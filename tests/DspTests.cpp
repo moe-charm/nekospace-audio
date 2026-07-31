@@ -24,14 +24,19 @@ static float rms (const std::vector<float>& v)
 
 // Render noiseSeconds of pink-ish noise at a fixed position, return L/R buffers.
 static void renderAt (BinauralEngine& eng, EngineParams p, float seconds, float fs,
-                      std::vector<float>& L, std::vector<float>& R, unsigned seed = 7)
+                      std::vector<float>& L, std::vector<float>& R, unsigned seed = 7,
+                      float inputScale = 1.0f)
 {
     const int n = (int) (seconds * fs);
     std::vector<float> inL (n), inR (n);
     std::mt19937 rng (seed);
     std::uniform_real_distribution<float> d (-0.5f, 0.5f);
     float lp = 0;
-    for (int i = 0; i < n; ++i) { lp = 0.9f * lp + 0.1f * d (rng); inL[i] = inR[i] = lp * 3.0f; }
+    for (int i = 0; i < n; ++i)
+    {
+        lp = 0.9f * lp + 0.1f * d (rng);
+        inL[i] = inR[i] = lp * 3.0f * inputScale;
+    }
     L.assign (n, 0.0f); R.assign (n, 0.0f);
     eng.setParams (p);
     // process in odd-sized blocks to exercise chunking
@@ -75,7 +80,8 @@ static void testDistanceMonotonic()
         BinauralEngine e; e.prepare (fs, 512);
         p.distanceM = dist;
         std::vector<float> L, R;
-        renderAt (e, p, 0.6f, fs, L, R);
+        // low level: keeps the safety limiter out of the picture, isolating the 1/r law
+        renderAt (e, p, 0.6f, fs, L, R, 7, 0.1f);
         const int skip = (int) (0.2f * fs);
         std::vector<float> tl (L.begin() + skip, L.end()), tr (R.begin() + skip, R.end());
         const float energy = rms (tl) + rms (tr);
@@ -191,6 +197,150 @@ static void testNearFieldEarApproach()
     CHECK (prevRatio > 3.0f, "nearfield: strong ILD at 6 cm");
 }
 
+// Regression: in-place processing (out buffers alias in buffers) must be identical to
+// out-of-place — FL Studio calls plugins in-place. Covers the Linked Stereo silence bug.
+static void testInPlaceEquivalence()
+{
+    const float fs = 48000.0f;
+    for (int mode : { 0, 1 })
+    {
+        EngineParams p; p.sourceMode = mode; p.azimuthDeg = 35.0f;
+        p.distanceM = 0.5f; p.roomAmount = 0.4f; p.widthDeg = 80.0f;
+        const int n = 12000;
+        std::vector<float> inL (n), inR (n);
+        std::mt19937 rng (21);
+        std::uniform_real_distribution<float> d (-0.5f, 0.5f);
+        for (int i = 0; i < n; ++i) { inL[i] = d (rng); inR[i] = d (rng); }
+
+        BinauralEngine e1; e1.prepare (fs, 512); e1.setParams (p);
+        std::vector<float> oL (n, 0.0f), oR (n, 0.0f);
+        for (int pos = 0; pos < n; pos += 512)
+            e1.process (inL.data() + pos, inR.data() + pos, oL.data() + pos, oR.data() + pos,
+                        std::min (512, n - pos));
+
+        BinauralEngine e2; e2.prepare (fs, 512); e2.setParams (p);
+        std::vector<float> aL = inL, aR = inR; // aliased: in == out
+        for (int pos = 0; pos < n; pos += 512)
+            e2.process (aL.data() + pos, aR.data() + pos, aL.data() + pos, aR.data() + pos,
+                        std::min (512, n - pos));
+
+        float maxDiff = 0; double energy = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            maxDiff = std::max (maxDiff, std::fabs (oL[i] - aL[i]) + std::fabs (oR[i] - aR[i]));
+            energy += (double) oL[i] * oL[i] + (double) oR[i] * oR[i];
+        }
+        CHECK (maxDiff == 0.0f, mode == 0 ? "in-place == out-of-place (Mono Object)"
+                                          : "in-place == out-of-place (Linked Stereo)");
+        CHECK (energy > 1.0, "in-place: output is not silent");
+    }
+}
+
+// Regression: reported latency must match actual impulse arrival (FL PDC correctness).
+static void testLatencyReported()
+{
+    for (float fs : { 44100.0f, 48000.0f, 192000.0f })
+    {
+        BinauralEngine e; e.prepare (fs, 512);
+        EngineParams p; p.roomAmount = 0; p.nearField = 0; p.distanceM = 1.0f;
+        e.setParams (p);
+        const int lat = e.latencySamples();
+        CHECK (lat == (int) (0.002f * fs + 0.5f), "latency: 2 ms base delay reported");
+
+        const int n = lat + 512;
+        std::vector<float> in (n, 0.0f), L (n, 0.0f), R (n, 0.0f);
+        in[0] = 1.0f;
+        for (int pos = 0; pos < n; pos += 512)
+            e.process (in.data() + pos, in.data() + pos, L.data() + pos, R.data() + pos,
+                       std::min (512, n - pos));
+        int peakIdx = 0; float peak = 0;
+        for (int i = 0; i < n; ++i)
+            if (std::fabs (L[i]) > peak) { peak = std::fabs (L[i]); peakIdx = i; }
+        CHECK (peak > 0.01f, "latency: impulse came through");
+        CHECK (std::abs (peakIdx - lat) <= (int) (fs / 48000.0f * 12.0f),
+               "latency: impulse arrives at the reported delay");
+    }
+}
+
+// Regression: quality (tap count) switching mid-stream must ride the crossfade.
+static void testQualitySwitchNoClick()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e; e.prepare (fs, 512);
+    EngineParams p; p.azimuthDeg = 40.0f; p.distanceM = 1.0f; p.roomAmount = 0;
+    const int n = (int) (2.5f * fs);
+    std::vector<float> in (512), L (n, 0.0f), R (n, 0.0f);
+    double ph = 0.0; const double dph = 2.0 * 3.14159265358979 * 330.0 / fs;
+    for (int pos = 0; pos < n; pos += 512)
+    {
+        const int m = std::min (512, n - pos);
+        p.qualityMode = ((pos / (int) (0.5f * fs)) % 2 == 0) ? 1 : 0;
+        e.setParams (p);
+        for (int i = 0; i < m; ++i) { in[(size_t) i] = 0.25f * (float) std::sin (ph); ph += dph; }
+        e.process (in.data(), in.data(), L.data() + pos, R.data() + pos, m);
+    }
+    float maxJump = 0;
+    for (int i = (int) (0.2f * fs); i < n; ++i)
+        maxJump = std::max (maxJump, std::fabs (L[i] - L[i - 1]));
+    CHECK (maxJump < 0.08f, "quality switch: no click");
+}
+
+// Regression: room early/late automation must be smooth.
+static void testEarlyLateAutomationNoClick()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e; e.prepare (fs, 512);
+    EngineParams p; p.azimuthDeg = -30.0f; p.distanceM = 1.2f;
+    p.roomAmount = 0.6f; p.roomSize = 0.4f;
+    const int n = (int) (2.5f * fs);
+    std::vector<float> in (512), L (n, 0.0f), R (n, 0.0f);
+    double ph = 0.0; const double dph = 2.0 * 3.14159265358979 * 220.0 / fs;
+    for (int pos = 0; pos < n; pos += 512)
+    {
+        const int m = std::min (512, n - pos);
+        p.roomEarlyLate = ((pos / (int) (0.25f * fs)) % 2 == 0) ? 0.0f : 1.0f;
+        p.roomSize      = 0.2f + 0.6f * ((pos / (int) (0.4f * fs)) % 2);
+        e.setParams (p);
+        for (int i = 0; i < m; ++i) { in[(size_t) i] = 0.25f * (float) std::sin (ph); ph += dph; }
+        e.process (in.data(), in.data(), L.data() + pos, R.data() + pos, m);
+    }
+    CHECK (allFinite (L) && allFinite (R), "early/late: no NaN");
+    float maxJump = 0;
+    for (int i = (int) (0.3f * fs); i < n; ++i)
+        maxJump = std::max (maxJump, std::fabs (L[i] - L[i - 1]));
+    CHECK (maxJump < 0.12f, "early/late + size automation: no click");
+}
+
+// Regression: straight below must not lean left or right (grid now reaches -90°).
+static void testBottomElevationCentered()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e; e.prepare (fs, 512);
+    EngineParams p; p.azimuthDeg = 90.0f; p.elevationDeg = -90.0f;
+    p.distanceM = 1.0f; p.roomAmount = 0; p.nearField = 1.0f;
+    std::vector<float> L, R;
+    renderAt (e, p, 0.8f, fs, L, R);
+    const int skip = (int) (0.3f * fs);
+    std::vector<float> tl (L.begin() + skip, L.end()), tr (R.begin() + skip, R.end());
+    const float ratioDb = 20.0f * std::log10 (rms (tl) / (rms (tr) + 1e-9f));
+    CHECK (std::fabs (ratioDb) < 1.0f, "elevation -90: interaural level within 1 dB");
+}
+
+// Multi-rate smoke: full feature path stays finite at 44.1 / 96 / 192 kHz.
+static void testSampleRatesFinite()
+{
+    for (float fs : { 44100.0f, 96000.0f, 192000.0f })
+    {
+        BinauralEngine e; e.prepare (fs, 512);
+        EngineParams p; p.roomAmount = 0.5f; p.nearField = 1.0f; p.distanceM = 0.15f;
+        p.azimuthDeg = -95.0f;
+        std::vector<float> L, R;
+        renderAt (e, p, 0.4f, fs, L, R);
+        CHECK (allFinite (L) && allFinite (R), "multi-rate: finite output");
+        CHECK (rms (L) > 1e-4f, "multi-rate: not silent");
+    }
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -200,6 +350,12 @@ int main()
     testAutomationSweepNoNanNoClick();
     testBlockSizeInvariance();
     testNearFieldEarApproach();
+    testInPlaceEquivalence();
+    testLatencyReported();
+    testQualitySwitchNoClick();
+    testEarlyLateAutomationNoClick();
+    testBottomElevationCentered();
+    testSampleRatesFinite();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

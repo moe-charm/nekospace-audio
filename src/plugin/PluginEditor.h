@@ -77,6 +77,11 @@ public:
         elevBig.setSliderStyle (juce::Slider::LinearVertical);
         elevBig.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
         elevBig.setTooltip ("Elevation");
+        elevBig.setTitle ("Elevation");
+        pad.setTitle ("Spatial Pad");
+        modeBox.setTitle ("Source Mode");
+        qualityBox.setTitle ("Quality");
+        presetBox.setTitle ("Presets");
         addAndMakeVisible (elevBig);
         elevBigAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, nsb::pid::elevation, elevBig);
@@ -133,8 +138,8 @@ public:
         if (! outCaption.isEmpty())
             g.drawText ("OUTPUT", outCaption, juce::Justification::centredLeft);
         g.setFont (juce::Font (juce::FontOptions (10.0f)));
-        g.drawText ("HRTF: Analytic A (built-in, procedural)  |  0 samples latency",
-                    hrtfInfo, juce::Justification::centredRight);
+        g.drawText ("HRTF: Analytic A (built-in)  ·  latency 2 ms",
+                    hrtfInfo, juce::Justification::centredLeft);
     }
 
     void resized() override
@@ -147,7 +152,6 @@ public:
         presetBox.setBounds (header.removeFromLeft (190).reduced (4, 9));
         modeBox.setBounds (header.removeFromLeft (150).reduced (4, 9));
         qualityBox.setBounds (header.removeFromLeft (120).reduced (4, 9));
-        hrtfInfo = header.reduced (8, 0);
 
         auto bottom = b.removeFromBottom (150).reduced (10, 6);
         layoutBottom (bottom);
@@ -178,6 +182,7 @@ private:
     {
         s.setSliderStyle (juce::Slider::LinearHorizontal);
         s.setTextBoxStyle (juce::Slider::TextBoxRight, false, 66, 18);
+        s.setTitle (name); // accessibility name for screen readers
         addAndMakeVisible (s);
         att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, pid, s);
@@ -192,6 +197,7 @@ private:
     {
         s.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 70, 16);
+        s.setTitle (name); // accessibility name for screen readers
         addAndMakeVisible (s);
         att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, pid, s);
@@ -307,6 +313,8 @@ private:
             snapButtons[i]->setBounds (grid.getX() + cx * bw + 2,
                                        grid.getY() + cy * (bh + 4), bw - 4, bh);
         }
+        r.removeFromTop (6);
+        hrtfInfo = r.removeFromTop (16); // always inside the right panel, never clipped
     }
 
     void layoutBottom (juce::Rectangle<int> b)

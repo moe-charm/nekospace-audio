@@ -1,0 +1,14 @@
+Copyright (c) 2026 TextureVoice (whiteunyora)
+
+All rights reserved.
+
+This repository is not yet publicly licensed. No permission is granted to use,
+copy, modify, or distribute this software or its binaries outside the copyright
+holder's own projects.
+
+A final license will be chosen before any public distribution. Note that the
+choice is constrained by third-party terms tracked in
+docs/third-party-licenses.md — in particular JUCE (AGPLv3 / commercial dual
+license): distributing closed-source binaries requires an appropriate JUCE
+license tier, while AGPLv3 distribution requires this source to be published
+under AGPLv3-compatible terms.

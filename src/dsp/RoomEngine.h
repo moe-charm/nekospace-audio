@@ -119,8 +119,11 @@ public:
             maxLen[i] = (int) (baseLen[i] * (sr / 48000.0f) * 2.2f) + 8;
             lines[i].prepare (maxLen[i]);
             damp[i].prepare (sr);
+            lenSm[i].prepare (sr, 0.08f);
+            fbSm[i].prepare (sr, 0.08f);
         }
         setRoom ({});
+        for (int i = 0; i < kLines; ++i) { lenSm[i].snap (len[i]); fbSm[i].snap (fb[i]); }
     }
 
     void reset() { for (int i = 0; i < kLines; ++i) { lines[i].reset(); damp[i].reset(); } }
@@ -135,6 +138,8 @@ public:
         {
             len[i] = clampf ((float) baseLen[i] * scale, 32.0f, (float) (maxLen[i] - 8));
             fb[i]  = std::pow (10.0f, -3.0f * len[i] / (t60 * sr));
+            lenSm[i].setTarget (len[i]);   // smoothed per sample: size automation
+            fbSm[i].setTarget (fb[i]);     // never steps the tail discontinuously
             damp[i].setCutoff (dampFc);
         }
     }
@@ -147,7 +152,7 @@ public:
         {
             float d[kLines];
             for (int k = 0; k < kLines; ++k)
-                d[k] = damp[k].process (lines[k].read (len[k]) * fb[k]);
+                d[k] = damp[k].process (lines[k].read (lenSm[k].next()) * fbSm[k].next());
 
             // 8x8 Hadamard via butterfly, scaled 1/sqrt(8)
             float s[kLines];
@@ -179,6 +184,7 @@ private:
     static constexpr float inGain[kLines] = { 0.5f, -0.4f, 0.45f, -0.35f, 0.4f, -0.45f, 0.35f, -0.5f };
     FractionalDelay lines[kLines];
     OnePoleLP damp[kLines];
+    LinearSmoother lenSm[kLines], fbSm[kLines];
     int maxLen[kLines] = {};
     float len[kLines] = {}, fb[kLines] = {};
     float sr = 48000.0f, tail = 1.0f;

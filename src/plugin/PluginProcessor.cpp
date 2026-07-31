@@ -88,7 +88,10 @@ bool NekoSpaceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
 void NekoSpaceProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare ((float) sampleRate, samplesPerBlock);
-    setLatencySamples (0); // direct FIR path — keeps FL Studio PDC trivial (Contract #17)
+    // The renderer runs every voice through a fixed 2 ms base delay (headroom for the
+    // near-field per-ear geometry). Report it so FL Studio PDC stays phase-accurate
+    // when NekoSpace runs in parallel with dry paths (Contract #17).
+    setLatencySamples (engine.latencySamples());
 }
 
 void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
@@ -114,8 +117,12 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     p.bypassRoom    = pBypassRoom->load() > 0.5f;
     engine.setParams (p);
 
+    // Channel 1 of the buffer is only valid *input* when the input bus is stereo;
+    // on a mono-in/stereo-out layout it is output scratch — treat input as dual-mono.
+    const int numInputCh = getMainBusNumInputChannels();
     const float* inL = buffer.getReadPointer (0);
-    const float* inR = buffer.getNumChannels() > 1 ? buffer.getReadPointer (1) : inL;
+    const float* inR = (numInputCh > 1 && buffer.getNumChannels() > 1)
+                           ? buffer.getReadPointer (1) : inL;
     float* outL = buffer.getWritePointer (0);
     float* outR = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : outL;
 

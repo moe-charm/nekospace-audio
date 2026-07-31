@@ -37,6 +37,7 @@ public:
     void prepare (float sampleRate, int maxBlock, const HrtfDatabase* db)
     {
         sr = sampleRate; hrtf = db; maxBlockSize = maxBlock;
+        baseDelay = (int) (0.002f * sr + 0.5f); // reported to the host as plugin latency
         const int maxDelay = (int) (0.02f * sr) + maxBlock + 8; // base 2ms + wrap margin
         for (int e = 0; e < 2; ++e)
         {
@@ -60,20 +61,14 @@ public:
         primed = false;
     }
 
-    void setQuality (int taps) noexcept
-    {
-        if (taps != activeTaps)
-        {
-            activeTaps = taps;
-            fir[0].setNumTaps (taps); fir[1].setNumTaps (taps);
-            primed = false; // reload both banks
-        }
-    }
+    int latencySamples() const noexcept { return baseDelay; }
 
     // Block-rate geometry update. Continuity across position jumps comes from the
     // FIR output crossfade + per-ear delay/gain smoothing (no angle smoothing needed,
-    // so the ±180° wrap can never take the long way around).
-    void update (float azDeg, float elDeg, float dist, float nearAmt, float headR) noexcept
+    // so the ±180° wrap can never take the long way around). Quality (tap-count)
+    // changes ride the same crossfade — never a reset, never a click.
+    void update (float azDeg, float elDeg, float dist, float nearAmt, float headR,
+                 int taps) noexcept
     {
         // a source can't be inside the head: effective distance floors at the skull
         const float r = clampf (dist, headR + 0.005f, kMaxDistance);
@@ -103,16 +98,26 @@ public:
 
         // HRTF spectral part (time-aligned) — interpolate & stage with crossfade
         hrtf->interpolate (azDeg, elDeg, coefL.data(), coefR.data());
+        if (taps < HrtfDatabase::kMaxTaps)
+        {
+            // soften the truncation edge so Economy mode has no spectral ripple step
+            for (int k = taps - 8; k < taps; ++k)
+            {
+                const float w = 0.5f + 0.5f * std::cos (kPi * (float) (k - (taps - 8)) / 8.0f);
+                coefL[(size_t) k] *= w;
+                coefR[(size_t) k] *= w;
+            }
+        }
         if (!primed)
         {
-            fir[0].setCoefficientsImmediate (coefL.data());
-            fir[1].setCoefficientsImmediate (coefR.data());
+            fir[0].setCoefficientsImmediate (coefL.data(), taps);
+            fir[1].setCoefficientsImmediate (coefR.data(), taps);
             primed = true;
         }
         else
         {
-            fir[0].setCoefficients (coefL.data());
-            fir[1].setCoefficients (coefR.data());
+            fir[0].setCoefficients (coefL.data(), taps);
+            fir[1].setCoefficients (coefR.data(), taps);
         }
     }
 
@@ -139,7 +144,7 @@ public:
     Vec3 position() const noexcept { return lastPos; }
 
 private:
-    float baseDelaySamples() const noexcept { return 0.002f * sr; }
+    float baseDelaySamples() const noexcept { return (float) baseDelay; }
 
     FractionalDelay earDelay[2];
     CrossfadeFir fir[2];
@@ -148,7 +153,7 @@ private:
     std::vector<float> scratch, coefL, coefR;
     const HrtfDatabase* hrtf = nullptr;
     float sr = 48000.0f;
-    int maxBlockSize = 0, activeTaps = HrtfDatabase::kMaxTaps;
+    int maxBlockSize = 0, baseDelay = 96;
     bool primed = false;
     Vec3 lastPos;
 };
@@ -167,7 +172,9 @@ public:
         fdn.prepare (sr, kChunk);
         outGainSm.prepare (sr, 0.02f); outGainSm.snap (1.0f);
         roomAmtSm.prepare (sr, 0.05f); roomAmtSm.snap (0.0f); // room fades in; amount 0 stays bit-exact direct
+        earlyLateSm.prepare (sr, 0.05f); earlyLateSm.snap (params.roomEarlyLate);
         modeFade.prepare (sr, 0.008f); modeFade.snap (1.0f);
+        limiterRelease = std::exp (-1.0f / (0.120f * sr));
         monoBuf.assign (kChunk, 0.0f);
         roomFeed.assign (kChunk, 0.0f);
         erL.assign (kChunk, 0.0f); erR.assign (kChunk, 0.0f);
@@ -181,7 +188,10 @@ public:
         for (auto& s : sources) s.reset();
         early.reset(); fdn.reset();
         peakL = peakR = 0.0f;
+        limiterEnv = 0.0f;
     }
+
+    int latencySamples() const noexcept { return sources[0].latencySamples(); }
 
     void setParams (const EngineParams& p) noexcept { params = p; }
 
@@ -226,7 +236,6 @@ private:
             fadingMode = false;
 
         const int taps = p.qualityMode == 0 ? 64 : 128;
-        for (auto& s : sources) s.setQuality (taps);
 
         // ---- geometry updates (block rate) ----
         const float roomTarget = p.bypassRoom ? 0.0f : p.roomAmount;
@@ -241,11 +250,12 @@ private:
 
         if (activeMode == 0) // Mono Object
         {
+            // downmix BEFORE clearing outputs — in-place (out == in) must stay valid
             for (int i = 0; i < n; ++i)
                 mono[i] = 0.5f * (inL[i] + inR[i]);
 
             sources[0].update (p.azimuthDeg, p.elevationDeg, p.distanceM,
-                               p.nearField, p.headRadiusM);
+                               p.nearField, p.headRadiusM, taps);
             std::memset (outL, 0, sizeof (float) * (size_t) n);
             std::memset (outR, 0, sizeof (float) * (size_t) n);
             sources[0].process (mono, outL, outR, n);
@@ -258,14 +268,14 @@ private:
         {
             const float half = p.widthDeg * 0.5f;
             sources[0].update (wrapDeg (p.azimuthDeg - half), p.elevationDeg, p.distanceM,
-                               p.nearField, p.headRadiusM);
+                               p.nearField, p.headRadiusM, taps);
             sources[1].update (wrapDeg (p.azimuthDeg + half), p.elevationDeg, p.distanceM,
-                               p.nearField, p.headRadiusM);
-            std::memset (outL, 0, sizeof (float) * (size_t) n);
-            std::memset (outR, 0, sizeof (float) * (size_t) n);
-            // copy inputs (in/out may alias)
+                               p.nearField, p.headRadiusM, taps);
+            // stash inputs BEFORE clearing outputs — in-place (out == in) must stay valid
             std::memcpy (mono, inL, sizeof (float) * (size_t) n);
             std::memcpy (feed, inR, sizeof (float) * (size_t) n);
+            std::memset (outL, 0, sizeof (float) * (size_t) n);
+            std::memset (outR, 0, sizeof (float) * (size_t) n);
             sources[0].process (mono, outL, outR, n);
             sources[1].process (feed, outL, outR, n);
 
@@ -289,26 +299,38 @@ private:
             std::memset (fdnR.data(), 0, sizeof (float) * (size_t) n);
             fdn.process (feed, fdnL.data(), fdnR.data(), n);
 
-            const float b = p.roomEarlyLate;
+            earlyLateSm.setTarget (p.roomEarlyLate);
             for (int i = 0; i < n; ++i)
             {
                 const float amt = roomAmtSm.next();
+                const float b = earlyLateSm.next();
                 outL[i] += amt * (erL[i] * (1.0f - b) + fdnL[i] * b) * 1.6f;
                 outR[i] += amt * (erR[i] * (1.0f - b) + fdnR[i] * b) * 1.6f;
             }
         }
 
-        // ---- output stage ----
+        // ---- output stage: trim, safety limiter (ear-whisper gain can reach +32 dB),
+        //      then metering of what actually leaves the plugin ----
         outGainSm.setTarget (std::pow (10.0f, p.outputGainDb / 20.0f));
+        constexpr float kCeiling = 0.945f; // ~ -0.5 dBFS
+        float env = limiterEnv;
         float pl = peakL * 0.85f, pr = peakR * 0.85f; // block decay
         for (int i = 0; i < n; ++i)
         {
             const float g = outGainSm.next() * modeFade.next();
-            outL[i] *= g; outR[i] *= g;
-            const float al = std::fabs (outL[i]), ar = std::fabs (outR[i]);
-            if (al > pl) pl = al;
-            if (ar > pr) pr = ar;
+            float l = outL[i] * g, r = outR[i] * g;
+            const float m = std::fabs (l) > std::fabs (r) ? std::fabs (l) : std::fabs (r);
+            env = m > env ? m : env * limiterRelease; // instant attack, ~120 ms release
+            if (env > kCeiling)
+            {
+                const float lg = kCeiling / env;
+                l *= lg; r *= lg;
+            }
+            outL[i] = l; outR[i] = r;
+            if (std::fabs (l) > pl) pl = std::fabs (l);
+            if (std::fabs (r) > pr) pr = std::fabs (r);
         }
+        limiterEnv = env;
         peakL = pl; peakR = pr;
     }
 
@@ -317,9 +339,10 @@ private:
     SourceRenderer sources[2];
     EarlyReflections early;
     FdnReverb fdn;
-    LinearSmoother outGainSm, roomAmtSm, modeFade;
+    LinearSmoother outGainSm, roomAmtSm, earlyLateSm, modeFade;
     std::vector<float> monoBuf, roomFeed, erL, erR, fdnL, fdnR;
     float sr = 48000.0f;
+    float limiterEnv = 0.0f, limiterRelease = 0.9998f;
     float peakL = 0.0f, peakR = 0.0f;
     int activeMode = 0;
     bool fadingMode = false;

@@ -60,7 +60,12 @@ inline float earPathLengthExact (const Vec3& sourcePos, float sourceDist, float 
 
     const float cosTheta = clampf (sourcePos.dot (earDir) / (sourcePos.length() + 1e-9f), -1.0f, 1.0f);
     const float theta    = std::acos (cosTheta);
-    const float thetaVis = kPi * 0.5f + std::acos (clampf (a / r, 0.0f, 1.0f));
+
+    // The ear sits ON the sphere: line-of-sight exists iff the source lies above the
+    // tangent plane at the ear, i.e. r*cos(theta) >= a  <=>  theta <= acos(a/r).
+    // At the boundary |S-E| == sqrt(r^2 - a^2) == tangent length, so both branches meet
+    // continuously.
+    const float thetaVis = std::acos (clampf (a / r, 0.0f, 1.0f));
 
     if (theta <= thetaVis)
         return (sourcePos - earPos).length();

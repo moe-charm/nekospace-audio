@@ -67,7 +67,9 @@ Key DSP decisions:
 15. Third-party licenses are tracked in third-party-licenses.md (SSOT).
 16. **FL Studio (Windows) is the primary acceptance DAW**: variable/odd block sizes,
     "Fixed size buffers" both on and off, project save/reload, offline render.
-17. **Latency must be reported accurately whenever quality modes change** so FL PDC
-    stays correct (v1 direct FIR = 0 samples).
+17. **Latency must be reported accurately at all times** so FL PDC stays correct.
+    v1: the renderer's fixed 2 ms base delay (near-field geometry headroom) is reported
+    via `setLatencySamples`; the direct FIR itself adds zero. Any future partitioned-FFT
+    quality mode must update the report when engaged.
 18. Windows x64 ships first; the codebase stays cross-platform (CMake + JUCE) but macOS
     signing/notarization/AU are deferred until Mac hardware is in the loop.

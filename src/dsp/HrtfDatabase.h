@@ -31,8 +31,10 @@ class HrtfDatabase
 {
 public:
     static constexpr int kNumAz = 72;             // 0..355 step 5
-    static constexpr int kNumEl = 11;             // -60..+90 step 15
-    static constexpr float kElMin = -60.0f, kElStep = 15.0f, kAzStep = 5.0f;
+    static constexpr int kNumEl = 13;             // -90..+90 step 15 (poles included:
+    static constexpr float kElMin = -90.0f, kElStep = 15.0f, kAzStep = 5.0f;
+    // at el = ±90 the direction vector is azimuth-independent, so every az slot holds
+    // the same FIR and interpolation stays lateral-bias-free straight up/down)
     static constexpr int kMaxTaps = 128;
 
     void generateAnalytic (float sampleRate, float headRadius)
