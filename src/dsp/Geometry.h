@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // NekoSpace Binaural — geometry & shared math. JUCE-free (Architecture Contract #4).
 #include <cmath>

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -23,9 +26,21 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::elevation, 1 }, "Elevation",
             NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
             AudioParameterFloatAttributes().withLabel ("deg")));
+    // The log distance range has no step interval, so without an explicit formatter both
+    // the GUI text box and the host's automation readout show 7 decimal places.
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::distance, 1 }, "Distance",
             logDistanceRange(), 1.0f,
-            AudioParameterFloatAttributes().withLabel ("m")));
+            AudioParameterFloatAttributes()
+                .withStringFromValueFunction ([] (float v, int)
+                {
+                    return v < 1.0f ? String (v * 100.0f, 1) + " cm"
+                                    : String (v, 2) + " m";
+                })
+                .withValueFromStringFunction ([] (const String& s)
+                {
+                    const float v = s.getFloatValue();
+                    return s.containsIgnoreCase ("cm") ? v * 0.01f : v;
+                })));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::width, 1 }, "Width",
             NormalisableRange<float> (0.0f, 180.0f, 0.5f), 60.0f,
             AudioParameterFloatAttributes().withLabel ("deg")));
@@ -35,7 +50,11 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
             AudioParameterFloatAttributes().withLabel ("%")));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::headRadius, 1 }, "Head Size",
             NormalisableRange<float> (0.075f, 0.100f, 0.0005f), 0.0875f,
-            AudioParameterFloatAttributes().withLabel ("m")));
+            AudioParameterFloatAttributes()
+                .withStringFromValueFunction ([] (float v, int)
+                                              { return String (v * 100.0f, 2) + " cm"; })
+                .withValueFromStringFunction ([] (const String& s)
+                                              { return s.getFloatValue() * 0.01f; })));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::roomAmount, 1 }, "Room Amount", pct, 15.0f,
             AudioParameterFloatAttributes().withLabel ("%")));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::roomSize, 1 }, "Room Size", pct, 35.0f,

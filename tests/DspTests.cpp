@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // NekoSpace Binaural — JUCE-free DSP acceptance tests (Contract #12).
 #include <cstdio>
 #include <cmath>

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -102,11 +105,30 @@ public:
             g.setColour (col::grid);
             g.fillRoundedRectangle (groove, t * 0.5f);
 
+            // Bipolar ranges (azimuth, elevation, gain) fill outward from the centre so
+            // "0" reads as neutral instead of half-full.
+            const auto range = s.getRange();
+            const bool bipolar = range.getStart() < 0.0 && range.getEnd() > 0.0;
+            const float zeroPos = bipolar
+                ? (float) (horiz ? s.getPositionOfValue (0.0) : s.getPositionOfValue (0.0))
+                : (horiz ? (float) x : track.getBottom());
+
             juce::Rectangle<float> fill = groove;
-            if (horiz) fill = fill.withWidth (sliderPos - (float) x);
-            else       fill = fill.withTop (sliderPos);
+            if (horiz)
+                fill = fill.withLeft (juce::jmin (zeroPos, sliderPos))
+                           .withRight (juce::jmax (zeroPos, sliderPos));
+            else
+                fill = fill.withTop (juce::jmin (zeroPos, sliderPos))
+                           .withBottom (juce::jmax (zeroPos, sliderPos));
             g.setColour (col::accent.withAlpha (0.85f));
-            g.fillRoundedRectangle (fill, t * 0.5f);
+            if (fill.getWidth() > 0.0f && fill.getHeight() > 0.0f)
+                g.fillRoundedRectangle (fill, t * 0.5f);
+            if (bipolar)
+            {
+                g.setColour (col::textDim.withAlpha (0.55f)); // centre tick
+                if (horiz) g.fillRect (zeroPos - 0.5f, groove.getY() - 3.0f, 1.0f, t + 6.0f);
+                else       g.fillRect (groove.getX() - 3.0f, zeroPos - 0.5f, t + 6.0f, 1.0f);
+            }
 
             const float r = 7.0f;
             juce::Point<float> c = horiz

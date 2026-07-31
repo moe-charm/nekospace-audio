@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
@@ -13,12 +16,23 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds().toFloat();
-        const float w = (b.getWidth() - 12.0f) / 2.0f - 2.0f;
-        drawBar (g, b.removeFromLeft (w), dispL);
-        b.removeFromLeft (4.0f);
-        drawBar (g, b.removeFromLeft (w), dispR);
-        b.removeFromLeft (4.0f);
-        drawGr (g, b); // thin limiter gain-reduction strip, fills top-down
+        auto labels = b.removeFromBottom (12.0f);
+        const float w = (b.getWidth() - 8.0f) / 3.0f;
+
+        auto lCol = b.removeFromLeft (w); b.removeFromLeft (4.0f);
+        auto rCol = b.removeFromLeft (w); b.removeFromLeft (4.0f);
+        drawBar (g, lCol, dispL);
+        drawBar (g, rCol, dispR);
+        drawGr (g, b); // limiter gain reduction, fills top-down
+
+        g.setColour (nsbui::col::textDim);
+        g.setFont (juce::Font (juce::FontOptions (9.0f)));
+        g.drawText ("L", labels.removeFromLeft (w), juce::Justification::centred);
+        labels.removeFromLeft (4.0f);
+        g.drawText ("R", labels.removeFromLeft (w), juce::Justification::centred);
+        labels.removeFromLeft (4.0f);
+        g.setColour (dispGr > 0.1f ? nsbui::col::meterHi : nsbui::col::textDim);
+        g.drawText ("GR", labels, juce::Justification::centred);
     }
 
 private:
@@ -149,16 +163,46 @@ public:
         g.setColour (nsbui::col::panelLine);
         g.drawLine (0, 44, (float) getWidth(), 44, 1.0f);
 
-        // section captions
+        // section caption
         g.setColour (nsbui::col::textDim);
         g.setFont (juce::Font (juce::FontOptions (11.0f)).boldened());
         if (! spaceCaption.isEmpty())
             g.drawText ("SPACE", spaceCaption, juce::Justification::centredLeft);
-        if (! outCaption.isEmpty())
-            g.drawText ("OUTPUT", outCaption, juce::Justification::centredLeft);
-        g.setFont (juce::Font (juce::FontOptions (10.0f)));
-        g.drawText ("HRTF: Analytic A (built-in)  ·  latency 2 ms",
-                    hrtfInfo, juce::Justification::centredLeft);
+
+        // Info + AGPL Appropriate Legal Notices (LICENSE sections 0 and 5d).
+        // ASCII only: keeps rendering identical regardless of host source encoding.
+        if (! infoArea.isEmpty())
+        {
+            g.setColour (nsbui::col::panelLine);
+            g.drawLine ((float) infoArea.getX(), (float) infoArea.getY() - 2.0f,
+                        (float) infoArea.getRight(), (float) infoArea.getY() - 2.0f, 1.0f);
+
+            const juce::Font f (juce::FontOptions (9.5f));
+            g.setFont (f);
+            g.setColour (nsbui::col::textDim.withAlpha (0.75f));
+            g.drawText ("HRTF: Analytic A (built-in)  |  latency 2 ms",
+                        infoArea, juce::Justification::centredLeft);
+            g.drawText (fitting (f, infoArea.getWidth() - 280,
+                                 { "NekoSpace Binaural  |  Copyright (C) 2026 TextureVoice  |  "
+                                   "AGPLv3, NO WARRANTY  |  see LICENSE",
+                                   "(C) 2026 TextureVoice  |  AGPLv3, NO WARRANTY",
+                                   "(C) 2026 TextureVoice  |  AGPLv3" }),
+                        infoArea, juce::Justification::centredRight);
+        }
+    }
+
+    // Longest variant that fits the available width; never renders an ellipsis.
+    static juce::String fitting (const juce::Font& f, int width,
+                                 std::initializer_list<const char*> options)
+    {
+        const char* last = nullptr;
+        for (auto* o : options)
+        {
+            last = o;
+            if (juce::GlyphArrangement::getStringWidthInt (f, o) <= width)
+                return juce::String (o);
+        }
+        return juce::String (last != nullptr ? last : "");
     }
 
     void resized() override
@@ -171,6 +215,9 @@ public:
         presetBox.setBounds (header.removeFromLeft (190).reduced (4, 9));
         modeBox.setBounds (header.removeFromLeft (150).reduced (4, 9));
         qualityBox.setBounds (header.removeFromLeft (120).reduced (4, 9));
+
+        // full-width footer strip: always has room for the info + licence line
+        infoArea = b.removeFromBottom (18).reduced (12, 2);
 
         auto bottom = b.removeFromBottom (150).reduced (10, 6);
         layoutBottom (bottom);
@@ -332,14 +379,11 @@ private:
             snapButtons[i]->setBounds (grid.getX() + cx * bw + 2,
                                        grid.getY() + cy * (bh + 4), bw - 4, bh);
         }
-        r.removeFromTop (6);
-        hrtfInfo = r.removeFromTop (16); // always inside the right panel, never clipped
     }
 
     void layoutBottom (juce::Rectangle<int> b)
     {
         spaceCaption = b.removeFromTop (14);
-        outCaption = {};
         const int knobW = juce::jmin (110, b.getWidth() / 7);
         auto place = [&] (juce::Slider& s, juce::Label& l)
         {
@@ -347,17 +391,18 @@ private:
             l.setBounds (cell.removeFromTop (14));
             s.setBounds (cell.reduced (2));
         };
+        // meters pinned to the right edge so the bar never ends in dead space
+        meter.setBounds (b.removeFromRight (72).reduced (4, 2));
+        b.removeFromRight (12);
+        bypassRoomBtn.setBounds (b.removeFromRight (116).withSizeKeepingCentre (110, 30));
+        b.removeFromRight (12);
+
         place (roomAmtKnob, roomAmtLabel);
         place (roomSizeKnob, roomSizeLabel);
         place (dampKnob, dampLabel);
         place (elKnob, elKnobLabel);
         b.removeFromLeft (16);
         place (gainKnob, gainLabel);
-        b.removeFromLeft (8);
-        auto byArea = b.removeFromLeft (110);
-        bypassRoomBtn.setBounds (byArea.withSizeKeepingCentre (104, 30));
-        b.removeFromLeft (8);
-        meter.setBounds (b.removeFromLeft (58).reduced (0, 4)); // L / R / GR strip
     }
 
     NekoSpaceProcessor& proc;
@@ -384,7 +429,7 @@ private:
     juce::OwnedArray<juce::TextButton> snapButtons;
     std::vector<Preset> presets;
 
-    juce::Rectangle<int> spaceCaption, outCaption, hrtfInfo;
+    juce::Rectangle<int> spaceCaption, infoArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceEditor)
 };

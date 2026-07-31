@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // Fractional delay line, 4-point Hermite interpolation. JUCE-free.
 #include <vector>

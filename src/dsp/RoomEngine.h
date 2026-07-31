@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // Room engine: 6 first-order shoebox reflections + 8-line FDN late reverb.
 // room.amount == 0 must reduce to exact direct rendering (Contract #13) — the

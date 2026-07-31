@@ -64,7 +64,10 @@ Key DSP decisions:
 12. New DSP features require standalone unit tests (JUCE-free) before GUI integration.
 13. Room processing must reduce to exact direct rendering at `room.amount = 0`.
 14. No Dear Reality source, asset, preset, name, or proprietary implementation is copied.
-15. Third-party licenses are tracked in third-party-licenses.md (SSOT).
+15. The project is **AGPLv3-or-later**. Every source file carries an SPDX header, and
+    every dependency must be AGPLv3-compatible; third-party terms are tracked in
+    third-party-licenses.md (SSOT). Audio rendered through the plugin is not a covered
+    work and carries no licence obligation.
 16. **FL Studio (Windows) is the primary acceptance DAW**: variable/odd block sizes,
     "Fixed size buffers" both on and off, project save/reload, offline render.
 17. **Latency must be reported accurately at all times** so FL PDC stays correct.

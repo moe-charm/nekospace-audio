@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // NekoSpace Binaural — engine top level. JUCE-free (Contract #4).
 // Owns: input routing, per-source binaural renderers, room engine, output stage.

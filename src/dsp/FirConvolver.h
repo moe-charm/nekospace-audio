@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // Time-domain FIR with coefficient crossfading (Architecture Contract #8).
 // Two coefficient banks (each with its own tap count) share one input history; on any

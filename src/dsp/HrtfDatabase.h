@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // HRTF grid: time-aligned (ITD-free) FIRs on an az/el grid + bilinear interpolation.
 // v1 ships the procedural "Analytic A" profile; measured data (KEMAR/KU100) will fill

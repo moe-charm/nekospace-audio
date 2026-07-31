@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 #pragma once
 // Top-down spatial pad: head fixed at center (with neko ears), draggable source node.
 // Drag = azimuth + distance, wheel = distance, Shift = fine, double-click = front 1 m.
@@ -195,7 +198,7 @@ private:
         // readout near node
         g.setColour (col::text);
         g.setFont (juce::Font (juce::FontOptions (11.0f)));
-        juce::String txt = juce::String (az, 0) + juce::String::fromUTF8 ("°  ")
+        juce::String txt = juce::String (az, 0) + juce::String::fromUTF8 ("\xc2\xb0  ")
                          + (dist < 1.0f ? juce::String (dist * 100.0f, 0) + " cm"
                                         : juce::String (dist, 2) + " m");
         g.drawText (txt, (int) pos.x - 60, (int) pos.y - 30, 120, 14,
