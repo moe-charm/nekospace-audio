@@ -42,7 +42,7 @@ public:
         for (int e = 0; e < 2; ++e)
         {
             earDelay[e].prepare (maxDelay + (int) (0.01f * sr));
-            fir[e].prepare (HrtfDatabase::kMaxTaps, maxBlock, (int) (0.010f * sr));
+            fir[e].prepare (db->numTaps(), maxBlock, (int) (0.010f * sr));
             airLP[e].prepare (sr);
             gainSm[e].prepare (sr, 0.020f);
             gainSm[e].snap (0.0f);
@@ -50,8 +50,8 @@ public:
             delaySm[e].snap (baseDelaySamples());
         }
         scratch.assign ((size_t) maxBlock, 0.0f);
-        coefL.assign (HrtfDatabase::kMaxTaps, 0.0f);
-        coefR.assign (HrtfDatabase::kMaxTaps, 0.0f);
+        coefL.assign ((size_t) db->numTaps(), 0.0f);
+        coefR.assign ((size_t) db->numTaps(), 0.0f);
         primed = false;
     }
 
@@ -96,28 +96,36 @@ public:
             airLP[e].setCutoff (20000.0f / std::pow (std::max (r, 1.0f), 0.55f));
         }
 
-        // HRTF spectral part (time-aligned) — interpolate & stage with crossfade
-        hrtf->interpolate (azDeg, elDeg, coefL.data(), coefR.data());
-        if (taps < HrtfDatabase::kMaxTaps)
+        // HRTF spectral part (time-aligned) — interpolate & stage with crossfade.
+        // Skipped entirely while the direction is static so no crossfade restarts and
+        // the steady-state convolver runs single-bank (no redundant CPU).
+        const bool coeffsDirty = !primed || azDeg != lastAz || elDeg != lastEl
+                                 || taps != lastTaps;
+        if (coeffsDirty)
         {
-            // soften the truncation edge so Economy mode has no spectral ripple step
-            for (int k = taps - 8; k < taps; ++k)
+            hrtf->interpolate (azDeg, elDeg, coefL.data(), coefR.data());
+            if (taps < hrtf->numTaps())
             {
-                const float w = 0.5f + 0.5f * std::cos (kPi * (float) (k - (taps - 8)) / 8.0f);
-                coefL[(size_t) k] *= w;
-                coefR[(size_t) k] *= w;
+                // soften the truncation edge so Economy mode has no spectral ripple step
+                for (int k = taps - 8; k < taps; ++k)
+                {
+                    const float w = 0.5f + 0.5f * std::cos (kPi * (float) (k - (taps - 8)) / 8.0f);
+                    coefL[(size_t) k] *= w;
+                    coefR[(size_t) k] *= w;
+                }
             }
-        }
-        if (!primed)
-        {
-            fir[0].setCoefficientsImmediate (coefL.data(), taps);
-            fir[1].setCoefficientsImmediate (coefR.data(), taps);
-            primed = true;
-        }
-        else
-        {
-            fir[0].setCoefficients (coefL.data(), taps);
-            fir[1].setCoefficients (coefR.data(), taps);
+            if (!primed)
+            {
+                fir[0].setCoefficientsImmediate (coefL.data(), taps);
+                fir[1].setCoefficientsImmediate (coefR.data(), taps);
+                primed = true;
+            }
+            else
+            {
+                fir[0].setCoefficients (coefL.data(), taps);
+                fir[1].setCoefficients (coefR.data(), taps);
+            }
+            lastAz = azDeg; lastEl = elDeg; lastTaps = taps;
         }
     }
 
@@ -154,6 +162,8 @@ private:
     const HrtfDatabase* hrtf = nullptr;
     float sr = 48000.0f;
     int maxBlockSize = 0, baseDelay = 96;
+    float lastAz = 1e9f, lastEl = 1e9f;
+    int lastTaps = -1;
     bool primed = false;
     Vec3 lastPos;
 };
@@ -177,9 +187,11 @@ public:
         limiterRelease = std::exp (-1.0f / (0.120f * sr));
         monoBuf.assign (kChunk, 0.0f);
         roomFeed.assign (kChunk, 0.0f);
+        zeroBuf.assign (kChunk, 0.0f);
         erL.assign (kChunk, 0.0f); erR.assign (kChunk, 0.0f);
         fdnL.assign (kChunk, 0.0f); fdnR.assign (kChunk, 0.0f);
         activeMode = params.sourceMode;
+        roomCooldown = 0;
         reset();
     }
 
@@ -214,6 +226,8 @@ public:
 
     float lastPeakL() const noexcept { return peakL; }
     float lastPeakR() const noexcept { return peakR; }
+    float lastGainReduction() const noexcept { return lastGr; } // linear, 1 = none
+    int   hrtfTaps() const noexcept { return hrtf.numTaps(); }
 
 private:
     void processChunk (const float* inL, const float* inR, float* outL, float* outR, int n) noexcept
@@ -235,14 +249,13 @@ private:
         if (fadingMode && !modeFade.isSmoothing() && modeFade.value() >= 0.999f)
             fadingMode = false;
 
-        const int taps = p.qualityMode == 0 ? 64 : 128;
+        const int fullTaps = hrtf.numTaps(); // scales with sample rate (constant ~2.7 ms)
+        const int taps = p.qualityMode == 0 ? fullTaps / 2 : fullTaps;
 
         // ---- geometry updates (block rate) ----
         const float roomTarget = p.bypassRoom ? 0.0f : p.roomAmount;
         roomAmtSm.setTarget (roomTarget);
-        const bool roomActive = roomTarget > 0.0001f || roomAmtSm.value() > 0.0001f;
-        if (!roomActive && roomWasActive) { early.reset(); fdn.reset(); } // no stale tail burst on re-enable
-        roomWasActive = roomActive;
+        const bool roomOn = roomTarget > 0.0001f || roomAmtSm.value() > 0.0001f;
 
         // ---- input routing ----
         float* mono = monoBuf.data();
@@ -285,27 +298,41 @@ private:
         }
 
         // ---- room ----
-        if (roomActive)
+        if (roomOn)
+            roomCooldown = (int) (fdn.tailSeconds() * sr);
+        if (roomOn || roomCooldown > 0)
         {
             RoomParams rp { p.roomSize, p.roomDamping, p.roomEarlyLate };
             early.update (sources[0].position(), rp);
             fdn.setRoom (rp);
 
+            // After switch-off the room keeps running on silence until its tail has
+            // decayed — state empties naturally, so re-enabling never bursts a stale
+            // tail and the audio thread never does large buffer resets (Contract #5).
+            const float* roomIn = roomOn ? feed : zeroBuf.data();
+
             std::memset (erL.data(), 0, sizeof (float) * (size_t) n);
             std::memset (erR.data(), 0, sizeof (float) * (size_t) n);
-            early.process (feed, erL.data(), erR.data(), n);
+            early.process (roomIn, erL.data(), erR.data(), n);
 
             std::memset (fdnL.data(), 0, sizeof (float) * (size_t) n);
             std::memset (fdnR.data(), 0, sizeof (float) * (size_t) n);
-            fdn.process (feed, fdnL.data(), fdnR.data(), n);
+            fdn.process (roomIn, fdnL.data(), fdnR.data(), n);
 
-            earlyLateSm.setTarget (p.roomEarlyLate);
-            for (int i = 0; i < n; ++i)
+            if (roomOn)
             {
-                const float amt = roomAmtSm.next();
-                const float b = earlyLateSm.next();
-                outL[i] += amt * (erL[i] * (1.0f - b) + fdnL[i] * b) * 1.6f;
-                outR[i] += amt * (erR[i] * (1.0f - b) + fdnR[i] * b) * 1.6f;
+                earlyLateSm.setTarget (p.roomEarlyLate);
+                for (int i = 0; i < n; ++i)
+                {
+                    const float amt = roomAmtSm.next();
+                    const float b = earlyLateSm.next();
+                    outL[i] += amt * (erL[i] * (1.0f - b) + fdnL[i] * b) * 1.6f;
+                    outR[i] += amt * (erR[i] * (1.0f - b) + fdnR[i] * b) * 1.6f;
+                }
+            }
+            else
+            {
+                roomCooldown -= n;
             }
         }
 
@@ -314,6 +341,7 @@ private:
         outGainSm.setTarget (std::pow (10.0f, p.outputGainDb / 20.0f));
         constexpr float kCeiling = 0.945f; // ~ -0.5 dBFS
         float env = limiterEnv;
+        float minLg = 1.0f; // worst gain reduction this chunk, for the GR meter
         float pl = peakL * 0.85f, pr = peakR * 0.85f; // block decay
         for (int i = 0; i < n; ++i)
         {
@@ -324,6 +352,7 @@ private:
             if (env > kCeiling)
             {
                 const float lg = kCeiling / env;
+                if (lg < minLg) minLg = lg;
                 l *= lg; r *= lg;
             }
             outL[i] = l; outR[i] = r;
@@ -331,6 +360,7 @@ private:
             if (std::fabs (r) > pr) pr = std::fabs (r);
         }
         limiterEnv = env;
+        lastGr = minLg;
         peakL = pl; peakR = pr;
     }
 
@@ -340,12 +370,12 @@ private:
     EarlyReflections early;
     FdnReverb fdn;
     LinearSmoother outGainSm, roomAmtSm, earlyLateSm, modeFade;
-    std::vector<float> monoBuf, roomFeed, erL, erR, fdnL, fdnR;
+    std::vector<float> monoBuf, roomFeed, zeroBuf, erL, erR, fdnL, fdnR;
     float sr = 48000.0f;
-    float limiterEnv = 0.0f, limiterRelease = 0.9998f;
+    float limiterEnv = 0.0f, limiterRelease = 0.9998f, lastGr = 1.0f;
     float peakL = 0.0f, peakR = 0.0f;
     int activeMode = 0;
+    int roomCooldown = 0;
     bool fadingMode = false;
-    bool roomWasActive = false;
 };
 } // namespace nsb

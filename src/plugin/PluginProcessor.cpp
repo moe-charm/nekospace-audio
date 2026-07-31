@@ -133,6 +133,7 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 
     meterL.store (engine.lastPeakL(), std::memory_order_relaxed);
     meterR.store (engine.lastPeakR(), std::memory_order_relaxed);
+    meterGR.store (engine.lastGainReduction(), std::memory_order_relaxed);
     tailSeconds.store (engine.tailSeconds(), std::memory_order_relaxed);
 }
 

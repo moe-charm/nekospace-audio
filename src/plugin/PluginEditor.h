@@ -13,13 +13,29 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds().toFloat();
-        const float w = b.getWidth() / 2.0f - 2.0f;
+        const float w = (b.getWidth() - 12.0f) / 2.0f - 2.0f;
         drawBar (g, b.removeFromLeft (w), dispL);
         b.removeFromLeft (4.0f);
-        drawBar (g, b, dispR);
+        drawBar (g, b.removeFromLeft (w), dispR);
+        b.removeFromLeft (4.0f);
+        drawGr (g, b); // thin limiter gain-reduction strip, fills top-down
     }
 
 private:
+    void drawGr (juce::Graphics& g, juce::Rectangle<float> r)
+    {
+        g.setColour (nsbui::col::bg);
+        g.fillRoundedRectangle (r, 3.0f);
+        if (dispGr > 0.001f)
+        {
+            const float t = juce::jlimit (0.0f, 1.0f, dispGr / 12.0f); // 12 dB full scale
+            g.setColour (nsbui::col::meterHi);
+            g.fillRoundedRectangle (r.withHeight (r.getHeight() * t), 3.0f);
+        }
+        g.setColour (nsbui::col::panelLine);
+        g.drawRoundedRectangle (r, 3.0f, 1.0f);
+    }
+
     void drawBar (juce::Graphics& g, juce::Rectangle<float> r, float v)
     {
         g.setColour (nsbui::col::bg);
@@ -38,13 +54,16 @@ private:
     {
         const float l = proc.meterL.load (std::memory_order_relaxed);
         const float r = proc.meterR.load (std::memory_order_relaxed);
+        const float grDb = -juce::Decibels::gainToDecibels (
+            proc.meterGR.load (std::memory_order_relaxed), -60.0f);
         dispL = l > dispL ? l : dispL * 0.88f;
         dispR = r > dispR ? r : dispR * 0.88f;
+        dispGr = grDb > dispGr ? grDb : dispGr * 0.90f;
         repaint();
     }
 
     NekoSpaceProcessor& proc;
-    float dispL = 0, dispR = 0;
+    float dispL = 0, dispR = 0, dispGr = 0;
 };
 
 // ---------------------------------------------------------------- editor ----
@@ -338,7 +357,7 @@ private:
         auto byArea = b.removeFromLeft (110);
         bypassRoomBtn.setBounds (byArea.withSizeKeepingCentre (104, 30));
         b.removeFromLeft (8);
-        meter.setBounds (b.removeFromLeft (46).reduced (0, 4));
+        meter.setBounds (b.removeFromLeft (58).reduced (0, 4)); // L / R / GR strip
     }
 
     NekoSpaceProcessor& proc;

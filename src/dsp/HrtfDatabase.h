@@ -35,12 +35,16 @@ public:
     static constexpr float kElMin = -90.0f, kElStep = 15.0f, kAzStep = 5.0f;
     // at el = ±90 the direction vector is azimuth-independent, so every az slot holds
     // the same FIR and interpolation stays lateral-bias-free straight up/down)
-    static constexpr int kMaxTaps = 128;
+    static constexpr int kMaxTaps = 256;
 
     void generateAnalytic (float sampleRate, float headRadius)
     {
         sr = sampleRate;
-        taps = kMaxTaps;
+        // keep the HRIR window a constant ~2.7 ms so Economy/Standard timbre does not
+        // depend on the session sample rate (128 taps @48k). Capped at 256: the analytic
+        // profile's filters have fully decayed within ~1.3 ms, so 192 kHz loses nothing
+        // audible while time-domain convolution cost stays bounded.
+        taps = (int) clampf (128.0f * sampleRate / 48000.0f + 0.5f, 64.0f, (float) kMaxTaps);
         firs.assign ((size_t) kNumAz * kNumEl * 2 * (size_t) taps, 0.0f);
 
         for (int ei = 0; ei < kNumEl; ++ei)

@@ -38,6 +38,18 @@ old HRTF, project reload resolves the same HRTF.
 Windows installer, code signing, CI artifacts. macOS (VST3+AU, Universal 2, notarization)
 when Mac hardware is available. Then: AAX, CLAP, Mid-Side mode, OSC head tracking.
 
+## Known limitations (accepted for alpha, tracked)
+
+- **Head Size does not reshape the HRTF spectrum** — it drives ITD/near-field geometry
+  only. A spectral rebuild requires regenerating the FIR grid off the audio thread;
+  lands with the TASK 6 HRTF-worker infrastructure (rebuild in background, long
+  crossfade on publish — same path SOFA import uses).
+- **Limiter is sample-peak** (instant attack, 120 ms release, -0.5 dBFS ceiling) with a
+  GR meter; true-peak (oversampled) detection is a mastering nicety deferred until the
+  output stage is final.
+- **pluginval / FL Studio re-verification** after each fix round is manual for now;
+  becomes CI in TASK 7.
+
 ## Test matrix (standing)
 
 - Sample rates: 44.1 / 48 / 88.2 / 96 / 192 kHz

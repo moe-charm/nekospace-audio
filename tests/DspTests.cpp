@@ -326,12 +326,15 @@ static void testBottomElevationCentered()
     CHECK (std::fabs (ratioDb) < 1.0f, "elevation -90: interaural level within 1 dB");
 }
 
-// Multi-rate smoke: full feature path stays finite at 44.1 / 96 / 192 kHz.
+// Multi-rate smoke: full feature path stays finite at 44.1 / 96 / 192 kHz, and the
+// HRIR window stays a constant ~2.7 ms in time (taps scale with SR, capped at 256).
 static void testSampleRatesFinite()
 {
     for (float fs : { 44100.0f, 96000.0f, 192000.0f })
     {
         BinauralEngine e; e.prepare (fs, 512);
+        const int expectedTaps = std::min (256, (int) (128.0f * fs / 48000.0f + 0.5f));
+        CHECK (e.hrtfTaps() == expectedTaps, "multi-rate: taps follow sample rate");
         EngineParams p; p.roomAmount = 0.5f; p.nearField = 1.0f; p.distanceM = 0.15f;
         p.azimuthDeg = -95.0f;
         std::vector<float> L, R;
@@ -339,6 +342,40 @@ static void testSampleRatesFinite()
         CHECK (allFinite (L) && allFinite (R), "multi-rate: finite output");
         CHECK (rms (L) > 1e-4f, "multi-rate: not silent");
     }
+}
+
+// Regression: room off -> (tail cooldown) -> on again must not burst stale reverb,
+// and the decay must happen without any big audio-thread buffer reset.
+static void testRoomToggleNoBurst()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e; e.prepare (fs, 512);
+    EngineParams p; p.distanceM = 1.0f; p.roomAmount = 0.7f; p.roomSize = 0.5f;
+    e.setParams (p);
+    std::vector<float> in (512), L (512), R (512);
+    std::mt19937 rng (5);
+    std::uniform_real_distribution<float> d (-0.4f, 0.4f);
+
+    auto run = [&] (float seconds, bool noise)
+    {
+        float peak = 0;
+        const int blocks = (int) (seconds * fs) / 512;
+        for (int bIdx = 0; bIdx < blocks; ++bIdx)
+        {
+            for (auto& x : in) x = noise ? d (rng) : 0.0f;
+            e.process (in.data(), in.data(), L.data(), R.data(), 512);
+            for (int i = 0; i < 512; ++i)
+                peak = std::max (peak, std::fabs (L[i]) + std::fabs (R[i]));
+        }
+        return peak;
+    };
+
+    run (1.0f, true);                       // room ringing with signal
+    p.roomAmount = 0.0f; e.setParams (p);
+    run (3.5f, false);                      // off: tail decays through the cooldown
+    p.roomAmount = 0.7f; e.setParams (p);
+    const float burst = run (0.5f, false);  // re-enable on silence
+    CHECK (burst < 1e-3f, "room toggle: no stale tail burst on re-enable");
 }
 
 int main()
@@ -356,6 +393,7 @@ int main()
     testEarlyLateAutomationNoClick();
     testBottomElevationCentered();
     testSampleRatesFinite();
+    testRoomToggleNoBurst();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

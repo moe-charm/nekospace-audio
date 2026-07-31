@@ -54,6 +54,7 @@ public:
 
     // meters for the UI (audio thread -> UI, relaxed atomics)
     std::atomic<float> meterL { 0.0f }, meterR { 0.0f };
+    std::atomic<float> meterGR { 1.0f }; // limiter gain reduction, linear (1 = none)
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
