@@ -28,7 +28,8 @@ struct EngineParams
     float roomSize     = 0.35f;
     float roomDamping  = 0.5f;
     float roomEarlyLate= 0.35f;
-    int   qualityMode  = 1;       // 0 = Economy(64), 1 = Standard(128)
+    int   qualityMode  = 1;       // 0 = Economy(half taps), 1 = Standard(full)
+    int   hrtfProfile  = 1;       // 0 = Analytic A (legacy), 1 = Analytic B
     float outputGainDb = 0.0f;
     bool  bypassRoom   = false;
 };
@@ -70,9 +71,10 @@ public:
     // FIR output crossfade + per-ear delay/gain smoothing (no angle smoothing needed,
     // so the ±180° wrap can never take the long way around). Quality (tap-count)
     // changes ride the same crossfade — never a reset, never a click.
-    void update (float azDeg, float elDeg, float dist, float nearAmt, float headR,
-                 int taps) noexcept
+    void update (const HrtfDatabase* db, float azDeg, float elDeg, float dist,
+                 float nearAmt, float headR, int taps) noexcept
     {
+        hrtf = db;
         // a source can't be inside the head: effective distance floors at the skull
         const float r = clampf (dist, headR + 0.005f, kMaxDistance);
         const Vec3 dir = directionFromAngles (azDeg, elDeg);
@@ -103,7 +105,7 @@ public:
         // Skipped entirely while the direction is static so no crossfade restarts and
         // the steady-state convolver runs single-bank (no redundant CPU).
         const bool coeffsDirty = !primed || azDeg != lastAz || elDeg != lastEl
-                                 || taps != lastTaps;
+                                 || taps != lastTaps || db != lastDb;
         if (coeffsDirty)
         {
             hrtf->interpolate (azDeg, elDeg, coefL.data(), coefR.data());
@@ -128,7 +130,7 @@ public:
                 fir[0].setCoefficients (coefL.data(), taps);
                 fir[1].setCoefficients (coefR.data(), taps);
             }
-            lastAz = azDeg; lastEl = elDeg; lastTaps = taps;
+            lastAz = azDeg; lastEl = elDeg; lastTaps = taps; lastDb = db;
         }
     }
 
@@ -167,6 +169,7 @@ private:
     int maxBlockSize = 0, baseDelay = 96;
     float lastAz = 1e9f, lastEl = 1e9f;
     int lastTaps = -1;
+    const HrtfDatabase* lastDb = nullptr;
     bool primed = false;
     Vec3 lastPos;
 };
@@ -179,8 +182,11 @@ public:
     void prepare (float sampleRate, int /*hostMaxBlock*/)
     {
         sr = sampleRate;
-        hrtf.generateAnalytic (sr, 0.0875f);
-        for (auto& s : sources) s.prepare (sr, kChunk, &hrtf);
+        // Both analytic profiles are built up front (~1 MB each) so switching is a
+        // pointer swap at a block boundary — no worker thread, no audio-thread rebuild.
+        hrtf[HrtfDatabase::AnalyticA].generateAnalytic (sr, 0.0875f, HrtfDatabase::AnalyticA);
+        hrtf[HrtfDatabase::AnalyticB].generateAnalytic (sr, 0.0875f, HrtfDatabase::AnalyticB);
+        for (auto& s : sources) s.prepare (sr, kChunk, &hrtf[HrtfDatabase::AnalyticB]);
         early.prepare (sr, kChunk);
         fdn.prepare (sr, kChunk);
         outGainSm.prepare (sr, 0.02f); outGainSm.snap (1.0f);
@@ -230,7 +236,9 @@ public:
     float lastPeakL() const noexcept { return peakL; }
     float lastPeakR() const noexcept { return peakR; }
     float lastGainReduction() const noexcept { return lastGr; } // linear, 1 = none
-    int   hrtfTaps() const noexcept { return hrtf.numTaps(); }
+    int   hrtfTaps() const noexcept { return hrtf[0].numTaps(); }
+    const HrtfDatabase& database (int profile) const noexcept
+    { return hrtf[profile == 0 ? 0 : 1]; }
 
 private:
     void processChunk (const float* inL, const float* inR, float* outL, float* outR, int n) noexcept
@@ -252,8 +260,10 @@ private:
         if (fadingMode && !modeFade.isSmoothing() && modeFade.value() >= 0.999f)
             fadingMode = false;
 
-        const int fullTaps = hrtf.numTaps(); // scales with sample rate (constant ~2.7 ms)
+        const int fullTaps = hrtf[0].numTaps(); // scales with sample rate (~2.7 ms window)
         const int taps = p.qualityMode == 0 ? fullTaps / 2 : fullTaps;
+        const HrtfDatabase* db = &hrtf[p.hrtfProfile == 0 ? HrtfDatabase::AnalyticA
+                                                          : HrtfDatabase::AnalyticB];
 
         // ---- geometry updates (block rate) ----
         const float roomTarget = p.bypassRoom ? 0.0f : p.roomAmount;
@@ -270,7 +280,7 @@ private:
             for (int i = 0; i < n; ++i)
                 mono[i] = 0.5f * (inL[i] + inR[i]);
 
-            sources[0].update (p.azimuthDeg, p.elevationDeg, p.distanceM,
+            sources[0].update (db, p.azimuthDeg, p.elevationDeg, p.distanceM,
                                p.nearField, p.headRadiusM, taps);
             std::memset (outL, 0, sizeof (float) * (size_t) n);
             std::memset (outR, 0, sizeof (float) * (size_t) n);
@@ -283,9 +293,9 @@ private:
         else // Linked Stereo: L/R inputs become two sources at az ± width/2
         {
             const float half = p.widthDeg * 0.5f;
-            sources[0].update (wrapDeg (p.azimuthDeg - half), p.elevationDeg, p.distanceM,
+            sources[0].update (db, wrapDeg (p.azimuthDeg - half), p.elevationDeg, p.distanceM,
                                p.nearField, p.headRadiusM, taps);
-            sources[1].update (wrapDeg (p.azimuthDeg + half), p.elevationDeg, p.distanceM,
+            sources[1].update (db, wrapDeg (p.azimuthDeg + half), p.elevationDeg, p.distanceM,
                                p.nearField, p.headRadiusM, taps);
             // stash inputs BEFORE clearing outputs — in-place (out == in) must stay valid
             std::memcpy (mono, inL, sizeof (float) * (size_t) n);
@@ -368,7 +378,7 @@ private:
     }
 
     EngineParams params;
-    HrtfDatabase hrtf;
+    HrtfDatabase hrtf[HrtfDatabase::kNumProfiles];
     SourceRenderer sources[2];
     EarlyReflections early;
     FdnReverb fdn;

@@ -11,15 +11,40 @@
   (rigid-sphere path: straight line when the ear is visible, tangent+arc when occluded)
 - Regenerated at `prepareToPlay` for the current sample rate (analytic profile is cheap)
 
-## v1 profile: "Analytic A"
+## v1 profiles (both procedural, both built at `prepareToPlay`)
 
-Procedural spherical-head model, generated per direction/ear:
+Both start with the same head-shadow first-order filter (Brown–Duda):
+`H(s) = (1 + α·s/2ω0)/(1 + s/2ω0)`, `ω0 = c/a`, `α = 1 + cos(θ_inc)`, θ_inc = angle
+source↔ear axis (ears at ±95°). They differ in the pinna/elevation stage.
 
-1. Head-shadow first-order filter (Brown–Duda): `H(s) = (1 + α·s/2ω0)/(1 + s/2ω0)`,
-   `ω0 = c/a`, `α = 1 + cos(θ_inc)`, θ_inc = angle source↔ear axis (ears at ±95°)
-2. Pinna elevation notch: biquad, center ≈ 5–12 kHz tracking elevation, frontal emphasis
-3. Elevation shelf: small HF peak for upward sources
-4. Impulse through the cascade → truncated to N taps
+### Analytic A (legacy, kept for A/B comparison)
+
+Pinna notch at 5–12 kHz tracking elevation, plus a small HF peak for upward sources —
+but the notch depth is scaled by `cos(elevation) × frontness`. That makes the height cue
+**vanish at ±90° and behind the listener**, which is why "above" and "below" were hard to
+hear. Retained only so the change is audible side by side.
+
+### Analytic B (default)
+
+Elevation cues that survive at the poles and behind:
+
+1. **N1 notch** — centre sweeps geometrically 4.2 kHz (straight down) → 11.5 kHz
+   (straight up), monotonic in elevation; depth 8–16 dB and never scaled to zero.
+   Measured HRIRs show 10–20 dB here, so a shallow notch simply is not audible as height.
+2. **P1 peak** — companion peak at `0.62 × f_N`, +2…+6 dB. The moving *pair* is what
+   reads as height, not a lone notch (Hebrank & Wright; Langendijk & Bronkhorst).
+3. **Elevation shelf** — high shelf at 8 kHz, ±6.5 dB: sources above gain air, sources
+   below lose it to torso shadow.
+4. Front/back weight floors at 0.45 (never 0) so the rear keeps most of the cue, and
+   blends to a constant at the poles where azimuth is meaningless.
+
+Impulse through the cascade → truncated to N taps.
+
+Measured mean spectral separation over 4–14 kHz (`nsb_tests` prints this):
+straight-up vs straight-down **5.8 dB** for B against **2.0 dB** for A.
+
+Switching profiles is a pointer swap at a block boundary — both grids are resident
+(~1 MB each) — and rides the normal filter crossfade.
 
 ## Future `.bhrtf` pack (TASK 6)
 

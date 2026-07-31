@@ -69,9 +69,10 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
             AudioParameterFloatAttributes().withLabel ("%")));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::earlyLate, 1 }, "Early/Late", pct, 35.0f,
             AudioParameterFloatAttributes().withLabel ("%")));
-    // nsb::pid::hrtfProfile is deliberately NOT exposed yet: with a single profile a
-    // choice parameter has range 0..0, so convertTo0to1 is 0/0 = NaN and no host can
-    // round-trip it. It returns in TASK 6 alongside the imported SOFA profiles.
+    // Two real profiles, so the choice has a usable range (a single-option choice has
+    // range 0..0 and normalises to 0/0 = NaN, which no host can round-trip).
+    lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::hrtfProfile, 1 },
+            "HRTF Profile", StringArray { "Analytic A (legacy)", "Analytic B" }, 1));
     lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::quality, 1 },
             "Quality", StringArray { "Economy", "Standard" }, 1));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::outputGain, 1 }, "Output Gain",
@@ -100,6 +101,7 @@ NekoSpaceProcessor::NekoSpaceProcessor()
     pQuality = raw (nsb::pid::quality);  pOutGain = raw (nsb::pid::outputGain);
     pBypassRoom = raw (nsb::pid::bypassRoom);
     pBypass = raw (nsb::pid::bypass);
+    pProfile = raw (nsb::pid::hrtfProfile);
     bypassParam = apvts.getParameter (nsb::pid::bypass);
 }
 
@@ -154,6 +156,7 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     p.roomDamping   = pRoomDamp->load() * 0.01f;
     p.roomEarlyLate = pEarlyLate->load() * 0.01f;
     p.qualityMode   = (int) pQuality->load();
+    p.hrtfProfile   = (int) pProfile->load();
     p.outputGainDb  = pOutGain->load();
     p.bypassRoom    = pBypassRoom->load() > 0.5f;
     engine.setParams (p);

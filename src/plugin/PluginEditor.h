@@ -95,6 +95,10 @@ public:
 
         setupCombo (modeBox, nsb::pid::mode, modeAtt);
         setupCombo (qualityBox, nsb::pid::quality, qualityAtt);
+        setupCombo (profileBox, nsb::pid::hrtfProfile, profileAtt);
+        profileBox.setTitle ("HRTF Profile");
+        profileBox.setTooltip ("Analytic B has the stronger height cue; A is the original "
+                               "model, kept for comparison");
 
         // right-panel horizontal sliders
         addRow (azSlider, azLabel, "AZIMUTH", nsb::pid::azimuth, azSAtt);
@@ -186,7 +190,7 @@ public:
             const juce::Font f (juce::FontOptions (9.5f));
             g.setFont (f);
             g.setColour (nsbui::col::textDim.withAlpha (0.75f));
-            g.drawText ("HRTF: Analytic A (built-in)  |  latency 2 ms",
+            g.drawText ("HRTF: procedural (built-in)  |  latency 2 ms",
                         infoArea, juce::Justification::centredLeft);
             g.drawText (fitting (f, infoArea.getWidth() - 280,
                                  { "NekoSpace Binaural  |  Copyright (C) 2026 TextureVoice  |  "
@@ -221,6 +225,7 @@ public:
         presetBox.setBounds (header.removeFromLeft (190).reduced (4, 9));
         modeBox.setBounds (header.removeFromLeft (150).reduced (4, 9));
         qualityBox.setBounds (header.removeFromLeft (120).reduced (4, 9));
+        profileBox.setBounds (header.removeFromLeft (170).reduced (4, 9));
 
         // full-width footer strip: always has room for the info + licence line
         infoArea = b.removeFromBottom (18).reduced (12, 2);
@@ -308,6 +313,10 @@ private:
             { "Small Quiet Room",   { { pid::azimuth, 20.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.4f },
                                       { pid::nearfield, 60.0f }, { pid::roomAmount, 35.0f },
                                       { pid::roomSize, 20.0f }, { pid::roomDamping, 70.0f } } },
+            // Dry reference for judging height: room and near-field colouring off, so
+            // only the HRTF elevation cue is audible. Sweep ELEVATION from here.
+            { "Height Check (dry)", { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.0f },
+                                      { pid::nearfield, 0.0f }, { pid::roomAmount, 0.0f } } },
         };
         presetBox.setTextWhenNothingSelected ("Presets...");
         for (int i = 0; i < (int) presets.size(); ++i)
@@ -416,8 +425,9 @@ private:
     StereoMeter meter;
     nsbui::SpatialPad pad;
 
-    juce::ComboBox presetBox, modeBox, qualityBox;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAtt, qualityAtt;
+    juce::ComboBox presetBox, modeBox, qualityBox, profileBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>
+        modeAtt, qualityAtt, profileAtt;
 
     juce::Slider azSlider, elSlider, distSlider, widthSlider, nearSlider, headSlider, elevBig;
     juce::Label azLabel, elLabel, distLabel, widthLabel, nearLabel, headLabel;

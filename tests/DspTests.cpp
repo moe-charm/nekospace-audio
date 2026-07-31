@@ -381,6 +381,123 @@ static void testRoomToggleNoBurst()
     CHECK (burst < 1e-3f, "room toggle: no stale tail burst on re-enable");
 }
 
+// ---- elevation cue tests (Analytic B) -------------------------------------
+// The failure these guard against: profile A scaled the pinna notch by
+// cos(elevation) and by frontness, so "above", "below" and anything behind the
+// listener lost their height cue entirely.
+
+static float magDb (const float* fir, int taps, float freq, float fs)
+{
+    double re = 0, im = 0;
+    for (int n = 0; n < taps; ++n)
+    {
+        const double w = -2.0 * 3.14159265358979 * (double) freq * n / (double) fs;
+        re += (double) fir[n] * std::cos (w);
+        im += (double) fir[n] * std::sin (w);
+    }
+    return 20.0f * std::log10 ((float) std::sqrt (re * re + im * im) + 1e-12f);
+}
+
+// Frequency of the deepest point in [lo, hi] — the first pinna notch.
+static float notchFreq (const HrtfDatabase& db, float az, float el, float fs,
+                        float lo = 3500.0f, float hi = 14000.0f)
+{
+    std::vector<float> L ((size_t) db.numTaps()), R ((size_t) db.numTaps());
+    db.interpolate (az, el, L.data(), R.data());
+    float best = lo, bestDb = 1e9f;
+    for (float f = lo; f <= hi; f += 50.0f)
+    {
+        const float d = magDb (L.data(), db.numTaps(), f, fs);
+        if (d < bestDb) { bestDb = d; best = f; }
+    }
+    return best;
+}
+
+// Mean absolute spectral difference between two directions, over a band.
+static float spectralDiffDb (const HrtfDatabase& db, float az1, float el1,
+                             float az2, float el2, float fs,
+                             float lo = 4000.0f, float hi = 14000.0f)
+{
+    const int taps = db.numTaps();
+    std::vector<float> a ((size_t) taps), b ((size_t) taps), t1 ((size_t) taps), t2 ((size_t) taps);
+    db.interpolate (az1, el1, a.data(), t1.data());
+    db.interpolate (az2, el2, b.data(), t2.data());
+    double acc = 0; int count = 0;
+    for (float f = lo; f <= hi; f += 100.0f)
+    {
+        acc += std::fabs (magDb (a.data(), taps, f, fs) - magDb (b.data(), taps, f, fs));
+        ++count;
+    }
+    return (float) (acc / std::max (1, count));
+}
+
+static void testElevationNotchMovesMonotonically()
+{
+    const float fs = 48000.0f;
+    HrtfDatabase db;
+    db.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticB);
+    float prev = 0.0f;
+    for (float el : { -90.0f, -60.0f, -30.0f, 0.0f, 30.0f, 60.0f, 90.0f })
+    {
+        const float f = notchFreq (db, 0.0f, el, fs);
+        CHECK (f > prev + 200.0f, "elevation: notch centre rises monotonically with elevation");
+        prev = f;
+    }
+    // and it actually sweeps a useful range, not a token amount
+    const float low = notchFreq (db, 0.0f, -90.0f, fs);
+    const float high = notchFreq (db, 0.0f, 90.0f, fs);
+    CHECK (high > low * 2.0f, "elevation: notch sweeps more than an octave");
+}
+
+static void testElevationSpectraDiffer()
+{
+    const float fs = 48000.0f;
+    HrtfDatabase b;
+    b.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticB);
+
+    HrtfDatabase a;
+    a.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticA);
+
+    const float frontB = spectralDiffDb (b, 0.0f, -60.0f, 0.0f, 60.0f, fs);
+    const float polesB = spectralDiffDb (b, 0.0f, -90.0f, 0.0f, 90.0f, fs);
+    const float rearB  = spectralDiffDb (b, 180.0f, -60.0f, 180.0f, 60.0f, fs);
+    const float polesA = spectralDiffDb (a, 0.0f, -90.0f, 0.0f, 90.0f, fs);
+    std::printf ("  [elevation dB spread] front B=%.2f  poles B=%.2f  rear B=%.2f  poles A=%.2f\n",
+                 frontB, polesB, rearB, polesA);
+
+    CHECK (frontB > 4.0f, "elevation: -60 vs +60 spectra clearly differ (front)");
+    CHECK (polesB > 4.0f, "elevation: straight down vs straight up clearly differ");
+    // the cue must survive behind the listener, where profile A had none at all
+    CHECK (rearB > 2.5f, "elevation: cue retained behind the listener");
+    // regression guard: profile A really is the weak one, so a future edit that
+    // silently reverts the model gets caught
+    CHECK (polesB > polesA * 2.0f, "elevation: profile B separates the poles far better than A");
+}
+
+static void testProfileSwitchIsClean()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e; e.prepare (fs, 512);
+    EngineParams p; p.azimuthDeg = 25.0f; p.elevationDeg = 45.0f;
+    p.distanceM = 1.0f; p.roomAmount = 0.0f;
+    const int n = (int) (2.0f * fs);
+    std::vector<float> in (512), L (n, 0.0f), R (n, 0.0f);
+    double ph = 0.0; const double dph = 2.0 * 3.14159265358979 * 440.0 / fs;
+    for (int pos = 0; pos < n; pos += 512)
+    {
+        const int m = std::min (512, n - pos);
+        p.hrtfProfile = ((pos / (int) (0.4f * fs)) % 2);
+        e.setParams (p);
+        for (int i = 0; i < m; ++i) { in[(size_t) i] = 0.25f * (float) std::sin (ph); ph += dph; }
+        e.process (in.data(), in.data(), L.data() + pos, R.data() + pos, m);
+    }
+    CHECK (allFinite (L) && allFinite (R), "profile switch: no NaN");
+    float maxJump = 0;
+    for (int i = (int) (0.2f * fs); i < n; ++i)
+        maxJump = std::max (maxJump, std::fabs (L[i] - L[i - 1]));
+    CHECK (maxJump < 0.08f, "profile switch: rides the crossfade, no click");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -397,6 +514,9 @@ int main()
     testBottomElevationCentered();
     testSampleRatesFinite();
     testRoomToggleNoBurst();
+    testElevationNotchMovesMonotonically();
+    testElevationSpectraDiffer();
+    testProfileSwitchIsClean();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

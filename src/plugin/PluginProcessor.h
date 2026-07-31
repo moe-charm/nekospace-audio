@@ -20,7 +20,7 @@ inline constexpr const char* roomAmount = "room.amount";
 inline constexpr const char* roomSize   = "room.size";
 inline constexpr const char* roomDamping= "room.damping";
 inline constexpr const char* earlyLate  = "room.early_late";
-inline constexpr const char* hrtfProfile= "hrtf.profile"; // reserved, not exposed until TASK 6
+inline constexpr const char* hrtfProfile= "hrtf.profile";
 inline constexpr const char* quality    = "quality.mode";
 inline constexpr const char* outputGain = "output.gain";
 inline constexpr const char* bypassRoom = "output.bypass_room";
@@ -104,7 +104,7 @@ private:
     // cached raw-value pointers (atomic loads in processBlock)
     std::atomic<float>* pAz, * pEl, * pDist, * pWidth, * pMode, * pNear, * pHead;
     std::atomic<float>* pRoomAmt, * pRoomSize, * pRoomDamp, * pEarlyLate;
-    std::atomic<float>* pQuality, * pOutGain, * pBypassRoom, * pBypass;
+    std::atomic<float>* pQuality, * pOutGain, * pBypassRoom, * pBypass, * pProfile;
     juce::AudioProcessorParameter* bypassParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceProcessor)

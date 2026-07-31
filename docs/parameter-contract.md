@@ -17,17 +17,13 @@ All parameters use JUCE `ParameterID` version hint 1 unless noted.
 | `room.size`          | float  | 0 … 100 %                     | 35      | continuous shoebox + T60 scale |
 | `room.damping`       | float  | 0 … 100 %                     | 50      | HF absorption |
 | `room.early_late`    | float  | 0 … 100 %                     | 35      | 0 = all early, 100 = all late |
+| `hrtf.profile`       | choice | Analytic A (legacy) / Analytic B | Analytic B | B has the working height cue; A is kept for comparison. Both grids stay resident, so switching is a block-boundary swap + crossfade. Not meant for continuous automation |
 | `quality.mode`       | choice | Economy / Standard            | Standard | Standard = full HRIR window (~2.7 ms), Economy = half. Tap counts scale with sample rate — 128/64 at 48 kHz, 256/128 at 96 kHz and above |
 | `output.gain`        | float  | -24 … +12 dB                  | 0       | |
 | `output.bypass_room` | bool   | Off / On                      | Off     | A/B compare |
 
 Reserved for future versions (do not reuse for anything else):
 
-- **`hrtf.profile`** (choice) — ID reserved, **not exposed in v1**. A choice parameter
-  with a single option has range 0..0, so its normalised value is 0/0 = NaN and no host
-  can round-trip it (caught by pluginval strictness 10). It ships in TASK 6 once
-  imported SOFA profiles make the list longer than one. Not for continuous automation:
-  changing it rebuilds every filter on a worker thread, then crossfades on publish.
 - `quality.mode` value `High` (partitioned FFT — must update reported latency).
 - `source.mode` value `Mid-Side`.
 
