@@ -41,6 +41,9 @@ public:
     bool hasEditor() const override { return true; }
     juce::AudioProcessorParameter* getBypassParameter() const override { return bypassParam; }
 
+    // True when the measured pack loaded for the current sample rate (48 kHz only today).
+    bool measuredHrtfAvailable() const noexcept { return engine.measuredAvailable(); }
+
     const juce::String getName() const override { return "NekoSpace Binaural"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }

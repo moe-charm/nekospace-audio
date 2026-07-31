@@ -54,6 +54,15 @@ Choosing AGPLv3 also settles the JUCE question: JUCE 9 is dual-licensed AGPLv3 /
 commercial, so an AGPLv3 release needs no paid JUCE tier. See
 [third-party-licenses.md](docs/third-party-licenses.md).
 
+### Optional: experimental measured HRTF (development only)
+
+Not part of a normal build or of any distribution — see `current_task.md`.
+
+```bash
+python tools/hrtf-pack/sofa_to_bhrtf.py external/hrtf-data/HRIR_L2702.sofa resources/hrtf/ku100_48k.bhrtf
+cmake -B build -DNSB_WITH_KU100=ON
+```
+
 ## Docs
 
 - [architecture.md](docs/architecture.md) — signal path + Architecture Contract (binding)

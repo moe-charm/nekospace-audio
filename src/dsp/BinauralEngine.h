@@ -29,7 +29,7 @@ struct EngineParams
     float roomDamping  = 0.5f;
     float roomEarlyLate= 0.35f;
     int   qualityMode  = 1;       // 0 = Economy(half taps), 1 = Standard(full)
-    int   hrtfProfile  = 1;       // 0 = Analytic A (legacy), 1 = Analytic B
+    int   hrtfProfile  = 1;       // 0 = Analytic A (legacy), 1 = Analytic B, 2 = measured
     float outputGainDb = 0.0f;
     bool  bypassRoom   = false;
 };
@@ -179,13 +179,36 @@ class BinauralEngine
 public:
     static constexpr int kChunk = 512; // internal processing granularity
 
+    // Optional measured pack (see tools/hrtf-pack). Set before prepare(); ownership
+    // stays with the caller and the data is only read during prepare().
+    void setMeasuredPack (const void* data, size_t bytes) noexcept
+    {
+        packData = data; packBytes = bytes;
+    }
+
+    bool measuredAvailable() const noexcept { return hrtf[HrtfDatabase::Measured].isValid(); }
+
     void prepare (float sampleRate, int /*hostMaxBlock*/)
     {
         sr = sampleRate;
-        // Both analytic profiles are built up front (~1 MB each) so switching is a
-        // pointer swap at a block boundary — no worker thread, no audio-thread rebuild.
+        // Every profile is built up front (~1 MB each) so switching is a pointer swap at
+        // a block boundary — no worker thread, no audio-thread rebuild.
         hrtf[HrtfDatabase::AnalyticA].generateAnalytic (sr, 0.0875f, HrtfDatabase::AnalyticA);
         hrtf[HrtfDatabase::AnalyticB].generateAnalytic (sr, 0.0875f, HrtfDatabase::AnalyticB);
+
+        // The measured pack is 48 kHz only for now; loadPack refuses any other rate, so
+        // at 44.1/96/192 kHz the profile simply stays unavailable and selecting it falls
+        // back to Analytic B rather than playing back at the wrong rate.
+        auto& measured = hrtf[HrtfDatabase::Measured];
+        measured = HrtfDatabase{};
+        if (packData != nullptr && measured.loadPack (packData, packBytes, sr))
+        {
+            const float ref = hrtf[HrtfDatabase::AnalyticB].frontalRms();
+            const float own = measured.frontalRms();
+            if (own > 1e-9f && ref > 1e-9f)
+                measured.applyGain (ref / own);   // level-matched: compare timbre, not loudness
+        }
+
         for (auto& s : sources) s.prepare (sr, kChunk, &hrtf[HrtfDatabase::AnalyticB]);
         early.prepare (sr, kChunk);
         fdn.prepare (sr, kChunk);
@@ -238,7 +261,7 @@ public:
     float lastGainReduction() const noexcept { return lastGr; } // linear, 1 = none
     int   hrtfTaps() const noexcept { return hrtf[0].numTaps(); }
     const HrtfDatabase& database (int profile) const noexcept
-    { return hrtf[profile == 0 ? 0 : 1]; }
+    { return hrtf[profile >= 0 && profile < HrtfDatabase::kNumProfiles ? profile : 1]; }
 
 private:
     void processChunk (const float* inL, const float* inR, float* outL, float* outR, int n) noexcept
@@ -262,8 +285,10 @@ private:
 
         const int fullTaps = hrtf[0].numTaps(); // scales with sample rate (~2.7 ms window)
         const int taps = p.qualityMode == 0 ? fullTaps / 2 : fullTaps;
-        const HrtfDatabase* db = &hrtf[p.hrtfProfile == 0 ? HrtfDatabase::AnalyticA
-                                                          : HrtfDatabase::AnalyticB];
+        int wanted = p.hrtfProfile;
+        if (wanted < 0 || wanted >= HrtfDatabase::kNumProfiles) wanted = HrtfDatabase::AnalyticB;
+        if (! hrtf[wanted].isValid()) wanted = HrtfDatabase::AnalyticB;
+        const HrtfDatabase* db = &hrtf[wanted];
 
         // ---- geometry updates (block rate) ----
         const float roomTarget = p.bypassRoom ? 0.0f : p.roomAmount;
@@ -390,5 +415,7 @@ private:
     int activeMode = 0;
     int roomCooldown = 0;
     bool fadingMode = false;
+    const void* packData = nullptr;
+    size_t packBytes = 0;
 };
 } // namespace nsb

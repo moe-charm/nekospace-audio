@@ -3,6 +3,8 @@
 
 // NekoSpace Binaural — JUCE-free DSP acceptance tests (Contract #12).
 #include <cstdio>
+#include <cstring>
+#include <cstdint>
 #include <cmath>
 #include <vector>
 #include <random>
@@ -498,6 +500,193 @@ static void testProfileSwitchIsClean()
     CHECK (maxJump < 0.08f, "profile switch: rides the crossfade, no click");
 }
 
+// ---- measured pack (.bhrtf) ------------------------------------------------
+// Built synthetically here so the suite never depends on the CC BY-SA dataset being
+// present. Guards the loader contract that the real KU100 pack relies on.
+
+static std::vector<unsigned char> makePack (float sampleRate, int taps,
+                                            int numAz = HrtfDatabase::kNumAz,
+                                            int numEl = HrtfDatabase::kNumEl,
+                                            std::uint32_t version = 1)
+{
+    const size_t count = (size_t) numEl * (size_t) numAz * 2u * (size_t) taps;
+    std::vector<unsigned char> b (36 + count * sizeof (float), 0);
+    b[0] = 'N'; b[1] = 'S'; b[2] = 'B'; b[3] = 'H';
+    const std::uint32_t az = (std::uint32_t) numAz, el = (std::uint32_t) numEl,
+                        tp = (std::uint32_t) taps;
+    const float elMin = HrtfDatabase::kElMin, elStep = HrtfDatabase::kElStep,
+                azStep = HrtfDatabase::kAzStep;
+    std::memcpy (b.data() + 4,  &version, 4);
+    std::memcpy (b.data() + 8,  &az, 4);
+    std::memcpy (b.data() + 12, &el, 4);
+    std::memcpy (b.data() + 16, &tp, 4);
+    std::memcpy (b.data() + 20, &sampleRate, 4);
+    std::memcpy (b.data() + 24, &elMin, 4);
+    std::memcpy (b.data() + 28, &elStep, 4);
+    std::memcpy (b.data() + 32, &azStep, 4);
+
+    // right-ear-louder impulses, so the orientation assertion below is meaningful
+    std::vector<float> data (count, 0.0f);
+    for (int ei = 0; ei < numEl; ++ei)
+        for (int ai = 0; ai < numAz; ++ai)
+            for (int ear = 0; ear < 2; ++ear)
+            {
+                const size_t base = (((size_t) ei * (size_t) numAz + (size_t) ai) * 2u
+                                     + (size_t) ear) * (size_t) taps;
+                const float azDeg = HrtfDatabase::kAzStep * (float) ai;
+                const float pan = std::sin (deg2rad (azDeg));           // +1 = right
+                data[base] = 0.5f * (1.0f + (ear == 1 ? pan : -pan));
+            }
+    std::memcpy (b.data() + 36, data.data(), count * sizeof (float));
+    return b;
+}
+
+static void testPackLoaderRejectsBadInput()
+{
+    HrtfDatabase db;
+    db.generateAnalytic (48000.0f, 0.0875f, HrtfDatabase::AnalyticB);
+
+    const auto good = makePack (48000.0f, 128);
+    CHECK (db.loadPack (good.data(), good.size(), 48000.0f), "pack: valid pack loads");
+
+    // every rejection must leave a previously good database usable
+    HrtfDatabase d2;
+    CHECK (! d2.loadPack (nullptr, 0, 48000.0f), "pack: null rejected");
+    CHECK (! d2.loadPack (good.data(), 10, 48000.0f), "pack: truncated header rejected");
+    CHECK (! d2.loadPack (good.data(), good.size() - 4, 48000.0f),
+           "pack: truncated payload rejected");
+    CHECK (! d2.loadPack (good.data(), good.size(), 96000.0f),
+           "pack: sample-rate mismatch rejected (48 kHz-only prototype)");
+
+    auto badMagic = good; badMagic[1] = 'X';
+    CHECK (! d2.loadPack (badMagic.data(), badMagic.size(), 48000.0f), "pack: bad magic rejected");
+
+    const auto badVersion = makePack (48000.0f, 128, HrtfDatabase::kNumAz,
+                                      HrtfDatabase::kNumEl, 99);
+    CHECK (! d2.loadPack (badVersion.data(), badVersion.size(), 48000.0f),
+           "pack: unknown version rejected");
+
+    const auto badGrid = makePack (48000.0f, 128, 36, HrtfDatabase::kNumEl);
+    CHECK (! d2.loadPack (badGrid.data(), badGrid.size(), 48000.0f),
+           "pack: wrong direction grid rejected");
+    CHECK (! d2.isValid(), "pack: a database that only saw bad packs stays invalid");
+}
+
+static void testPackOrientationAndLevelMatch()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e;
+    const auto pack = makePack (fs, 128);
+    e.setMeasuredPack (pack.data(), pack.size());
+    e.prepare (fs, 512);
+    CHECK (e.measuredAvailable(), "pack: engine picks up the measured profile at 48 kHz");
+
+    // a source on the right must be louder in the right ear (catches an azimuth-sign or
+    // receiver-order mistake in the converter)
+    const auto& db = e.database (HrtfDatabase::Measured);
+    std::vector<float> l ((size_t) db.numTaps()), r ((size_t) db.numTaps());
+    db.interpolate (90.0f, 0.0f, l.data(), r.data());
+    double el2 = 0, er2 = 0;
+    for (int t = 0; t < db.numTaps(); ++t) { el2 += l[(size_t) t] * l[(size_t) t];
+                                             er2 += r[(size_t) t] * r[(size_t) t]; }
+    CHECK (er2 > el2 * 2.0, "pack: az +90 is louder in the right ear");
+
+    // level-matched against Analytic B so switching compares timbre, not loudness
+    const float refRms = e.database (HrtfDatabase::AnalyticB).frontalRms();
+    const float ownRms = db.frontalRms();
+    CHECK (std::fabs (20.0f * std::log10 ((ownRms + 1e-12f) / (refRms + 1e-12f))) < 0.1f,
+           "pack: frontal level matches Analytic B within 0.1 dB");
+}
+
+static void testPackFallsBackOffFortyEight()
+{
+    const float fs = 96000.0f;
+    BinauralEngine e;
+    const auto pack = makePack (48000.0f, 128);       // 48 kHz pack, 96 kHz session
+    e.setMeasuredPack (pack.data(), pack.size());
+    e.prepare (fs, 512);
+    CHECK (! e.measuredAvailable(), "pack: 48 kHz pack not used at 96 kHz");
+
+    EngineParams p; p.hrtfProfile = 2;                // ask for the missing profile
+    p.azimuthDeg = 40.0f; p.roomAmount = 0.0f;
+    std::vector<float> L, R;
+    renderAt (e, p, 0.3f, fs, L, R);
+    CHECK (allFinite (L) && allFinite (R), "pack: missing profile falls back cleanly");
+    CHECK (rms (L) + rms (R) > 1e-4f, "pack: fallback still renders audio");
+}
+
+// End-to-end check of the real converted pack, when one has been generated. Skipped
+// silently otherwise so the suite never depends on the CC BY-SA dataset.
+static void testRealPackIfPresent()
+{
+    const char* candidates[] = {
+        "resources/hrtf/ku100_48k.bhrtf",
+        "../resources/hrtf/ku100_48k.bhrtf",
+        "../../resources/hrtf/ku100_48k.bhrtf",
+    };
+    std::vector<unsigned char> bytes;
+    for (const char* path : candidates)
+    {
+        std::FILE* fp = std::fopen (path, "rb");
+        if (fp == nullptr) continue;
+        std::fseek (fp, 0, SEEK_END);
+        const long size = std::ftell (fp);
+        std::fseek (fp, 0, SEEK_SET);
+        if (size > 0)
+        {
+            bytes.resize ((size_t) size);
+            const size_t got = std::fread (bytes.data(), 1, (size_t) size, fp);
+            if (got != (size_t) size) bytes.clear();
+        }
+        std::fclose (fp);
+        if (! bytes.empty()) { std::printf ("  [real pack] %s (%zu bytes)\n", path, bytes.size()); break; }
+    }
+    if (bytes.empty()) { std::printf ("  [real pack] not generated - skipped\n"); return; }
+
+    const float fs = 48000.0f;
+    BinauralEngine e;
+    e.setMeasuredPack (bytes.data(), bytes.size());
+    e.prepare (fs, 512);
+    CHECK (e.measuredAvailable(), "real pack: loads at 48 kHz");
+    if (! e.measuredAvailable()) return;
+
+    const auto& db = e.database (HrtfDatabase::Measured);
+    const int taps = db.numTaps();
+    std::vector<float> l ((size_t) taps), r ((size_t) taps);
+
+    // right source -> right ear louder (converter's azimuth sign and receiver order)
+    db.interpolate (90.0f, 0.0f, l.data(), r.data());
+    double el2 = 0, er2 = 0;
+    for (int t = 0; t < taps; ++t) { el2 += l[(size_t) t] * l[(size_t) t];
+                                     er2 += r[(size_t) t] * r[(size_t) t]; }
+    CHECK (er2 > el2 * 2.0, "real pack: az +90 is louder in the right ear");
+    std::printf ("  [real pack] az+90 ILD = %.1f dB\n",
+                 10.0 * std::log10 ((er2 + 1e-20) / (el2 + 1e-20)));
+
+    // minimum phase: energy must sit at the start, or the geometric ITD would be
+    // fighting a residual delay left in the data
+    db.interpolate (0.0f, 0.0f, l.data(), r.data());
+    double head = 0, total = 0;
+    for (int t = 0; t < taps; ++t)
+    {
+        const double v = (double) l[(size_t) t] * l[(size_t) t];
+        total += v;
+        if (t < 16) head += v;
+    }
+    CHECK (head > 0.9 * total, "real pack: min-phase energy is front-loaded (no residual ITD)");
+    std::printf ("  [real pack] energy in first 16 taps = %.1f%%\n", 100.0 * head / (total + 1e-20));
+
+    // level-matched to the analytic reference
+    const float refRms = e.database (HrtfDatabase::AnalyticB).frontalRms();
+    CHECK (std::fabs (20.0f * std::log10 ((db.frontalRms() + 1e-12f) / (refRms + 1e-12f))) < 0.1f,
+           "real pack: frontal level matches Analytic B");
+
+    // and it should carry a real elevation cue, like Analytic B does
+    const float spread = spectralDiffDb (db, 0.0f, -90.0f, 0.0f, 90.0f, fs);
+    std::printf ("  [real pack] up vs down spread = %.2f dB\n", spread);
+    CHECK (spread > 4.0f, "real pack: up/down spectra clearly differ");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -517,6 +706,10 @@ int main()
     testElevationNotchMovesMonotonically();
     testElevationSpectraDiffer();
     testProfileSwitchIsClean();
+    testPackLoaderRejectsBadInput();
+    testPackOrientationAndLevelMatch();
+    testPackFallsBackOffFortyEight();
+    testRealPackIfPresent();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

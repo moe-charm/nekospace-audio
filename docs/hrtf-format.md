@@ -46,7 +46,54 @@ straight-up vs straight-down **5.8 dB** for B against **2.0 dB** for A.
 Switching profiles is a pointer swap at a block boundary — both grids are resident
 (~1 MB each) — and rides the normal filter crossfade.
 
-## Future `.bhrtf` pack (TASK 6)
+### KU100 48k (experimental, development builds only)
+
+A measured profile, off by default. Build with `-DNSB_WITH_KU100=ON` after generating the
+pack; see `current_task.md` for why it is not distributed yet.
+
+```bash
+python tools/hrtf-pack/sofa_to_bhrtf.py external/hrtf-data/HRIR_L2702.sofa resources/hrtf/ku100_48k.bhrtf
+cmake -B build -DNSB_WITH_KU100=ON && cmake --build build --config Release
+```
+
+Conversion (`tools/hrtf-pack/sofa_to_bhrtf.py`):
+
+1. **Minimum phase** (real-cepstrum fold) per HRIR. The engine synthesises ITD from the
+   rigid-sphere path, so any delay left in the data would be counted twice. Min phase
+   removes all delay, preserves the magnitude response exactly, and front-loads the
+   energy so truncation is clean — measured: 98 % of the frontal HRIR's energy lands in
+   the first 16 taps, and total energy is preserved to 4 decimal places.
+2. **Frame conversion.** SOFA `SimpleFreeFieldHRIR` azimuth is counter-clockwise
+   (positive = left) and receiver 0 is the left ear; both are mirrored into the engine
+   frame once, in the converter. The converter aborts if a source on the right does not
+   end up louder in the right ear, and a test re-checks it on the loaded pack.
+3. **Regrid** from the measured set to 72 × 13 by inverse-distance weighting of the three
+   nearest directions on the unit sphere (safe only because the HRIRs are time-aligned
+   first). With the Lebedev 2702-point set the largest nearest-neighbour gap is 2.5°.
+4. **Level match** happens at load time, not in the converter: the engine scales the pack
+   so its frontal RMS equals Analytic B's, keeping the analytic model as the single
+   reference and making profile switching a timbre comparison rather than a loudness one.
+
+The pack is 48 kHz only. `loadPack` refuses any other rate, and selecting the profile in a
+44.1/96/192 kHz session falls back to Analytic B (the GUI says so).
+
+Measured up-vs-down spectral spread over 4–14 kHz: **6.4 dB** (Analytic B 5.8, A 2.0).
+
+## `.bhrtf` pack format (v1)
+
+```
+offset  size  field
+0       4     magic "NSBH"
+4       4     uint32 version = 1
+8       4     uint32 numAz  = 72
+12      4     uint32 numEl  = 13
+16      4     uint32 taps
+20      4     float  sampleRate
+24      12    float  elMin, elStep, azStep
+36      ...   float  data[numEl][numAz][2][taps]  (ear 0 = left)
+```
+
+## Future runtime SOFA import (TASK 6)
 
 ```
 元の .sofa → 検証・座標正規化 → SR正規化 → 到達時間/残差フィルター分離

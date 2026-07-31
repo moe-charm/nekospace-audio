@@ -7,6 +7,8 @@
 // the same grid via the .bhrtf pipeline later (docs/hrtf-format.md). JUCE-free.
 #include <vector>
 #include <cmath>
+#include <cstring>
+#include <cstdint>
 #include "Geometry.h"
 
 namespace nsb
@@ -59,7 +61,7 @@ public:
 
     // A: original model — elevation cue fades to nothing at the poles and behind.
     // B: elevation cue survives everywhere (see buildDirectionB).
-    enum Profile { AnalyticA = 0, AnalyticB = 1, kNumProfiles = 2 };
+    enum Profile { AnalyticA = 0, AnalyticB = 1, Measured = 2, kNumProfiles = 3 };
 
     void generateAnalytic (float sampleRate, float headRadius, Profile p = AnalyticB)
     {
@@ -117,6 +119,67 @@ public:
     }
 
     int numTaps() const noexcept { return taps; }
+    bool isValid() const noexcept { return !firs.empty(); }
+
+    // Load a .bhrtf pack produced by tools/hrtf-pack/sofa_to_bhrtf.py. Returns false and
+    // leaves the database untouched if anything does not match this build's grid — a bad
+    // or stale pack must never half-load. Not real-time safe; call from prepare().
+    bool loadPack (const void* data, size_t bytes, float expectedSampleRate)
+    {
+        constexpr size_t kHeader = 36;
+        if (data == nullptr || bytes < kHeader) return false;
+        const auto* p = static_cast<const unsigned char*> (data);
+        if (p[0] != 'N' || p[1] != 'S' || p[2] != 'B' || p[3] != 'H') return false;
+
+        std::uint32_t version = 0, nAz = 0, nEl = 0, nTaps = 0;
+        float packSr = 0.0f, elMin = 0.0f, elStep = 0.0f, azStep = 0.0f;
+        std::memcpy (&version, p + 4,  4);
+        std::memcpy (&nAz,     p + 8,  4);
+        std::memcpy (&nEl,     p + 12, 4);
+        std::memcpy (&nTaps,   p + 16, 4);
+        std::memcpy (&packSr,  p + 20, 4);
+        std::memcpy (&elMin,   p + 24, 4);
+        std::memcpy (&elStep,  p + 28, 4);
+        std::memcpy (&azStep,  p + 32, 4);
+
+        if (version != 1) return false;
+        if ((int) nAz != kNumAz || (int) nEl != kNumEl) return false;
+        if (elMin != kElMin || elStep != kElStep || azStep != kAzStep) return false;
+        if ((int) nTaps < 8 || (int) nTaps > kMaxTaps) return false;
+        // 48 kHz-only prototype: a pack for another rate is refused rather than
+        // silently played back at the wrong speed.
+        if (std::fabs (packSr - expectedSampleRate) > 0.5f) return false;
+
+        const size_t count = (size_t) nEl * (size_t) nAz * 2u * (size_t) nTaps;
+        if (bytes < kHeader + count * sizeof (float)) return false;
+
+        firs.assign (count, 0.0f);
+        std::memcpy (firs.data(), p + kHeader, count * sizeof (float));
+        taps = (int) nTaps;
+        sr = packSr;
+        profile = Measured;
+        return true;
+    }
+
+    // Broadband energy of the frontal direction, used to level-match profiles so that
+    // switching compares timbre and not loudness.
+    float frontalRms() const noexcept
+    {
+        if (firs.empty()) return 0.0f;
+        const int ei = (int) ((0.0f - kElMin) / kElStep);
+        double acc = 0.0;
+        for (int ear = 0; ear < 2; ++ear)
+        {
+            const float* f = firAtConst (ei, 0, ear);
+            for (int t = 0; t < taps; ++t) acc += (double) f[t] * f[t];
+        }
+        return (float) std::sqrt (acc / (double) (2 * taps));
+    }
+
+    void applyGain (float g) noexcept
+    {
+        for (auto& v : firs) v *= g;
+    }
 
 private:
     float* firAt (int ei, int ai, int ear) noexcept

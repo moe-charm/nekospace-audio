@@ -28,6 +28,11 @@ symmetry preserved.
 **Accept:** never diverges, no NaN at any setting, room 0% == exact direct,
 tail length reported to host.
 
+## TASK 5.5 — measured KU100 listening prototype (in progress)
+Offline SOFA→`.bhrtf` converter, third `hrtf.profile` entry, development builds only
+(`NSB_WITH_KU100=ON`). See `current_task.md`; promotion depends on a listening result,
+not on the numbers.
+
 ## TASK 6 — SOFA Import (next)
 libmysofa, background conversion, `.bhrtf` pack + cache, license display.
 Priority dataset: TH Köln KU100 (matches production recording chain).

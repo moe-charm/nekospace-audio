@@ -13,3 +13,8 @@ compile_commands.json
 *.ilk
 JUCE/
 external/JUCE/
+
+# Measured HRTF source data and generated packs: CC BY-SA third-party data, kept out of
+# the repository while the KU100 profile is an unpromoted experiment (current_task.md).
+external/hrtf-data/
+resources/hrtf/*.bhrtf

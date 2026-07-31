@@ -38,6 +38,25 @@ target_sources(NekoSpaceBinaural PRIVATE
     src/plugin/PluginProcessor.cpp
 )
 
+# --- Optional measured HRTF pack (development listening prototype) ---
+# OFF by default: the TH Köln KU100 data is CC BY-SA and is NOT part of the distributed
+# plugin until it wins the listening comparison. See current_task.md.
+#   python tools/hrtf-pack/sofa_to_bhrtf.py <in.sofa> resources/hrtf/ku100_48k.bhrtf
+#   cmake -B build -DNSB_WITH_KU100=ON
+option(NSB_WITH_KU100 "Embed the experimental measured KU100 HRTF pack (dev only)" OFF)
+if(NSB_WITH_KU100)
+    set(NSB_KU100_PACK "${CMAKE_CURRENT_SOURCE_DIR}/resources/hrtf/ku100_48k.bhrtf")
+    if(NOT EXISTS "${NSB_KU100_PACK}")
+        message(FATAL_ERROR
+            "NSB_WITH_KU100=ON but ${NSB_KU100_PACK} is missing.\n"
+            "Generate it first:\n"
+            "  python tools/hrtf-pack/sofa_to_bhrtf.py <HRIR_L2702.sofa> ${NSB_KU100_PACK}")
+    endif()
+    juce_add_binary_data(NekoSpaceHrtfData SOURCES "${NSB_KU100_PACK}")
+    target_link_libraries(NekoSpaceBinaural PRIVATE NekoSpaceHrtfData)
+    target_compile_definitions(NekoSpaceBinaural PRIVATE NSB_WITH_KU100=1)
+endif()
+
 target_compile_definitions(NekoSpaceBinaural PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0

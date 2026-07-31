@@ -4,6 +4,10 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#if NSB_WITH_KU100
+ #include "BinaryData.h"
+#endif
+
 using namespace juce;
 
 static NormalisableRange<float> logDistanceRange()
@@ -69,10 +73,12 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
             AudioParameterFloatAttributes().withLabel ("%")));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::earlyLate, 1 }, "Early/Late", pct, 35.0f,
             AudioParameterFloatAttributes().withLabel ("%")));
-    // Two real profiles, so the choice has a usable range (a single-option choice has
-    // range 0..0 and normalises to 0/0 = NaN, which no host can round-trip).
+    // The choice always lists every profile so the parameter's range never changes with
+    // the build configuration (a host project must restore the same index either way).
+    // Selecting a profile that is not present falls back to Analytic B in the engine.
     lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::hrtfProfile, 1 },
-            "HRTF Profile", StringArray { "Analytic A (legacy)", "Analytic B" }, 1));
+            "HRTF Profile",
+            StringArray { "Analytic A (legacy)", "Analytic B", "KU100 48k (experimental)" }, 1));
     lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::quality, 1 },
             "Quality", StringArray { "Economy", "Standard" }, 1));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::outputGain, 1 }, "Output Gain",
@@ -102,6 +108,10 @@ NekoSpaceProcessor::NekoSpaceProcessor()
     pBypassRoom = raw (nsb::pid::bypassRoom);
     pBypass = raw (nsb::pid::bypass);
     pProfile = raw (nsb::pid::hrtfProfile);
+
+#if NSB_WITH_KU100
+    engine.setMeasuredPack (BinaryData::ku100_48k_bhrtf, (size_t) BinaryData::ku100_48k_bhrtfSize);
+#endif
     bypassParam = apvts.getParameter (nsb::pid::bypass);
 }
 

@@ -98,7 +98,9 @@ public:
         setupCombo (profileBox, nsb::pid::hrtfProfile, profileAtt);
         profileBox.setTitle ("HRTF Profile");
         profileBox.setTooltip ("Analytic B has the stronger height cue; A is the original "
-                               "model, kept for comparison");
+                               "model, kept for comparison; KU100 is the experimental "
+                               "measured profile (48 kHz sessions only)");
+        profileBox.onChange = [this] { repaint(); };   // footer shows the active dataset
 
         // right-panel horizontal sliders
         addRow (azSlider, azLabel, "AZIMUTH", nsb::pid::azimuth, azSAtt);
@@ -190,8 +192,7 @@ public:
             const juce::Font f (juce::FontOptions (9.5f));
             g.setFont (f);
             g.setColour (nsbui::col::textDim.withAlpha (0.75f));
-            g.drawText ("HRTF: procedural (built-in)  |  latency 2 ms",
-                        infoArea, juce::Justification::centredLeft);
+            g.drawText (hrtfInfoText(), infoArea, juce::Justification::centredLeft);
             g.drawText (fitting (f, infoArea.getWidth() - 280,
                                  { "NekoSpace Binaural  |  Copyright (C) 2026 TextureVoice  |  "
                                    "AGPLv3, NO WARRANTY  |  see LICENSE",
@@ -199,6 +200,21 @@ public:
                                    "(C) 2026 TextureVoice  |  AGPLv3" }),
                         infoArea, juce::Justification::centredRight);
         }
+    }
+
+    // Attribution is a licence condition for the measured data (CC BY-SA), so it is
+    // shown whenever that profile is actually the one rendering.
+    juce::String hrtfInfoText() const
+    {
+        const bool measuredSelected =
+            profileBox.getSelectedItemIndex() == 2 && proc.measuredHrtfAvailable();
+        if (measuredSelected)
+            return "HRTF: KU100 (TH Koeln, B. Bernschuetz, CC BY-SA 3.0, min-phase + regridded)"
+                   "  |  latency 2 ms";
+        if (profileBox.getSelectedItemIndex() == 2)
+            return "HRTF: KU100 pack unavailable at this sample rate - using Analytic B"
+                   "  |  latency 2 ms";
+        return "HRTF: procedural (built-in)  |  latency 2 ms";
     }
 
     // Longest variant that fits the available width; never renders an ellipsis.
