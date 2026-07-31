@@ -38,6 +38,33 @@ old HRTF, project reload resolves the same HRTF.
 Windows installer, code signing, CI artifacts. macOS (VST3+AU, Universal 2, notarization)
 when Mac hardware is available. Then: AAX, CLAP, Mid-Side mode, OSC head tracking.
 
+## Validation status (2026-08-01)
+
+`pluginval 1.0.3 --strictness-level 10` — **passes, 6/6 consecutive runs**, warning-free
+build (MSVC 2022 x64). This is the release gate.
+
+**Open, unresolved:** with `--randomise` (randomised test order) the *Plugin state
+restoration* test intermittently reports the first non-bypass parameter as not restored.
+Evidence gathered:
+
+- The failure follows the **first parameter's position, not its name** — reordering the
+  layout moved it from Azimuth to Elevation.
+- It reproduces with `--skip-gui-tests`, so it is not an editor/attachment issue.
+- It never occurs in the default (fixed) test order, over many runs.
+- The restored value is always a *stale* value from the test's own intermediate
+  randomisation, while every other parameter in the same `setStateInformation` call
+  restores correctly.
+
+That points at test isolation in pluginval's randomised mode rather than at our state
+handling (a plain APVTS `copyState`/`replaceState` round-trip), but it is **not proven**,
+so it stays open. Re-check against a newer pluginval, and confirm real-world behaviour by
+saving and reloading an FL Studio project.
+
+Three genuine fixes came out of the investigation even though none of them removed the
+randomised-order failure: editor size no longer mutates the live APVTS ValueTree from the
+message thread (a real cross-thread ValueTree race), each parameter now has exactly one
+attachment, and an explicit bypass parameter replaces the wrapper-synthesised one.
+
 ## Known limitations (accepted for alpha, tracked)
 
 - **Head Size does not reshape the HRTF spectrum** — it drives ITD/near-field geometry

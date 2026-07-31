@@ -3,7 +3,14 @@
 
 #pragma once
 // Top-down spatial pad: head fixed at center (with neko ears), draggable source node.
-// Drag = azimuth + distance, wheel = distance, Shift = fine, double-click = front 1 m.
+// Drag = azimuth + distance, wheel = distance, double-click = front 1 m.
+//
+// The pad deliberately owns NO ParameterAttachment. Each of these parameters already
+// has a SliderAttachment in the editor, and two attachments on one parameter ping-pong:
+// after a host state restore the stale widget can push its own value back, losing the
+// restored one (caught by pluginval --repeat --randomise). Instead the pad reads the
+// APVTS raw atomics in its existing repaint timer and writes only through explicit
+// host gestures.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "NekoLookAndFeel.h"
 #include "../dsp/Geometry.h"
@@ -13,15 +20,17 @@ namespace nsbui
 class SpatialPad : public juce::Component, private juce::Timer
 {
 public:
-    SpatialPad (juce::RangedAudioParameter& azP, juce::RangedAudioParameter& elP,
-                juce::RangedAudioParameter& distP)
-        : azAtt (azP, [this] (float v) { az = v; repaint(); }),
-          elAtt (elP, [this] (float v) { el = v; repaint(); }),
-          distAtt (distP, [this] (float v) { dist = v; repaint(); })
+    SpatialPad (juce::AudioProcessorValueTreeState& state,
+                const juce::String& azId, const juce::String& elId, const juce::String& distId)
+        : apvts (state),
+          azParam (*state.getParameter (azId)),
+          elParam (*state.getParameter (elId)),
+          distParam (*state.getParameter (distId)),
+          azValue (*state.getRawParameterValue (azId)),
+          elValue (*state.getRawParameterValue (elId)),
+          distValue (*state.getRawParameterValue (distId))
     {
-        azAtt.sendInitialUpdate();
-        elAtt.sendInitialUpdate();
-        distAtt.sendInitialUpdate();
+        refreshFromParameters();
         setMouseCursor (juce::MouseCursor::PointingHandCursor);
         startTimerHz (30);
     }
@@ -79,8 +88,8 @@ public:
     {
         if (e.mods.isLeftButtonDown())
         {
-            azAtt.beginGesture();
-            distAtt.beginGesture();
+            azParam.beginChangeGesture();
+            distParam.beginChangeGesture();
             dragging = true;
             applyMouse (e);
         }
@@ -88,24 +97,53 @@ public:
     void mouseDrag (const juce::MouseEvent& e) override { if (dragging) applyMouse (e); }
     void mouseUp (const juce::MouseEvent&) override
     {
-        if (dragging) { azAtt.endGesture(); distAtt.endGesture(); dragging = false; }
+        if (dragging)
+        {
+            azParam.endChangeGesture();
+            distParam.endChangeGesture();
+            dragging = false;
+        }
     }
     void mouseDoubleClick (const juce::MouseEvent&) override
     {
-        azAtt.setValueAsCompleteGesture (0.0f);
-        distAtt.setValueAsCompleteGesture (1.0f);
-        elAtt.setValueAsCompleteGesture (0.0f);
+        setAsGesture (azParam, 0.0f);
+        setAsGesture (distParam, 1.0f);
+        setAsGesture (elParam, 0.0f);
     }
     void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails& w) override
     {
         const float fine = e.mods.isShiftDown() ? 0.25f : 1.0f;
         const float factor = std::pow (1.18f, -w.deltaY * 3.0f * fine);
-        distAtt.setValueAsCompleteGesture (
-            nsb::clampf (dist * factor, nsb::kMinDistance, nsb::kMaxDistance));
+        setAsGesture (distParam,
+                      nsb::clampf (dist * factor, nsb::kMinDistance, nsb::kMaxDistance));
     }
 
 private:
-    void timerCallback() override { glowPhase += 0.05f; repaint(); }
+    void timerCallback() override
+    {
+        glowPhase += 0.05f;
+        refreshFromParameters();
+        repaint();
+    }
+
+    void refreshFromParameters() noexcept
+    {
+        az = azValue.load (std::memory_order_relaxed);
+        el = elValue.load (std::memory_order_relaxed);
+        dist = distValue.load (std::memory_order_relaxed);
+    }
+
+    static void setAsGesture (juce::RangedAudioParameter& p, float plainValue)
+    {
+        p.beginChangeGesture();
+        p.setValueNotifyingHost (p.convertTo0to1 (plainValue));
+        p.endChangeGesture();
+    }
+
+    void setDuringGesture (juce::RangedAudioParameter& p, float plainValue)
+    {
+        p.setValueNotifyingHost (p.convertTo0to1 (plainValue));
+    }
 
     float padRadius() const
     {
@@ -134,8 +172,9 @@ private:
         const float dy = (float) e.position.y - c.y;
         const float newAz = juce::radiansToDegrees (std::atan2 (dx, -dy)); // up = front
         const float newDist = distanceFor (std::sqrt (dx * dx + dy * dy));
-        azAtt.setValueAsPartOfGesture (newAz);
-        distAtt.setValueAsPartOfGesture (newDist);
+        setDuringGesture (azParam, newAz);
+        setDuringGesture (distParam, newDist);
+        refreshFromParameters();
     }
 
     void drawHead (juce::Graphics& g, juce::Point<float> c)
@@ -205,7 +244,13 @@ private:
                     juce::Justification::centred);
     }
 
-    juce::ParameterAttachment azAtt, elAtt, distAtt;
+    juce::AudioProcessorValueTreeState& apvts;
+    juce::RangedAudioParameter& azParam;
+    juce::RangedAudioParameter& elParam;
+    juce::RangedAudioParameter& distParam;
+    std::atomic<float>& azValue;
+    std::atomic<float>& elValue;
+    std::atomic<float>& distValue;
     float az = 0, el = 0, dist = 1.0f;
     float glowPhase = 0;
     bool dragging = false;

@@ -20,10 +20,11 @@ inline constexpr const char* roomAmount = "room.amount";
 inline constexpr const char* roomSize   = "room.size";
 inline constexpr const char* roomDamping= "room.damping";
 inline constexpr const char* earlyLate  = "room.early_late";
-inline constexpr const char* hrtfProfile= "hrtf.profile";
+inline constexpr const char* hrtfProfile= "hrtf.profile"; // reserved, not exposed until TASK 6
 inline constexpr const char* quality    = "quality.mode";
 inline constexpr const char* outputGain = "output.gain";
 inline constexpr const char* bypassRoom = "output.bypass_room";
+inline constexpr const char* bypass     = "global.bypass";
 }
 
 class NekoSpaceProcessor : public juce::AudioProcessor
@@ -38,6 +39,7 @@ public:
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
+    juce::AudioProcessorParameter* getBypassParameter() const override { return bypassParam; }
 
     const juce::String getName() const override { return "NekoSpace Binaural"; }
     bool acceptsMidi() const override { return false; }
@@ -59,16 +61,51 @@ public:
     std::atomic<float> meterL { 0.0f }, meterR { 0.0f };
     std::atomic<float> meterGR { 1.0f }; // limiter gain reduction, linear (1 = none)
 
+    // Editor size lives here, NOT in the APVTS ValueTree: the host may call
+    // get/setStateInformation from a background thread while the editor resizes on the
+    // message thread, and ValueTree is not thread-safe. Serialized as XML attributes.
+    std::atomic<int> uiWidth { 1000 }, uiHeight { 640 };
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 
+    // Keeps bypassed audio aligned with the latency the plugin reports while active.
+    struct BypassDelay
+    {
+        void prepare (int delaySamples, int maxBlock)
+        {
+            len = delaySamples;
+            for (auto& line : lines) line.prepare (len + maxBlock + 8);
+        }
+        void reset() { for (auto& line : lines) line.reset(); }
+        void process (juce::AudioBuffer<float>& buffer, int n, int numInputCh)
+        {
+            const int ch = juce::jmin (2, juce::jmax (1, numInputCh));
+            for (int c = 0; c < ch; ++c)
+            {
+                auto* d = buffer.getWritePointer (c);
+                for (int i = 0; i < n; ++i)
+                {
+                    lines[(size_t) c].push (d[i]);
+                    d[i] = lines[(size_t) c].read ((float) len);
+                }
+            }
+            if (ch == 1 && buffer.getNumChannels() > 1)
+                buffer.copyFrom (1, 0, buffer, 0, 0, n);
+        }
+        std::array<nsb::FractionalDelay, 2> lines;
+        int len = 0;
+    };
+
     nsb::BinauralEngine engine;
+    BypassDelay bypassDelay;
     std::atomic<float> tailSeconds { 0.0f };
 
     // cached raw-value pointers (atomic loads in processBlock)
     std::atomic<float>* pAz, * pEl, * pDist, * pWidth, * pMode, * pNear, * pHead;
     std::atomic<float>* pRoomAmt, * pRoomSize, * pRoomDamp, * pEarlyLate;
-    std::atomic<float>* pQuality, * pOutGain, * pBypassRoom;
+    std::atomic<float>* pQuality, * pOutGain, * pBypassRoom, * pBypass;
+    juce::AudioProcessorParameter* bypassParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceProcessor)
 };

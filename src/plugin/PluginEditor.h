@@ -86,9 +86,7 @@ class NekoSpaceEditor : public juce::AudioProcessorEditor
 public:
     explicit NekoSpaceEditor (NekoSpaceProcessor& p)
         : AudioProcessorEditor (p), proc (p), meter (p),
-          pad (*p.apvts.getParameter (nsb::pid::azimuth),
-               *p.apvts.getParameter (nsb::pid::elevation),
-               *p.apvts.getParameter (nsb::pid::distance))
+          pad (p.apvts, nsb::pid::azimuth, nsb::pid::elevation, nsb::pid::distance)
     {
         setLookAndFeel (&lnf);
 
@@ -116,8 +114,17 @@ public:
         qualityBox.setTitle ("Quality");
         presetBox.setTitle ("Presets");
         addAndMakeVisible (elevBig);
-        elevBigAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-            proc.apvts, nsb::pid::elevation, elevBig);
+        // Elevation is shown twice (row slider + big vertical slider) but only ONE
+        // attachment may own the parameter — see the note in SpatialPad.h. The second
+        // widget mirrors the first instead of binding to the parameter again.
+        elevBig.setRange (elSlider.getRange(), elSlider.getInterval());
+        elevBig.setValue (elSlider.getValue(), juce::dontSendNotification);
+        elevBig.onValueChange = [this]
+        { elSlider.setValue (elevBig.getValue(), juce::sendNotificationSync); };
+        elevBig.onDragStart = [this] { elSlider.startedDragging(); };
+        elevBig.onDragEnd   = [this] { elSlider.stoppedDragging(); };
+        elSlider.onValueChange = [this]
+        { elevBig.setValue (elSlider.getValue(), juce::dontSendNotification); };
 
         // room / output knobs
         addKnob (roomAmtKnob, roomAmtLabel, "ROOM", nsb::pid::roomAmount, roomAmtAtt);
@@ -137,9 +144,8 @@ public:
 
         setResizable (true, true);
         setResizeLimits (760, 520, 1800, 1200);
-        const int w = (int) proc.apvts.state.getProperty ("uiWidth", 1000);
-        const int h = (int) proc.apvts.state.getProperty ("uiHeight", 640);
-        setSize (juce::jlimit (760, 1800, w), juce::jlimit (520, 1200, h));
+        setSize (juce::jlimit (760, 1800, proc.uiWidth.load()),
+                 juce::jlimit (520, 1200, proc.uiHeight.load()));
     }
 
     ~NekoSpaceEditor() override { setLookAndFeel (nullptr); }
@@ -207,8 +213,8 @@ public:
 
     void resized() override
     {
-        proc.apvts.state.setProperty ("uiWidth", getWidth(), nullptr);
-        proc.apvts.state.setProperty ("uiHeight", getHeight(), nullptr);
+        proc.uiWidth.store (getWidth());
+        proc.uiHeight.store (getHeight());
         auto b = getLocalBounds();
         auto header = b.removeFromTop (44);
         header.removeFromLeft (260);
@@ -281,27 +287,27 @@ private:
     {
         using namespace nsb;
         presets = {
-            { "Front 1 m",          { { pid::azimuth, 0 }, { pid::elevation, 0 }, { pid::distance, 1.0f },
-                                      { pid::nearfield, 75 }, { pid::roomAmount, 15 } } },
-            { "Front Intimate 20 cm",{ { pid::azimuth, 0 }, { pid::elevation, 0 }, { pid::distance, 0.2f },
-                                      { pid::nearfield, 90 }, { pid::roomAmount, 8 } } },
-            { "Left Ear 3 cm",      { { pid::azimuth, -95 }, { pid::elevation, 0 }, { pid::distance, 0.12f },
-                                      { pid::nearfield, 100 }, { pid::roomAmount, 5 } } },
-            { "Left Ear 8 cm",      { { pid::azimuth, -95 }, { pid::elevation, 0 }, { pid::distance, 0.17f },
-                                      { pid::nearfield, 100 }, { pid::roomAmount, 6 } } },
-            { "Right Ear 3 cm",     { { pid::azimuth, 95 }, { pid::elevation, 0 }, { pid::distance, 0.12f },
-                                      { pid::nearfield, 100 }, { pid::roomAmount, 5 } } },
-            { "Right Ear 8 cm",     { { pid::azimuth, 95 }, { pid::elevation, 0 }, { pid::distance, 0.17f },
-                                      { pid::nearfield, 100 }, { pid::roomAmount, 6 } } },
-            { "Behind Shoulder L",  { { pid::azimuth, -150 }, { pid::elevation, -12 }, { pid::distance, 0.35f },
-                                      { pid::nearfield, 90 }, { pid::roomAmount, 12 } } },
-            { "Behind Shoulder R",  { { pid::azimuth, 150 }, { pid::elevation, -12 }, { pid::distance, 0.35f },
-                                      { pid::nearfield, 90 }, { pid::roomAmount, 12 } } },
-            { "Above",              { { pid::azimuth, 0 }, { pid::elevation, 75 }, { pid::distance, 0.8f },
-                                      { pid::nearfield, 80 }, { pid::roomAmount, 15 } } },
-            { "Small Quiet Room",   { { pid::azimuth, 20 }, { pid::elevation, 0 }, { pid::distance, 1.4f },
-                                      { pid::nearfield, 60 }, { pid::roomAmount, 35 },
-                                      { pid::roomSize, 20 }, { pid::roomDamping, 70 } } },
+            { "Front 1 m",          { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.0f },
+                                      { pid::nearfield, 75.0f }, { pid::roomAmount, 15.0f } } },
+            { "Front Intimate 20 cm",{ { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.2f },
+                                      { pid::nearfield, 90.0f }, { pid::roomAmount, 8.0f } } },
+            { "Left Ear 3 cm",      { { pid::azimuth, -95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.12f },
+                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 5.0f } } },
+            { "Left Ear 8 cm",      { { pid::azimuth, -95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.17f },
+                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 6.0f } } },
+            { "Right Ear 3 cm",     { { pid::azimuth, 95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.12f },
+                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 5.0f } } },
+            { "Right Ear 8 cm",     { { pid::azimuth, 95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.17f },
+                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 6.0f } } },
+            { "Behind Shoulder L",  { { pid::azimuth, -150.0f }, { pid::elevation, -12.0f }, { pid::distance, 0.35f },
+                                      { pid::nearfield, 90.0f }, { pid::roomAmount, 12.0f } } },
+            { "Behind Shoulder R",  { { pid::azimuth, 150.0f }, { pid::elevation, -12.0f }, { pid::distance, 0.35f },
+                                      { pid::nearfield, 90.0f }, { pid::roomAmount, 12.0f } } },
+            { "Above",              { { pid::azimuth, 0.0f }, { pid::elevation, 75.0f }, { pid::distance, 0.8f },
+                                      { pid::nearfield, 80.0f }, { pid::roomAmount, 15.0f } } },
+            { "Small Quiet Room",   { { pid::azimuth, 20.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.4f },
+                                      { pid::nearfield, 60.0f }, { pid::roomAmount, 35.0f },
+                                      { pid::roomSize, 20.0f }, { pid::roomDamping, 70.0f } } },
         };
         presetBox.setTextWhenNothingSelected ("Presets...");
         for (int i = 0; i < (int) presets.size(); ++i)
@@ -416,7 +422,7 @@ private:
     juce::Slider azSlider, elSlider, distSlider, widthSlider, nearSlider, headSlider, elevBig;
     juce::Label azLabel, elLabel, distLabel, widthLabel, nearLabel, headLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
-        azSAtt, elSAtt, distSAtt, widthSAtt, nearSAtt, headSAtt, elevBigAtt;
+        azSAtt, elSAtt, distSAtt, widthSAtt, nearSAtt, headSAtt;
 
     juce::Slider roomAmtKnob, roomSizeKnob, dampKnob, elKnob, gainKnob;
     juce::Label roomAmtLabel, roomSizeLabel, dampLabel, elKnobLabel, gainLabel;

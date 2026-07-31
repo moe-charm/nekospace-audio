@@ -3,7 +3,10 @@
 ## Runtime grid format (in-memory, v1)
 
 - Direction grid: azimuth 0–355° step 5° (72), elevation -60…+90° step 15° (11) = 792 dirs
-- Per direction, per ear: N-tap FIR (64/128 by quality), **time-aligned (ITD removed)**
+- Per direction, per ear: N-tap FIR, **time-aligned (ITD removed)**.
+  N keeps the HRIR window at a constant ~2.7 ms so timbre does not depend on the session
+  sample rate: `N = clamp(128 * sr/48000, 64, 256)` (128 @ 48 kHz, 256 @ 96 kHz and up).
+  `quality.mode` Economy uses N/2 with an 8-tap raised-cosine fade on the truncation edge.
 - ITD is not stored: interaural delay is computed geometrically at runtime
   (rigid-sphere path: straight line when the ear is visible, tangent+arc when occluded)
 - Regenerated at `prepareToPlay` for the current sample rate (analytic profile is cheap)

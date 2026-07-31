@@ -20,6 +20,12 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
 
     auto pct = NormalisableRange<float> (0.0f, 100.0f, 0.1f);
 
+    // An explicit bypass parameter, first in the list. Without one the VST3 wrapper
+    // synthesises a hidden bypass parameter, which shifts the host-visible parameter
+    // indices and made the first real parameter fail state round-trip under
+    // pluginval --repeat --randomise.
+    lo.add (std::make_unique<AudioParameterBool> (ParameterID { nsb::pid::bypass, 1 },
+            "Bypass", false));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::azimuth, 1 }, "Azimuth",
             NormalisableRange<float> (-180.0f, 180.0f, 0.1f), 0.0f,
             AudioParameterFloatAttributes().withLabel ("deg")));
@@ -63,8 +69,9 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
             AudioParameterFloatAttributes().withLabel ("%")));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::earlyLate, 1 }, "Early/Late", pct, 35.0f,
             AudioParameterFloatAttributes().withLabel ("%")));
-    lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::hrtfProfile, 1 },
-            "HRTF Profile", StringArray { "Analytic A" }, 0));
+    // nsb::pid::hrtfProfile is deliberately NOT exposed yet: with a single profile a
+    // choice parameter has range 0..0, so convertTo0to1 is 0/0 = NaN and no host can
+    // round-trip it. It returns in TASK 6 alongside the imported SOFA profiles.
     lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::quality, 1 },
             "Quality", StringArray { "Economy", "Standard" }, 1));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::outputGain, 1 }, "Output Gain",
@@ -92,6 +99,8 @@ NekoSpaceProcessor::NekoSpaceProcessor()
     pEarlyLate = raw (nsb::pid::earlyLate);
     pQuality = raw (nsb::pid::quality);  pOutGain = raw (nsb::pid::outputGain);
     pBypassRoom = raw (nsb::pid::bypassRoom);
+    pBypass = raw (nsb::pid::bypass);
+    bypassParam = apvts.getParameter (nsb::pid::bypass);
 }
 
 bool NekoSpaceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -111,6 +120,8 @@ void NekoSpaceProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // near-field per-ear geometry). Report it so FL Studio PDC stays phase-accurate
     // when NekoSpace runs in parallel with dry paths (Contract #17).
     setLatencySamples (engine.latencySamples());
+    bypassDelay.prepare (engine.latencySamples(), samplesPerBlock);
+    bypassDelay.reset();
 }
 
 void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
@@ -118,6 +129,17 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
     if (n == 0) return;
+
+    if (pBypass->load() > 0.5f)
+    {
+        // Host bypass: pass through, but keep the reported latency honest by delaying
+        // the dry signal by the same amount the active path adds.
+        bypassDelay.process (buffer, n, getMainBusNumInputChannels());
+        meterL.store (0.0f, std::memory_order_relaxed);
+        meterR.store (0.0f, std::memory_order_relaxed);
+        meterGR.store (1.0f, std::memory_order_relaxed);
+        return;
+    }
 
     nsb::EngineParams p;
     p.azimuthDeg    = pAz->load();
@@ -158,17 +180,26 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
 
 void NekoSpaceProcessor::getStateInformation (MemoryBlock& destData)
 {
-    auto state = apvts.copyState();
+    auto state = apvts.copyState();          // mutating the copy is safe; the live tree is not
     state.setProperty ("schemaVersion", 1, nullptr);
     if (auto xml = state.createXml())
+    {
+        xml->setAttribute ("uiWidth", uiWidth.load());
+        xml->setAttribute ("uiHeight", uiHeight.load());
         copyXmlToBinary (*xml, destData);
+    }
 }
 
 void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    {
+        if (! xml->hasTagName (apvts.state.getType()))
+            return;
+        uiWidth.store (xml->getIntAttribute ("uiWidth", 1000));
+        uiHeight.store (xml->getIntAttribute ("uiHeight", 640));
+        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    }
 }
 
 juce::AudioProcessorEditor* NekoSpaceProcessor::createEditor()
