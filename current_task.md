@@ -121,6 +121,36 @@ KU100 against B. Round 1 compared A and B at slightly different loudness.
 New preset **"Height Check (room)"** — the one to judge height with. Round 1's dry
 preset is kept for isolating the HRTF, but it removes the cue that actually works.
 
+## Planned GUI restructure — deferred until after round 2 (agreed)
+
+The DSP for this already exists; it is a naming and grouping job, not new features.
+Deliberately **not** done yet: the labels would be dishonest while KU100 is 48 kHz-only
+and silently falls back to Analytic B at other rates.
+
+```
+Height Character:  Natural / Enhanced
+Room Assist:       OFF ───── 100%
+```
+
+| Product control | Backed by today |
+| --- | --- |
+| Height Character = `Natural` | KU100 measured profile |
+| Height Character = `Enhanced` | Analytic B (torso/shoulder cue, exaggerated notch sweep) |
+| Room Assist | existing `room.amount` + `room.early_late`, now with direction-rendered reflections |
+| Analytic A | moves to an Advanced/debug section — comparison only |
+
+Intended combinations: `Natural + Room OFF` dry and natural; `Natural + Room 30%`
+natural in a room; `Enhanced + Room OFF` height pushed by timbre; `Enhanced + Room 30%`
+the maximum-effect setting for audio drama.
+
+Prerequisites before renaming anything:
+
+1. Round 2 listening decides whether KU100 is actually good enough to be called
+   "Natural". If it is not, the whole two-axis naming needs rethinking.
+2. KU100 must work at every sample rate, not just 48 kHz — a `Natural` label that
+   silently becomes Analytic B at 44.1 kHz is worse than the current honest wording.
+3. `hrtf.profile` keeps its permanent ID and index order; only display names change.
+
 ### Round 2 listening protocol
 
 1. `Height Check (room)`, Analytic B, sweep ELEVATION -90 → 0 → +90 slowly.

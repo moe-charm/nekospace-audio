@@ -108,6 +108,10 @@ public:
         addRow (distSlider, distLabel, "DISTANCE", nsb::pid::distance, distSAtt);
         addRow (widthSlider, widthLabel, "WIDTH", nsb::pid::width, widthSAtt);
         addRow (nearSlider, nearLabel, "NEAR FIELD", nsb::pid::nearfield, nearSAtt);
+        nearSlider.setTooltip ("How much each ear gets its own distance to the source. "
+                               "0% behaves like a conventional panner (both ears equally "
+                               "far, level difference from head shadow only); 100% is the "
+                               "full ear-whisper geometry. Only matters up close.");
         addRow (headSlider, headLabel, "HEAD SIZE", nsb::pid::headRadius, headSAtt);
 
         // elevation big vertical slider next to pad
@@ -465,6 +469,7 @@ private:
 
     NekoSpaceProcessor& proc;
     nsbui::NekoLookAndFeel lnf;
+    juce::TooltipWindow tooltips { this, 700 };   // without this the setTooltip calls never show
     StereoMeter meter;
     nsbui::SpatialPad pad;
 

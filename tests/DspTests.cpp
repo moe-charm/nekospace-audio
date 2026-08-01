@@ -748,6 +748,34 @@ static void testReflectionsCarryElevation()
     CHECK (spread > 3.0f, "reflections: image direction changes the room response");
 }
 
+// nearfield.amount must actually span "conventional panner" to "at the ear": at 0 % the
+// distance law attenuates both ears equally and all the level difference comes from the
+// head shadow; at 100 % each ear gets its own distance. Previously both endpoints used a
+// per-ear distance and the control only refined the approximation, so it barely did
+// anything (about 0.9 dB of ILD at 12 cm).
+static void testNearFieldSpansPannerToEarWhisper()
+{
+    const float fs = 48000.0f;
+    auto ildDb = [&] (float nearAmt)
+    {
+        BinauralEngine e; e.prepare (fs, 512);
+        EngineParams p; p.sourceMode = 0; p.roomAmount = 0.0f;
+        p.azimuthDeg = -90.0f; p.distanceM = 0.12f; p.nearField = nearAmt;
+        std::vector<float> L, R;
+        renderAt (e, p, 0.6f, fs, L, R, 7, 0.05f);   // low level: keep the limiter out
+        const int skip = (int) (0.25f * fs);
+        std::vector<float> tl (L.begin() + skip, L.end()), tr (R.begin() + skip, R.end());
+        return 20.0f * std::log10 ((rms (tl) + 1e-12f) / (rms (tr) + 1e-12f));
+    };
+
+    const float far = ildDb (0.0f);
+    const float near = ildDb (1.0f);
+    std::printf ("  [near field] ILD at az -90, 12 cm: 0%%=%.1f dB  100%%=%.1f dB\n", far, near);
+    CHECK (far > 0.0f, "near field 0%: head shadow alone still favours the near ear");
+    CHECK (near > far + 8.0f, "near field: 100% adds a large per-ear distance difference");
+    CHECK (ildDb (0.5f) > far + 2.0f, "near field: the control is monotonic in between");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -773,6 +801,7 @@ int main()
     testRealPackIfPresent();
     testTorsoLowFrequencyElevationCue();
     testReflectionsCarryElevation();
+    testNearFieldSpansPannerToEarWhisper();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

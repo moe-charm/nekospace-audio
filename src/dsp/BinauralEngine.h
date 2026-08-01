@@ -86,16 +86,27 @@ public:
             const float sign = e == 0 ? -1.0f : 1.0f;
             const float exact  = earPathLengthExact (pos, r, headR, sign);
             const float farOff = r + earPathOffsetFarField (dir, headR, sign);
-            // nearfield.amount blends far-field-equivalent path vs exact per-ear geometry
-            const float path = farOff + (exact - farOff) * nearAmt;
-            const float gPath = clampf (path, 0.02f, kMaxDistance + 1.0f);
+
+            // Timing is always per-ear: ITD is the primary localisation cue at every
+            // distance, so it is never switched off. nearfield.amount only moves it from
+            // the Woodworth far-field approximation to the exact sphere path, which
+            // matters once the source is within a few head radii.
+            const float timingPath = farOff + (exact - farOff) * nearAmt;
+            delaySm[e].setTarget (baseDelaySamples()
+                                  + (timingPath - r) / kSpeedOfSound * sr);
+
+            // Level is what the control really spans. At 0 % both ears are attenuated by
+            // the same 1/r, exactly as a conventional panner would, and the whole level
+            // difference comes from the head-shadow filter in the HRTF. At 100 % each ear
+            // gets its own distance, so a source at the left ear is dramatically louder
+            // there — the ear-whisper effect. Anything in between is a blend.
+            const float levelPath = r + (exact - r) * nearAmt;
+            const float gPath = clampf (levelPath, 0.02f, kMaxDistance + 1.0f);
 
             // 1/r law referenced to 1 m, capped at +32 dB (keeps ear-whisper ILD growing
             // all the way to the skull without ever saturating both steps of an approach)
             float g = 1.0f / gPath;
             if (g > 40.0f) g = 40.0f;
-
-            delaySm[e].setTarget (baseDelaySamples() + (path - r) / kSpeedOfSound * sr);
             gainSm[e].setTarget (g);
             // air absorption with distance
             airLP[e].setCutoff (20000.0f / std::pow (std::max (r, 1.0f), 0.55f));

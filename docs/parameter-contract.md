@@ -11,7 +11,7 @@ All parameters use JUCE `ParameterID` version hint 1 unless noted.
 | `position.distance`  | float  | 0.05 … 20 m (log skew)        | 1.0     | from head center |
 | `source.width`       | float  | 0 … 180 °                     | 60      | Linked Stereo only |
 | `source.mode`        | choice | Mono Object / Linked Stereo   | Mono Object | discrete; short output fade on switch |
-| `nearfield.amount`   | float  | 0 … 100 %                     | 75      | blends far-field ⇄ exact per-ear geometry |
+| `nearfield.amount`   | float  | 0 … 100 %                     | 75      | how much each ear gets its *own* distance to the source. 0 % attenuates both ears by the same 1/r, so the level difference comes only from the head-shadow filter — a conventional panner. 100 % uses the exact per-ear sphere path, so a source at one ear is dramatically louder there. ITD is always per-ear and is never switched off; this only moves it from the Woodworth approximation to the exact path. Measured ILD at az −90°, 12 cm: **5.6 dB at 0 %, 24.2 dB at 100 %** |
 | `head.radius`        | float  | 0.075 … 0.100 m               | 0.0875  | |
 | `room.amount`        | float  | 0 … 100 %                     | 15      | 0 must equal exact direct render |
 | `room.size`          | float  | 0 … 100 %                     | 35      | continuous shoebox + T60 scale |
