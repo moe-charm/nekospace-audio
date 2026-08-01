@@ -776,6 +776,48 @@ static void testNearFieldSpansPannerToEarWhisper()
     CHECK (ildDb (0.5f) > far + 2.0f, "near field: the control is monotonic in between");
 }
 
+// The Custom profile must start out sounding like Analytic B (so a tuning session begins
+// from the current sound), must respond to anchor edits, and must let "above" be changed
+// without dragging "below" along with it — the whole reason for the anchor form.
+static void testCustomProfileAnchors()
+{
+    const float fs = 48000.0f;
+    HrtfDatabase b, c;
+    b.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticB);
+    auto model = ElevationModel::analyticBDefaults();
+    c.generateCustom (fs, 0.0875f, model);
+
+    // defaults track B closely at the anchors and at the poles
+    for (float el : { -90.0f, -60.0f, 0.0f, 60.0f, 90.0f })
+    {
+        const float nb = notchFreq (b, 0.0f, el, fs);
+        const float nc = notchFreq (c, 0.0f, el, fs);
+        CHECK (std::fabs (nb - nc) < 900.0f, "custom: defaults land near Analytic B");
+    }
+
+    // moving only the "above" anchor must not move "below"
+    const float belowBefore = notchFreq (c, 0.0f, -60.0f, fs);
+    model.above.notchHz = 14000.0f;
+    HrtfDatabase c2;
+    c2.generateCustom (fs, 0.0875f, model);
+    const float aboveAfter = notchFreq (c2, 0.0f, 60.0f, fs);
+    const float belowAfter = notchFreq (c2, 0.0f, -60.0f, fs);
+    std::printf ("  [custom] above anchor 9726 -> 14000 Hz: rendered above %.0f Hz, "
+                 "below %.0f -> %.0f Hz\n", aboveAfter, belowBefore, belowAfter);
+    CHECK (aboveAfter > 12000.0f, "custom: the above anchor actually moves the notch");
+    CHECK (std::fabs (belowAfter - belowBefore) < 100.0f,
+           "custom: tuning above leaves below untouched");
+
+    // and the engine must render it without artefacts
+    BinauralEngine e; e.prepare (fs, 512);
+    e.rebuildCustom (model);
+    EngineParams p; p.hrtfProfile = 3; p.elevationDeg = 45.0f; p.roomAmount = 0.0f;
+    std::vector<float> L, R;
+    renderAt (e, p, 0.4f, fs, L, R);
+    CHECK (allFinite (L) && allFinite (R), "custom: engine renders it cleanly");
+    CHECK (rms (L) + rms (R) > 1e-4f, "custom: not silent");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -802,6 +844,7 @@ int main()
     testTorsoLowFrequencyElevationCue();
     testReflectionsCarryElevation();
     testNearFieldSpansPannerToEarWhisper();
+    testCustomProfileAnchors();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

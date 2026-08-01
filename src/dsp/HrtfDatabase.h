@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cstdint>
 #include "Geometry.h"
+#include "ElevationModel.h"
 
 namespace nsb
 {
@@ -79,7 +80,16 @@ public:
 
     // A: original model — elevation cue fades to nothing at the poles and behind.
     // B: elevation cue survives everywhere (see buildDirectionB).
-    enum Profile { AnalyticA = 0, AnalyticB = 1, Measured = 2, kNumProfiles = 3 };
+    enum Profile { AnalyticA = 0, AnalyticB = 1, Measured = 2, Custom = 3, kNumProfiles = 4 };
+
+    // Build from a hand-tuned anchor model (Elevation Lab). Same cascade as Analytic B,
+    // but every value comes from the model instead of from a symmetric formula.
+    void generateCustom (float sampleRate, float headRadius, const ElevationModel& model)
+    {
+        customModel = &model;
+        generateAnalytic (sampleRate, headRadius, Custom);
+        customModel = nullptr;
+    }
 
     void generateAnalytic (float sampleRate, float headRadius, Profile p = AnalyticB)
     {
@@ -245,6 +255,20 @@ private:
                                 3.5f * std::max (0.0f, std::sin (deg2rad (elDeg))));
                 s3 = BiquadCoeffs{};                                // unused
             }
+            else if (profile == Custom && customModel != nullptr)
+            {
+                // Hand-tuned anchors. Front/back weighting is applied relative to the
+                // front, so at azimuth 0 the rendered filter matches the entered numbers
+                // exactly — otherwise tuning by ear would be chasing a moving target.
+                const ElevationAnchor k = customModel->at (elDeg);
+                const float wAz = 0.45f + 0.55f * (0.5f + 0.5f * std::cos (deg2rad (azDeg)));
+
+                s1 = makeNotch (sr, k.notchHz, k.notchQ, k.notchDb * wAz);
+                s2 = makeNotch (sr, k.notchHz * k.peakRatio, 1.2f, k.peakDb * wAz);
+                s3 = makeHighShelf (sr, 8000.0f, k.shelfDb * wAz);
+                torsoDelay = k.torsoMs * 0.001f * sr;
+                torsoGain  = k.torsoAmt * wAz;
+            }
             else
             {
                 // Analytic B — elevation cues that survive at the poles and behind.
@@ -330,5 +354,6 @@ private:
     float sr = 48000.0f;
     int taps = kMaxTaps;
     Profile profile = AnalyticB;
+    const ElevationModel* customModel = nullptr;   // borrowed during generateCustom only
 };
 } // namespace nsb

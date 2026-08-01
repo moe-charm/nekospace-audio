@@ -7,6 +7,7 @@
 #include <vector>
 #include <cmath>
 #include <cstring>
+#include <atomic>
 #include "Geometry.h"
 #include "FractionalDelay.h"
 #include "HrtfDatabase.h"
@@ -199,6 +200,24 @@ public:
 
     bool measuredAvailable() const noexcept { return hrtf[HrtfDatabase::Measured].isValid(); }
 
+    // Rebuild the hand-tuned profile. NOT real-time safe — call from the message thread.
+    // Double-buffered: the grid is built into whichever copy the audio thread is not
+    // reading, then published with a single atomic store. The renderer notices the
+    // pointer changed and crossfades, exactly as it does for any other profile switch.
+    void rebuildCustom (const ElevationModel& model)
+    {
+        const HrtfDatabase* live = customActive.load (std::memory_order_acquire);
+        const int target = (live == &custom[0]) ? 1 : 0;
+        custom[target].generateCustom (sr, 0.0875f, model);
+
+        const float ref = hrtf[HrtfDatabase::AnalyticB].frontalRms();
+        const float own = custom[target].frontalRms();
+        if (own > 1e-9f && ref > 1e-9f)
+            custom[target].applyGain (ref / own);   // level-matched like every other profile
+
+        customActive.store (&custom[target], std::memory_order_release);
+    }
+
     void prepare (float sampleRate, int /*hostMaxBlock*/)
     {
         sr = sampleRate;
@@ -229,6 +248,9 @@ public:
             if (own > 1e-9f && ref > 1e-9f)
                 measured.applyGain (ref / own);   // level-matched: compare timbre, not loudness
         }
+
+        customActive.store (nullptr, std::memory_order_release);
+        rebuildCustom (customModel);
 
         for (auto& s : sources) s.prepare (sr, kChunk, &hrtf[HrtfDatabase::AnalyticB]);
         early.prepare (sr, kChunk, &hrtf[HrtfDatabase::AnalyticB]);
@@ -282,7 +304,14 @@ public:
     float lastGainReduction() const noexcept { return lastGr; } // linear, 1 = none
     int   hrtfTaps() const noexcept { return hrtf[0].numTaps(); }
     const HrtfDatabase& database (int profile) const noexcept
-    { return hrtf[profile >= 0 && profile < HrtfDatabase::kNumProfiles ? profile : 1]; }
+    {
+        if (profile == HrtfDatabase::Custom)
+        {
+            const HrtfDatabase* c = customActive.load (std::memory_order_acquire);
+            return c != nullptr ? *c : hrtf[HrtfDatabase::AnalyticB];
+        }
+        return hrtf[profile >= 0 && profile < HrtfDatabase::Measured + 1 ? profile : 1];
+    }
 
 private:
     void processChunk (const float* inL, const float* inR, float* outL, float* outR, int n) noexcept
@@ -308,8 +337,10 @@ private:
         const int taps = p.qualityMode == 0 ? fullTaps / 2 : fullTaps;
         int wanted = p.hrtfProfile;
         if (wanted < 0 || wanted >= HrtfDatabase::kNumProfiles) wanted = HrtfDatabase::AnalyticB;
-        if (! hrtf[wanted].isValid()) wanted = HrtfDatabase::AnalyticB;
-        const HrtfDatabase* db = &hrtf[wanted];
+        const HrtfDatabase* db = (wanted == HrtfDatabase::Custom)
+                                     ? customActive.load (std::memory_order_acquire)
+                                     : &hrtf[wanted];
+        if (db == nullptr || ! db->isValid()) db = &hrtf[HrtfDatabase::AnalyticB];
 
         // ---- geometry updates (block rate) ----
         const float roomTarget = p.bypassRoom ? 0.0f : p.roomAmount;
@@ -424,7 +455,10 @@ private:
     }
 
     EngineParams params;
-    HrtfDatabase hrtf[HrtfDatabase::kNumProfiles];
+    HrtfDatabase hrtf[HrtfDatabase::Measured + 1];      // A, B, measured
+    HrtfDatabase custom[2];                             // double-buffered tuned profile
+    std::atomic<const HrtfDatabase*> customActive { nullptr };
+    ElevationModel customModel = ElevationModel::analyticBDefaults();
     SourceRenderer sources[2];
     EarlyReflections early;
     FdnReverb fdn;

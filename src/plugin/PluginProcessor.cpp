@@ -78,7 +78,8 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
     // Selecting a profile that is not present falls back to Analytic B in the engine.
     lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::hrtfProfile, 1 },
             "HRTF Profile",
-            StringArray { "Analytic A (legacy)", "Analytic B", "KU100 48k (experimental)" }, 1));
+            StringArray { "Analytic A (legacy)", "Analytic B", "KU100 48k (experimental)",
+                          "Custom (Elevation Lab)" }, 1));
     lo.add (std::make_unique<AudioParameterChoice> (ParameterID { nsb::pid::quality, 1 },
             "Quality", StringArray { "Economy", "Standard" }, 1));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::outputGain, 1 }, "Output Gain",
@@ -125,9 +126,50 @@ bool NekoSpaceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
     return in == AudioChannelSet::stereo() || in == AudioChannelSet::mono();
 }
 
+// Elevation Lab model <-> state tree. Stored as plain properties: it is design data that
+// gets frozen into code once tuned, not something a host should automate.
+static void writeAnchor (juce::ValueTree& t, const char* prefix, const nsb::ElevationAnchor& a)
+{
+    const juce::String p (prefix);
+    t.setProperty (p + "NotchHz",   a.notchHz,   nullptr);
+    t.setProperty (p + "NotchDb",   a.notchDb,   nullptr);
+    t.setProperty (p + "NotchQ",    a.notchQ,    nullptr);
+    t.setProperty (p + "PeakRatio", a.peakRatio, nullptr);
+    t.setProperty (p + "PeakDb",    a.peakDb,    nullptr);
+    t.setProperty (p + "ShelfDb",   a.shelfDb,   nullptr);
+    t.setProperty (p + "TorsoMs",   a.torsoMs,   nullptr);
+    t.setProperty (p + "TorsoAmt",  a.torsoAmt,  nullptr);
+}
+
+static void readAnchor (const juce::ValueTree& t, const char* prefix, nsb::ElevationAnchor& a)
+{
+    const juce::String p (prefix);
+    auto get = [&] (const char* suffix, float fallback)
+    {
+        const auto v = t.getProperty (p + suffix);
+        return v.isVoid() ? fallback : (float) v;
+    };
+    a.notchHz   = get ("NotchHz",   a.notchHz);
+    a.notchDb   = get ("NotchDb",   a.notchDb);
+    a.notchQ    = get ("NotchQ",    a.notchQ);
+    a.peakRatio = get ("PeakRatio", a.peakRatio);
+    a.peakDb    = get ("PeakDb",    a.peakDb);
+    a.shelfDb   = get ("ShelfDb",   a.shelfDb);
+    a.torsoMs   = get ("TorsoMs",   a.torsoMs);
+    a.torsoAmt  = get ("TorsoAmt",  a.torsoAmt);
+}
+
+void NekoSpaceProcessor::setElevationModel (const nsb::ElevationModel& m)
+{
+    if (m == elevModel) return;
+    elevModel = m;
+    engine.rebuildCustom (elevModel);   // message thread; publishes with an atomic swap
+}
+
 void NekoSpaceProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     engine.prepare ((float) sampleRate, samplesPerBlock);
+    engine.rebuildCustom (elevModel);
     // The renderer runs every voice through a fixed 2 ms base delay (headroom for the
     // near-field per-ear geometry). Report it so FL Studio PDC stays phase-accurate
     // when NekoSpace runs in parallel with dry paths (Contract #17).
@@ -195,6 +237,9 @@ void NekoSpaceProcessor::getStateInformation (MemoryBlock& destData)
 {
     auto state = apvts.copyState();          // mutating the copy is safe; the live tree is not
     state.setProperty ("schemaVersion", 1, nullptr);
+    writeAnchor (state, "elevBelow", elevModel.below);
+    writeAnchor (state, "elevLevel", elevModel.level);
+    writeAnchor (state, "elevAbove", elevModel.above);
     if (auto xml = state.createXml())
     {
         xml->setAttribute ("uiWidth", uiWidth.load());
@@ -211,7 +256,16 @@ void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
             return;
         uiWidth.store (xml->getIntAttribute ("uiWidth", 1000));
         uiHeight.store (xml->getIntAttribute ("uiHeight", 640));
-        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        const auto restored = juce::ValueTree::fromXml (*xml);
+
+        nsb::ElevationModel m = nsb::ElevationModel::analyticBDefaults();
+        readAnchor (restored, "elevBelow", m.below);
+        readAnchor (restored, "elevLevel", m.level);
+        readAnchor (restored, "elevAbove", m.above);
+        elevModel = m;
+        engine.rebuildCustom (elevModel);
+
+        apvts.replaceState (restored);
     }
 }
 

@@ -6,6 +6,7 @@
 #include "PluginProcessor.h"
 #include "../ui/NekoLookAndFeel.h"
 #include "../ui/SpatialPad.h"
+#include "../ui/ElevationLab.h"
 
 // ---------------------------------------------------------------- meters ----
 class StereoMeter : public juce::Component, private juce::Timer
@@ -152,6 +153,12 @@ public:
         setupPresets();
         setupSnaps();
 
+        labButton.setButtonText ("ELEVATION LAB");
+        labButton.setTooltip ("Tune the three elevation anchors by ear. Selects the "
+                              "Custom profile automatically.");
+        labButton.onClick = [this] { openLab(); };
+        addAndMakeVisible (labButton);
+
         setResizable (true, true);
         setResizeLimits (760, 520, 1800, 1200);
         setSize (juce::jlimit (760, 1800, proc.uiWidth.load()),
@@ -220,6 +227,8 @@ public:
         if (profileBox.getSelectedItemIndex() == 2)
             return "HRTF: KU100 pack unavailable at this sample rate - using Analytic B"
                    "  |  latency 2 ms";
+        if (profileBox.getSelectedItemIndex() == 3)
+            return "HRTF: Custom - tuned in the Elevation Lab  |  latency 2 ms";
         return "HRTF: procedural (built-in)  |  latency 2 ms";
     }
 
@@ -443,6 +452,45 @@ private:
         }
     }
 
+    void openLab()
+    {
+        if (labWindow == nullptr)
+        {
+            auto* content = new nsbui::ElevationLab (proc.elevationModel());
+            content->onChange = [this] (const nsb::ElevationModel& m)
+            { proc.setElevationModel (m); };
+            // a separate top-level window does not inherit the editor's look and feel.
+            // Safe: labWindow is declared after lnf, so it is destroyed first.
+            content->setLookAndFeel (&lnf);
+
+            labWindow = std::make_unique<LabWindow>();
+            labWindow->setLookAndFeel (&lnf);
+            labWindow->setContentOwned (content, true);
+            labWindow->setResizable (true, true);
+            labWindow->centreWithSize (780, 440);
+        }
+        labWindow->setVisible (true);
+        labWindow->toFront (true);
+
+        // tuning is pointless unless you are hearing the profile you are tuning
+        if (auto* p = proc.apvts.getParameter (nsb::pid::hrtfProfile))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (3.0f));
+            p->endChangeGesture();
+        }
+    }
+
+    struct LabWindow : juce::DocumentWindow
+    {
+        LabWindow() : juce::DocumentWindow ("Elevation Lab", nsbui::col::bg,
+                                            juce::DocumentWindow::closeButton)
+        {
+            setUsingNativeTitleBar (true);
+        }
+        void closeButtonPressed() override { setVisible (false); }
+    };
+
     void layoutBottom (juce::Rectangle<int> b)
     {
         spaceCaption = b.removeFromTop (14);
@@ -457,7 +505,11 @@ private:
         meter.setBounds (b.removeFromRight (72).reduced (4, 2));
         b.removeFromRight (12);
         bypassRoomBtn.setBounds (b.removeFromRight (116).withSizeKeepingCentre (110, 30));
-        b.removeFromRight (12);
+        b.removeFromRight (10);
+        // the bottom bar is always full width, so this never gets squeezed out the way
+        // it did in the right panel
+        labButton.setBounds (b.removeFromRight (150).withSizeKeepingCentre (144, 30));
+        b.removeFromRight (10);
 
         place (roomAmtKnob, roomAmtLabel);
         place (roomSizeKnob, roomSizeLabel);
@@ -489,6 +541,9 @@ private:
 
     juce::TextButton bypassRoomBtn;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAtt;
+
+    juce::TextButton labButton;
+    std::unique_ptr<LabWindow> labWindow;
 
     juce::OwnedArray<juce::TextButton> snapButtons;
     std::vector<Preset> presets;

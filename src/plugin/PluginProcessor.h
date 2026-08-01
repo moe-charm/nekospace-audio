@@ -44,6 +44,12 @@ public:
     // True when the measured pack loaded for the current sample rate (48 kHz only today).
     bool measuredHrtfAvailable() const noexcept { return engine.measuredAvailable(); }
 
+    // Elevation Lab. The model is design data, not an automatable parameter: it is 24
+    // numbers that get frozen into code once tuned, so it lives in the state tree
+    // instead of bloating the host's parameter list.
+    const nsb::ElevationModel& elevationModel() const noexcept { return elevModel; }
+    void setElevationModel (const nsb::ElevationModel& m);   // message thread only
+
     const juce::String getName() const override { return "NekoSpace Binaural"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
@@ -100,6 +106,7 @@ private:
         int len = 0;
     };
 
+    nsb::ElevationModel elevModel = nsb::ElevationModel::analyticBDefaults();
     nsb::BinauralEngine engine;
     BypassDelay bypassDelay;
     std::atomic<float> tailSeconds { 0.0f };

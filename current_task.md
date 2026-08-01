@@ -151,6 +151,47 @@ Prerequisites before renaming anything:
    silently becomes Analytic B at 44.1 kHz is worse than the current honest wording.
 3. `hrtf.profile` keeps its permanent ID and index order; only display names change.
 
+## Round 3 — Elevation Lab (implemented, awaiting tuning)
+
+Round 2 did not resolve it either: still hard to tell which is up. Rather than add
+another general-purpose model, the approach changes — **tune the curve by ear for this
+listener and these headphones**, and freeze the result.
+
+Criterion is explicitly *"does it feel like something is there"*, judged on the user's
+own Z1R with real material. Not a blind hit-rate.
+
+**Elevation Lab** (button in the bottom bar) opens a tuning bench with three independent
+anchors — `Below −60`, `Level 0`, `Above +60` — each carrying eight values: notch
+frequency / depth / Q, companion peak ratio and height, HF shelf, torso delay and amount.
+Intermediate angles interpolate between anchors, and beyond ±60° the trend is
+extrapolated rather than flattened.
+
+The point of the anchor form is that **up and down are no longer tied to one symmetric
+expression**. Analytic B derives everything from sin/cos of elevation, so any change to
+"above" drags "below" with it. Verified by test: moving the above anchor from 9.7 kHz to
+14 kHz moved the rendered above notch to 13.4 kHz and left below at 4850 Hz exactly.
+
+- Defaults reproduce Analytic B, so tuning starts from the current sound. Extrapolating
+  the log-frequency line to ±90° lands on 4.2 / 11.5 kHz, which are B's own endpoints.
+- Selected as profile `Custom (Elevation Lab)`; opening the Lab switches to it, because
+  tuning a profile you are not listening to is pointless.
+- Rebuilds happen on the message thread into a double buffer and are published with one
+  atomic pointer store, so the audio thread only ever swaps a pointer and crossfades.
+- Level-matched to Analytic B like every other profile.
+- Values persist in the plugin state, and **Copy as C++** emits the anchor block ready to
+  paste into `ElevationModel::analyticBDefaults`, which is how a good curve becomes
+  permanent.
+
+### Tuning order
+
+1. Room OFF, real voice material, `Height Check (dry)`.
+2. Work on `Above +60` until it reads as **out of the head and up**, not merely brighter.
+3. Work on `Below −60` **independently** until it reads as toward the floor, not merely
+   duller.
+4. Sweep elevation through 0° and check the movement is continuous.
+5. Only then add Room, and see whether floor/ceiling reflections reinforce the picture.
+6. **Copy as C++** and hand the block back so it can be frozen as the default.
+
 ### Round 2 listening protocol
 
 1. `Height Check (room)`, Analytic B, sweep ELEVATION -90 → 0 → +90 slowly.
