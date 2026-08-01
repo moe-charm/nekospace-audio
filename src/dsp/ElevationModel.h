@@ -29,10 +29,27 @@ struct ElevationAnchor
     float torsoAmt  = 0.427f;    // shoulder reflection strength
 };
 
+// Four plain-language controls that generate the whole anchor set. This is what you
+// actually turn while listening; the 24 raw values exist underneath for when a curve
+// needs finishing by hand.
+struct ElevationMacros
+{
+    float up    = 1.0f;   // how far "above" departs from level  (0 = none, 2 = double)
+    float down  = 1.0f;   // how far "below" departs from level
+    float body  = 1.0f;   // torso/shoulder reflection strength (the low-frequency cue)
+    float focus = 1.0f;   // notch width: low = broad tonal shift, high = sharp colouring
+
+    bool operator== (const ElevationMacros& o) const noexcept
+    { return up == o.up && down == o.down && body == o.body && focus == o.focus; }
+    bool operator!= (const ElevationMacros& o) const noexcept { return ! (*this == o); }
+};
+
 struct ElevationModel
 {
     // anchors at -60, 0 and +60 degrees
     ElevationAnchor below, level, above;
+
+    static ElevationModel fromMacros (const ElevationMacros& m) noexcept;
 
     // Defaults reproduce Analytic B closely, so a tuning session starts from the current
     // sound rather than from silence. Extrapolating the log-frequency line to +/-90
@@ -87,4 +104,52 @@ struct ElevationModel
         return r;
     }
 };
+
+inline ElevationModel ElevationModel::fromMacros (const ElevationMacros& m) noexcept
+{
+    const ElevationModel base = analyticBDefaults();
+    ElevationModel r = base;
+
+    // Each macro scales how far an anchor departs from Level, so 1.0 reproduces
+    // Analytic B exactly and 0 collapses that direction onto the horizontal.
+    // The endpoints are returned verbatim so that a macro of exactly 1.00 restores
+    // Analytic B bit-for-bit; a log/exp round-trip would otherwise drift by an ulp or two
+    // and "reset" would not quite reset.
+    auto away = [] (float lv, float anchor, float k)
+    {
+        if (k == 1.0f) return anchor;
+        if (k == 0.0f) return lv;
+        return lv + (anchor - lv) * k;
+    };
+    auto awayLog = [] (float lv, float anchor, float k)
+    {
+        if (k == 1.0f) return anchor;
+        if (k == 0.0f) return lv;
+        return std::exp (std::log (lv) + (std::log (anchor) - std::log (lv)) * k);
+    };
+
+    auto shape = [&] (ElevationAnchor& dst, const ElevationAnchor& src, float k)
+    {
+        dst.notchHz  = awayLog (base.level.notchHz,  src.notchHz,  k);
+        dst.notchDb  = away    (base.level.notchDb,  src.notchDb,  k);
+        dst.peakDb   = away    (base.level.peakDb,   src.peakDb,   k);
+        dst.shelfDb  = away    (base.level.shelfDb,  src.shelfDb,  k);
+        dst.torsoMs  = away    (base.level.torsoMs,  src.torsoMs,  k);
+        dst.torsoAmt = away    (base.level.torsoAmt, src.torsoAmt, k);
+    };
+    shape (r.above, base.above, m.up);
+    shape (r.below, base.below, m.down);
+
+    for (ElevationAnchor* a : { &r.below, &r.level, &r.above })
+    {
+        a->torsoAmt = clampf (a->torsoAmt * m.body, 0.0f, 0.9f);
+        a->notchQ   = clampf (a->notchQ * m.focus, 0.5f, 12.0f);
+        a->notchHz  = clampf (a->notchHz, 1500.0f, 18000.0f);
+        a->notchDb  = clampf (a->notchDb, -30.0f, 0.0f);
+        a->peakDb   = clampf (a->peakDb, -12.0f, 15.0f);
+        a->shelfDb  = clampf (a->shelfDb, -18.0f, 18.0f);
+        a->torsoMs  = clampf (a->torsoMs, 0.05f, 2.5f);
+    }
+    return r;
+}
 } // namespace nsb

@@ -48,7 +48,9 @@ public:
     // numbers that get frozen into code once tuned, so it lives in the state tree
     // instead of bloating the host's parameter list.
     const nsb::ElevationModel& elevationModel() const noexcept { return elevModel; }
+    const nsb::ElevationMacros& elevationMacros() const noexcept { return elevMacros; }
     void setElevationModel (const nsb::ElevationModel& m);   // message thread only
+    void setElevationMacros (const nsb::ElevationMacros& m) noexcept { elevMacros = m; }
 
     const juce::String getName() const override { return "NekoSpace Binaural"; }
     bool acceptsMidi() const override { return false; }
@@ -107,6 +109,7 @@ private:
     };
 
     nsb::ElevationModel elevModel = nsb::ElevationModel::analyticBDefaults();
+    nsb::ElevationMacros elevMacros;
     nsb::BinauralEngine engine;
     BypassDelay bypassDelay;
     std::atomic<float> tailSeconds { 0.0f };

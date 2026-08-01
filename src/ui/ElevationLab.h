@@ -22,7 +22,50 @@ public:
     // Called whenever a value changes; the host rebuilds the profile off the audio thread.
     std::function<void (const nsb::ElevationModel&)> onChange;
 
-    explicit ElevationLab (const nsb::ElevationModel& initial) : model (initial)
+    explicit ElevationLab (const nsb::ElevationModel& initial, const nsb::ElevationMacros& mac)
+        : model (initial), macros (mac)
+    {
+        struct MacroDef { const char* name; const char* hint; double lo, hi; float* target; };
+        const MacroDef macroDefs[kNumMacros] = {
+            { "UP",    "how far a raised source departs from ear level",   0.0, 2.0, &macros.up },
+            { "DOWN",  "how far a lowered source departs from ear level",  0.0, 2.0, &macros.down },
+            { "BODY",  "shoulder reflection - the low-frequency height cue", 0.0, 2.0, &macros.body },
+            { "FOCUS", "narrow colouring vs broad tonal shift",            0.4, 2.0, &macros.focus },
+        };
+        for (int i = 0; i < kNumMacros; ++i)
+        {
+            auto* s = macroSliders.add (new juce::Slider());
+            s->setSliderStyle (juce::Slider::LinearHorizontal);
+            s->setTextBoxStyle (juce::Slider::TextBoxRight, false, 64, 20);
+            s->setRange (macroDefs[i].lo, macroDefs[i].hi, 0.01);
+            s->setValue (*macroDefs[i].target, juce::dontSendNotification);
+            s->setTitle (macroDefs[i].name);
+            float* t = macroDefs[i].target;
+            s->onValueChange = [this, t, s] { *t = (float) s->getValue(); applyMacros(); };
+            addAndMakeVisible (s);
+
+            auto* n = macroNames.add (new juce::Label ({}, macroDefs[i].name));
+            n->setFont (juce::Font (juce::FontOptions (14.0f)).boldened());
+            n->setColour (juce::Label::textColourId, col::accent);
+            n->setJustificationType (juce::Justification::centredRight);
+            addAndMakeVisible (n);
+
+            auto* h = macroHints.add (new juce::Label ({}, macroDefs[i].hint));
+            h->setFont (juce::Font (juce::FontOptions (10.5f)));
+            h->setColour (juce::Label::textColourId, col::textDim);
+            addAndMakeVisible (h);
+        }
+
+        advancedButton.setButtonText ("Advanced...");
+        advancedButton.setClickingTogglesState (true);
+        advancedButton.onClick = [this] { setAdvancedVisible (advancedButton.getToggleState()); };
+        addAndMakeVisible (advancedButton);
+
+        buildAdvanced();
+        setAdvancedVisible (false);
+    }
+
+    void buildAdvanced()
     {
         static const char* names[kNumRows] = {
             "Notch Hz", "Notch dB", "Notch Q", "Peak ratio",
@@ -38,7 +81,7 @@ public:
             header->setJustificationType (juce::Justification::centred);
             header->setFont (juce::Font (juce::FontOptions (13.0f)).boldened());
             header->setColour (juce::Label::textColourId, col::accent);
-            addAndMakeVisible (header);
+            addChildComponent (header);
 
             for (int row = 0; row < kNumRows; ++row)
             {
@@ -49,7 +92,7 @@ public:
                 s->setValue (get (col, row), juce::dontSendNotification);
                 s->setTitle (juce::String (columnName (col)) + " " + names[row]);
                 s->onValueChange = [this, col, row, s] { set (col, row, (float) s->getValue()); };
-                addAndMakeVisible (s);
+                addChildComponent (s);   // shown only in Advanced
             }
         }
 
@@ -59,15 +102,16 @@ public:
             l->setFont (juce::Font (juce::FontOptions (11.0f)));
             l->setColour (juce::Label::textColourId, col::textDim);
             l->setJustificationType (juce::Justification::centredRight);
-            addAndMakeVisible (l);
+            addChildComponent (l);
         }
 
-        resetButton.setButtonText ("Reset to Analytic B");
+        resetButton.setButtonText ("Reset");
         resetButton.onClick = [this]
         {
+            macros = nsb::ElevationMacros{};
             model = nsb::ElevationModel::analyticBDefaults();
             refreshSliders();
-            if (onChange) onChange (model);
+            notify();
         };
         addAndMakeVisible (resetButton);
 
@@ -75,59 +119,104 @@ public:
         copyButton.onClick = [this] { juce::SystemClipboard::copyTextToClipboard (asCode()); };
         addAndMakeVisible (copyButton);
 
-        hint.setText ("Tune with Room OFF and real material. Find \"above\" and \"below\" "
-                      "independently - a setting that is merely brighter is not a setting "
-                      "that is higher.", juce::dontSendNotification);
+        hint.setText ("Room OFF, real voice. Get UP reading as out-of-the-head and above - "
+                      "not merely brighter - then find DOWN on its own.",
+                      juce::dontSendNotification);
         hint.setFont (juce::Font (juce::FontOptions (11.0f)));
         hint.setColour (juce::Label::textColourId, col::textDim);
         hint.setJustificationType (juce::Justification::topLeft);
         addAndMakeVisible (hint);
-
-        setSize (760, 430);
     }
 
     void paint (juce::Graphics& g) override
     {
         g.fillAll (col::bg);
+        if (! advancedVisible) return;
         g.setColour (col::panelLine);
-        for (int col = 1; col < kNumCols; ++col)
+        g.drawLine (10.0f, (float) advancedTop - 8.0f,
+                    (float) getWidth() - 10.0f, (float) advancedTop - 8.0f, 1.0f);
+        for (int c = 1; c < kNumCols; ++c)
         {
-            const float x = (float) (labelW + col * colW());
-            g.drawLine (x - 4.0f, 30.0f, x - 4.0f, (float) getHeight() - 74.0f, 1.0f);
+            const float x = (float) (10 + labelW + c * colW());
+            g.drawLine (x - 4.0f, (float) advancedTop + 18.0f,
+                        x - 4.0f, (float) getHeight() - 66.0f, 1.0f);
         }
     }
 
     void resized() override
     {
         auto b = getLocalBounds().reduced (10);
-        auto foot = b.removeFromBottom (54);
-        hint.setBounds (foot.removeFromTop (30));
-        resetButton.setBounds (foot.removeFromLeft (170).reduced (2));
-        copyButton.setBounds (foot.removeFromLeft (140).reduced (2));
 
-        auto head = b.removeFromTop (22);
+        auto foot = b.removeFromBottom (48);
+        auto row = foot.removeFromTop (26);
+        resetButton.setBounds (row.removeFromLeft (90).reduced (2));
+        copyButton.setBounds (row.removeFromLeft (130).reduced (2));
+        row.removeFromLeft (10);
+        advancedButton.setBounds (row.removeFromLeft (130).reduced (2));
+        hint.setBounds (foot);
+
+        for (int i = 0; i < kNumMacros; ++i)
+        {
+            auto r = b.removeFromTop (46);
+            macroNames[i]->setBounds (r.removeFromLeft (74).withTrimmedRight (8)
+                                        .withTrimmedBottom (14));
+            auto hintArea = r.removeFromBottom (14);
+            macroSliders[i]->setBounds (r.reduced (2, 1));
+            macroHints[i]->setBounds (hintArea.withTrimmedLeft (4));
+        }
+
+        if (! advancedVisible) return;
+
+        b.removeFromTop (10);
+        advancedTop = b.getY();
+        auto head = b.removeFromTop (20);
         head.removeFromLeft (labelW);
-        for (int col = 0; col < kNumCols; ++col)
-            headers[col]->setBounds (head.removeFromLeft (colW()));
+        for (int c = 0; c < kNumCols; ++c)
+            headers[c]->setBounds (head.removeFromLeft (colW()));
 
-        const int rowH = b.getHeight() / kNumRows;
-        for (int row = 0; row < kNumRows; ++row)
+        const int rowH = juce::jmax (20, b.getHeight() / kNumRows);
+        for (int rw = 0; rw < kNumRows; ++rw)
         {
             auto r = b.removeFromTop (rowH);
-            rowLabels[row]->setBounds (r.removeFromLeft (labelW).withTrimmedRight (6));
-            for (int col = 0; col < kNumCols; ++col)
-                sliders[col * kNumRows + row]->setBounds (r.removeFromLeft (colW()).reduced (3, 2));
+            rowLabels[rw]->setBounds (r.removeFromLeft (labelW).withTrimmedRight (6));
+            for (int c = 0; c < kNumCols; ++c)
+                sliders[c * kNumRows + rw]->setBounds (r.removeFromLeft (colW()).reduced (3, 1));
         }
     }
 
     const nsb::ElevationModel& current() const noexcept { return model; }
+    const nsb::ElevationMacros& currentMacros() const noexcept { return macros; }
 
 private:
     static constexpr int kNumCols = 3;   // below / level / above
     static constexpr int kNumRows = 8;
+    static constexpr int kNumMacros = 4;
     static constexpr int labelW = 78;
 
     int colW() const { return (getLocalBounds().reduced (10).getWidth() - labelW) / kNumCols; }
+
+    void setAdvancedVisible (bool shouldShow)
+    {
+        advancedVisible = shouldShow;
+        for (auto* s : sliders)   s->setVisible (shouldShow);
+        for (auto* l : headers)   l->setVisible (shouldShow);
+        for (auto* l : rowLabels) l->setVisible (shouldShow);
+        // the owning DocumentWindow was given resizeToFitWhenContentChangesSize, so it
+        // follows this
+        setSize (640, shouldShow ? 640 : 300);
+        repaint();
+    }
+
+    // The macros rebuild the whole anchor set, so they intentionally discard any
+    // hand-edits made in Advanced — one direction of authority, no silent conflict.
+    void applyMacros()
+    {
+        model = nsb::ElevationModel::fromMacros (macros);
+        refreshSliders();
+        notify();
+    }
+
+    void notify() { if (onChange) onChange (model); }
 
     static const char* columnName (int col)
     {
@@ -166,10 +255,13 @@ private:
 
     void refreshSliders()
     {
-        for (int col = 0; col < kNumCols; ++col)
-            for (int row = 0; row < kNumRows; ++row)
-                sliders[col * kNumRows + row]->setValue (get (col, row),
-                                                         juce::dontSendNotification);
+        for (int c = 0; c < kNumCols; ++c)
+            for (int rw = 0; rw < kNumRows; ++rw)
+                sliders[c * kNumRows + rw]->setValue (get (c, rw), juce::dontSendNotification);
+
+        const float* vals[kNumMacros] = { &macros.up, &macros.down, &macros.body, &macros.focus };
+        for (int i = 0; i < kNumMacros; ++i)
+            macroSliders[i]->setValue (*vals[i], juce::dontSendNotification);
     }
 
     juce::String asCode()
@@ -189,10 +281,13 @@ private:
     }
 
     nsb::ElevationModel model;
-    juce::OwnedArray<juce::Slider> sliders;
-    juce::OwnedArray<juce::Label> headers, rowLabels;
-    juce::TextButton resetButton, copyButton;
+    nsb::ElevationMacros macros;
+    juce::OwnedArray<juce::Slider> sliders, macroSliders;
+    juce::OwnedArray<juce::Label> headers, rowLabels, macroNames, macroHints;
+    juce::TextButton resetButton, copyButton, advancedButton;
     juce::Label hint;
+    bool advancedVisible = false;
+    int advancedTop = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ElevationLab)
 };

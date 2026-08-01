@@ -182,6 +182,23 @@ expression**. Analytic B derives everything from sin/cos of elevation, so any ch
   paste into `ElevationModel::analyticBDefaults`, which is how a good curve becomes
   permanent.
 
+### Controls
+
+The Lab opens with **four** controls, because 24 raw values turned out to be unusable —
+correct as a bench, meaningless as something to turn while listening:
+
+| | |
+| --- | --- |
+| **UP** | how far a raised source departs from ear level (0 = flat, 1 = Analytic B, 2 = double) |
+| **DOWN** | the same for a lowered source, independently |
+| **BODY** | shoulder-reflection strength — the low-frequency cue that survives headphone colouration |
+| **FOCUS** | notch width: narrow spectral colouring vs broad tonal shift |
+
+A macro of exactly 1.00 restores Analytic B bit-for-bit, so Reset really resets.
+**Advanced…** reveals the 24 raw anchor values for finishing a curve by hand; moving a
+macro afterwards rebuilds from the macros and discards those edits — one direction of
+authority, no silent conflict.
+
 ### Tuning order
 
 1. Room OFF, real voice material, `Height Check (dry)`.

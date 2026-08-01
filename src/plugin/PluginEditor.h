@@ -456,9 +456,13 @@ private:
     {
         if (labWindow == nullptr)
         {
-            auto* content = new nsbui::ElevationLab (proc.elevationModel());
-            content->onChange = [this] (const nsb::ElevationModel& m)
-            { proc.setElevationModel (m); };
+            auto* content = new nsbui::ElevationLab (proc.elevationModel(),
+                                                     proc.elevationMacros());
+            content->onChange = [this, content] (const nsb::ElevationModel& m)
+            {
+                proc.setElevationMacros (content->currentMacros());
+                proc.setElevationModel (m);
+            };
             // a separate top-level window does not inherit the editor's look and feel.
             // Safe: labWindow is declared after lnf, so it is destroyed first.
             content->setLookAndFeel (&lnf);
@@ -467,7 +471,8 @@ private:
             labWindow->setLookAndFeel (&lnf);
             labWindow->setContentOwned (content, true);
             labWindow->setResizable (true, true);
-            labWindow->centreWithSize (780, 440);
+            // keep whatever size the content asked for; only place it
+            labWindow->centreWithSize (labWindow->getWidth(), labWindow->getHeight());
         }
         labWindow->setVisible (true);
         labWindow->toFront (true);

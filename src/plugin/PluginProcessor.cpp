@@ -240,6 +240,10 @@ void NekoSpaceProcessor::getStateInformation (MemoryBlock& destData)
     writeAnchor (state, "elevBelow", elevModel.below);
     writeAnchor (state, "elevLevel", elevModel.level);
     writeAnchor (state, "elevAbove", elevModel.above);
+    state.setProperty ("elevUp", elevMacros.up, nullptr);
+    state.setProperty ("elevDown", elevMacros.down, nullptr);
+    state.setProperty ("elevBody", elevMacros.body, nullptr);
+    state.setProperty ("elevFocus", elevMacros.focus, nullptr);
     if (auto xml = state.createXml())
     {
         xml->setAttribute ("uiWidth", uiWidth.load());
@@ -263,6 +267,15 @@ void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
         readAnchor (restored, "elevLevel", m.level);
         readAnchor (restored, "elevAbove", m.above);
         elevModel = m;
+        auto macro = [&] (const char* key, float fallback)
+        {
+            const auto v = restored.getProperty (key);
+            return v.isVoid() ? fallback : (float) v;
+        };
+        elevMacros.up    = macro ("elevUp", 1.0f);
+        elevMacros.down  = macro ("elevDown", 1.0f);
+        elevMacros.body  = macro ("elevBody", 1.0f);
+        elevMacros.focus = macro ("elevFocus", 1.0f);
         engine.rebuildCustom (elevModel);
 
         apvts.replaceState (restored);

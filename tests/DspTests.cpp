@@ -818,6 +818,48 @@ static void testCustomProfileAnchors()
     CHECK (rms (L) + rms (R) > 1e-4f, "custom: not silent");
 }
 
+// The four macros are the controls that actually get turned; the 24 raw values are the
+// representation underneath. Defaults must be a no-op, and UP must not move DOWN.
+static void testElevationMacros()
+{
+    const float fs = 48000.0f;
+    CHECK (ElevationModel::fromMacros ({}) == ElevationModel::analyticBDefaults(),
+           "macros: defaults reproduce Analytic B exactly");
+
+    ElevationMacros m;
+    m.up = 2.0f;
+    const auto pushed = ElevationModel::fromMacros (m);
+    const auto base   = ElevationModel::analyticBDefaults();
+    CHECK (pushed.above.notchHz > base.above.notchHz * 1.2f,
+           "macros: UP pushes the above notch further from level");
+    CHECK (pushed.below.notchHz == base.below.notchHz,
+           "macros: UP leaves the below anchor untouched");
+    CHECK (pushed.level.notchHz == base.level.notchHz,
+           "macros: UP leaves the level anchor untouched");
+
+    ElevationMacros zero;
+    zero.up = 0.0f;
+    const auto flat = ElevationModel::fromMacros (zero);
+    CHECK (std::fabs (flat.above.notchHz - base.level.notchHz) < 1.0f,
+           "macros: UP at 0 collapses above onto level");
+
+    // BODY and FOCUS act on every anchor
+    ElevationMacros bf; bf.body = 0.0f; bf.focus = 2.0f;
+    const auto shaped = ElevationModel::fromMacros (bf);
+    CHECK (shaped.above.torsoAmt == 0.0f && shaped.below.torsoAmt == 0.0f,
+           "macros: BODY at 0 removes the torso cue everywhere");
+    CHECK (shaped.level.notchQ > base.level.notchQ * 1.5f,
+           "macros: FOCUS narrows the notch everywhere");
+
+    // and the whole thing still renders
+    BinauralEngine e; e.prepare (fs, 512);
+    e.rebuildCustom (pushed);
+    EngineParams p; p.hrtfProfile = 3; p.elevationDeg = 70.0f; p.roomAmount = 0.0f;
+    std::vector<float> L, R;
+    renderAt (e, p, 0.3f, fs, L, R);
+    CHECK (allFinite (L) && allFinite (R), "macros: engine renders a macro-built model");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -845,6 +887,7 @@ int main()
     testReflectionsCarryElevation();
     testNearFieldSpansPannerToEarWhisper();
     testCustomProfileAnchors();
+    testElevationMacros();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;
