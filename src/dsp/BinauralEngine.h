@@ -196,6 +196,16 @@ public:
         hrtf[HrtfDatabase::AnalyticA].generateAnalytic (sr, 0.0875f, HrtfDatabase::AnalyticA);
         hrtf[HrtfDatabase::AnalyticB].generateAnalytic (sr, 0.0875f, HrtfDatabase::AnalyticB);
 
+        // Every profile is level-matched to Analytic B at the frontal direction, so
+        // switching between them is a timbre comparison and never a loudness one — the
+        // whole point of the A/B/KU100 listening test.
+        {
+            const float ref = hrtf[HrtfDatabase::AnalyticB].frontalRms();
+            const float own = hrtf[HrtfDatabase::AnalyticA].frontalRms();
+            if (own > 1e-9f && ref > 1e-9f)
+                hrtf[HrtfDatabase::AnalyticA].applyGain (ref / own);
+        }
+
         // The measured pack is 48 kHz only for now; loadPack refuses any other rate, so
         // at 44.1/96/192 kHz the profile simply stays unavailable and selecting it falls
         // back to Analytic B rather than playing back at the wrong rate.
@@ -210,7 +220,7 @@ public:
         }
 
         for (auto& s : sources) s.prepare (sr, kChunk, &hrtf[HrtfDatabase::AnalyticB]);
-        early.prepare (sr, kChunk);
+        early.prepare (sr, kChunk, &hrtf[HrtfDatabase::AnalyticB]);
         fdn.prepare (sr, kChunk);
         outGainSm.prepare (sr, 0.02f); outGainSm.snap (1.0f);
         roomAmtSm.prepare (sr, 0.05f); roomAmtSm.snap (0.0f); // room fades in; amount 0 stays bit-exact direct
@@ -341,7 +351,7 @@ private:
         if (roomOn || roomCooldown > 0)
         {
             RoomParams rp { p.roomSize, p.roomDamping, p.roomEarlyLate };
-            early.update (sources[0].position(), rp);
+            early.update (db, sources[0].position(), rp, p.headRadiusM);
             fdn.setRoom (rp);
 
             // After switch-off the room keeps running on silence until its tail has

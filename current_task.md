@@ -97,6 +97,39 @@ Consequences:
 - Round 2 must be listened to **with the room engine on**, not dry. The dry test isolates
   the HRTF, which is exactly the cue that turns out to be weak.
 
+## Round 2 — pinna-independent elevation cues (implemented, awaiting listening)
+
+Two changes, both chosen because they do **not** depend on the listener's pinnae
+matching the dataset:
+
+1. **Early reflections now render through the HRTF** at each image's own direction, with
+   a per-ear far-field ITD, instead of being equal-power panned. A raised source now
+   produces a floor bounce that genuinely arrives from below. Under the old panning a
+   source above and a source below shared one pan angle (`atan2(x, z)` is identical for
+   the two) and differed only in arrival time — there was no directional information in
+   the reflections at all. Measured up-vs-down room-response spread: **5.9 dB**.
+   Cost: 6 images × 2 ears × 32 taps, a quarter of the direct path's length, which is
+   still ample for a Q=3.5 notch at 4 kHz.
+2. **Torso/shoulder reflection in Analytic B** — a delayed copy whose comb notches track
+   elevation across 440 Hz–1.2 kHz. Elevation spread in the 0.7–3 kHz band: **2.2 dB**
+   for B against 0.1 dB for A. The KU100 is a head without a torso, so the measured
+   profile has no equivalent; this is one reason it did not win round 1.
+
+Also: **all three profiles are now level-matched** at the frontal direction, not just
+KU100 against B. Round 1 compared A and B at slightly different loudness.
+
+New preset **"Height Check (room)"** — the one to judge height with. Round 1's dry
+preset is kept for isolating the HRTF, but it removes the cue that actually works.
+
+### Round 2 listening protocol
+
+1. `Height Check (room)`, Analytic B, sweep ELEVATION -90 → 0 → +90 slowly.
+2. Compare against `Height Check (dry)` at the same setting — the room version should be
+   clearly more convincing. If it is not, the reflection path is not helping and the next
+   lever is head tracking, not more spectral modelling.
+3. Then A vs B vs KU100 within `Height Check (room)`.
+4. Pink noise and claps as well as voice.
+
 ## Measured results so far (numbers only — the ear decides)
 
 | | Analytic A | Analytic B | KU100 48k |

@@ -15,6 +15,24 @@ namespace nsb
 {
 struct BiquadCoeffs { float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
 
+// Convolve an impulse response in place with (1 + g*z^-D), D fractional.
+// Used for the torso/shoulder reflection: a single delayed copy whose comb notches
+// move with elevation.
+inline void addDelayedCopy (float* fir, int taps, float delaySamples, float gain) noexcept
+{
+    if (gain <= 0.0f) return;
+    const float d = clampf (delaySamples, 1.0f, (float) (taps - 2));
+    const int i0 = (int) d;
+    const float frac = d - (float) i0;
+    // descending: fir[t] is only ever written by a step we have not reached yet
+    for (int t = taps - 1 - i0; t >= 0; --t)
+    {
+        const float v = fir[t] * gain;
+        fir[t + i0] += v * (1.0f - frac);
+        if (t + i0 + 1 < taps) fir[t + i0 + 1] += v * frac;
+    }
+}
+
 inline BiquadCoeffs makeHighShelf (float sr, float fc, float gainDb)
 {
     BiquadCoeffs c;
@@ -211,6 +229,7 @@ private:
             const float sa1 = (1.0f - K) / (1.0f + K);
 
             BiquadCoeffs s1, s2, s3;
+            float torsoDelay = 0.0f, torsoGain = 0.0f;
             if (profile == AnalyticA)
             {
                 // Legacy. The notch depth is scaled by cos(elevation) and by frontness,
@@ -257,6 +276,27 @@ private:
                 s1 = makeNotch (sr, fN, 3.5f, notchDb);
                 s2 = makeNotch (sr, fN * 0.62f, 1.2f, peakDb);
                 s3 = makeHighShelf (sr, 8000.0f, shelfDb);
+
+                // Torso/shoulder reflection (Algazi et al.): a delayed copy that combs
+                // 700 Hz - 3 kHz, with the delay tracking elevation. This cue matters
+                // because it does NOT depend on matching the listener's pinnae, and it
+                // sits low enough in frequency to survive headphone colouration — the
+                // band where the pinna notches live is exactly where headphones differ
+                // most. Note the KU100 is a head without a torso, so measured data from
+                // it has no equivalent.
+                const float elRad = deg2rad (clampf (elDeg, -90.0f, 90.0f));
+                // delay tracks elevation: first comb notch moves ~1.2 kHz (above) down
+                // to ~440 Hz (below)
+                torsoDelay = (0.78f - 0.42f * std::sin (elRad)) * 0.001f * sr;
+                // strength peaks just above the horizon, where the shoulder is squarely
+                // in view, and collapses for sources underneath, which the torso shadows
+                // rather than reflects. Deliberately not a function of cos(elevation):
+                // that is symmetric, and would make "above" and "below" differ only in
+                // delay instead of in strength as well.
+                const float view = clampf (0.45f + 0.55f * std::cos (elRad - deg2rad (25.0f)),
+                                           0.0f, 1.0f);
+                torsoGain = 0.45f * view
+                            * (0.65f + 0.35f * (0.5f + 0.5f * std::cos (deg2rad (azDeg))));
             }
 
             float* out = ear == 0 ? outL : outR;
@@ -282,6 +322,7 @@ private:
                 cz2 = s3.b2 * y3 - s3.a2 * y4;
                 out[t] = y4;
             }
+            addDelayedCopy (out, taps, torsoDelay, torsoGain);
         }
     }
 

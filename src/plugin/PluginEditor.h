@@ -353,6 +353,13 @@ private:
             // only the HRTF elevation cue is audible. Sweep ELEVATION from here.
             { "Height Check (dry)", { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.0f },
                                       { pid::nearfield, 0.0f }, { pid::roomAmount, 0.0f } } },
+            // The one to judge height with. Reflections are rendered through the HRTF at
+            // their image directions, so a raised source gets a floor bounce that really
+            // arrives from below — a cue that does not depend on the listener's pinnae.
+            { "Height Check (room)", { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.2f },
+                                      { pid::nearfield, 0.0f }, { pid::roomAmount, 40.0f },
+                                      { pid::roomSize, 40.0f }, { pid::roomDamping, 35.0f },
+                                      { pid::earlyLate, 20.0f } } },
         };
         presetBox.setTextWhenNothingSelected ("Presets...");
         for (int i = 0; i < (int) presets.size(); ++i)

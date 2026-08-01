@@ -37,6 +37,15 @@ Elevation cues that survive at the poles and behind:
    below lose it to torso shadow.
 4. Front/back weight floors at 0.45 (never 0) so the rear keeps most of the cue, and
    blends to a constant at the poles where azimuth is meaningless.
+5. **Torso/shoulder reflection** — a delayed copy (gain ≈ 0.45) whose comb notches move
+   with elevation: first notch ~1.2 kHz for sources above, ~440 Hz for sources below.
+   Strength peaks just above the horizon and collapses underneath, where the torso
+   shadows rather than reflects; deliberately *not* a function of `cos(elevation)`, which
+   is symmetric and would leave "above" and "below" differing only in delay.
+   This cue matters because 700 Hz–3 kHz varies far less between listeners than the
+   pinna region, and headphones colour it far less. Measured elevation spread in that
+   band: **2.2 dB** for B against 0.1 dB for A. Note the Neumann KU100 is a head without
+   a torso, so measured data from it carries no equivalent cue.
 
 Impulse through the cascade → truncated to N taps.
 

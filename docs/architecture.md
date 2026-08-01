@@ -21,7 +21,9 @@ HRTF Resolver         time-aligned (ITD-free) FIR grid, bilinear interpolation
    ▼
 Crossfading FIR Convolvers   dual coefficient sets, ~10 ms output crossfade
    │
-   ├────────────► Early Reflections (6 first-order shoebox images)
+   ├────────────► Early Reflections (6 first-order shoebox images,
+   │              │      each rendered through the HRTF at its own
+   │              │      image direction + per-ear far-field ITD)
    │                    │
    │                    ▼
    │              Late Room FDN (8 lines, Hadamard)

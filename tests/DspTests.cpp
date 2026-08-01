@@ -687,6 +687,67 @@ static void testRealPackIfPresent()
     CHECK (spread > 4.0f, "real pack: up/down spectra clearly differ");
 }
 
+// The torso/shoulder reflection puts an elevation cue at 700 Hz - 3 kHz, below the
+// pinna region. That band is the point: it varies far less between listeners and is
+// less mangled by headphone response than the 5-12 kHz notches.
+static void testTorsoLowFrequencyElevationCue()
+{
+    const float fs = 48000.0f;
+    HrtfDatabase a, b;
+    a.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticA);
+    b.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticB);
+
+    const float lowA = spectralDiffDb (a, 0.0f, -60.0f, 0.0f, 60.0f, fs, 700.0f, 3000.0f);
+    const float lowB = spectralDiffDb (b, 0.0f, -60.0f, 0.0f, 60.0f, fs, 700.0f, 3000.0f);
+    std::printf ("  [torso] low-band (0.7-3 kHz) elevation spread: A=%.2f dB  B=%.2f dB\n",
+                 lowA, lowB);
+    CHECK (lowB > 2.0f, "torso: profile B has a low-frequency elevation cue");
+    CHECK (lowB > lowA * 3.0f, "torso: profile A has essentially none");
+}
+
+// Reflections are rendered through the HRTF at their image directions, so a source
+// overhead and a source underfoot produce genuinely different room responses. With the
+// old equal-power panning both cases shared one pan angle (atan2 of x and z, which is
+// identical for the two) and differed only in arrival time.
+static void testReflectionsCarryElevation()
+{
+    const float fs = 48000.0f;
+    HrtfDatabase db;
+    db.generateAnalytic (fs, 0.0875f, HrtfDatabase::AnalyticB);
+
+    auto renderRoom = [&] (float y, std::vector<float>& L, std::vector<float>& R)
+    {
+        EarlyReflections er;
+        er.prepare (fs, 512, &db);
+        RoomParams rp { 0.4f, 0.0f, 0.5f };
+        er.update (&db, Vec3 { 0.0f, y, 1.2f }, rp, 0.0875f);
+        const int n = 4096;
+        std::vector<float> in ((size_t) n, 0.0f);
+        in[0] = 1.0f;
+        L.assign ((size_t) n, 0.0f); R.assign ((size_t) n, 0.0f);
+        for (int pos = 0; pos < n; pos += 512)
+            er.process (in.data() + pos, L.data() + pos, R.data() + pos, 512);
+    };
+
+    std::vector<float> upL, upR, dnL, dnR;
+    renderRoom (+1.6f, upL, upR);      // source above the listener
+    renderRoom (-1.2f, dnL, dnR);      // source below
+
+    CHECK (allFinite (upL) && allFinite (dnL), "reflections: finite");
+
+    double acc = 0; int count = 0;
+    for (float f = 500.0f; f <= 12000.0f; f += 250.0f)
+    {
+        const float a = magDb (upL.data(), (int) upL.size(), f, fs);
+        const float b = magDb (dnL.data(), (int) dnL.size(), f, fs);
+        acc += std::fabs (a - b);
+        ++count;
+    }
+    const float spread = (float) (acc / count);
+    std::printf ("  [reflections] up vs down room response spread = %.2f dB\n", spread);
+    CHECK (spread > 3.0f, "reflections: image direction changes the room response");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -710,6 +771,8 @@ int main()
     testPackOrientationAndLevelMatch();
     testPackFallsBackOffFortyEight();
     testRealPackIfPresent();
+    testTorsoLowFrequencyElevationCue();
+    testReflectionsCarryElevation();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

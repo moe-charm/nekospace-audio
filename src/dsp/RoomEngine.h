@@ -7,8 +7,11 @@
 // engine simply never calls this when amount is 0. JUCE-free.
 #include <vector>
 #include <cmath>
+#include <algorithm>
 #include "Geometry.h"
 #include "FractionalDelay.h"
+#include "HrtfDatabase.h"
+#include "FirConvolver.h"
 
 namespace nsb
 {
@@ -19,30 +22,57 @@ struct RoomParams
     float earlyLate = 0.35f;// 0 = all early, 1 = all late
 };
 
+// Six first-order shoebox reflections, each rendered through the HRTF at its own image
+// direction rather than being panned. That is what makes a source above the listener
+// produce a floor bounce that genuinely arrives from below — an elevation cue that works
+// regardless of how well the listener's pinnae match the dataset, which the direct-path
+// spectral cue does not.
 class EarlyReflections
 {
 public:
     static constexpr int kNumRefl = 6;
 
-    void prepare (float sampleRate, int /*maxBlock*/)
+    void prepare (float sampleRate, int maxBlock, const HrtfDatabase* db)
     {
         sr = sampleRate;
+        // A quarter of the direct path's length: enough for the pinna notch (a Q=3.5
+        // notch at 4 kHz settles inside ~13 samples at 48 kHz) at a fraction of the cost.
+        reflTaps = std::max (16, db->numTaps() / 4);
         line.prepare ((int) (0.25f * sr) + 8); // up to 250 ms reflection paths
-        for (auto& lp : dampLP) lp.prepare (sr);
-        for (auto& g : gainSm) { g.prepare (sr, 0.05f); g.snap (0.0f); }
-        for (auto& d : delaySm) { d.prepare (sr, 0.05f); d.snap (100.0f); }
-        for (auto& p : panSm) { p.prepare (sr, 0.05f); p.snap (0.0f); }
+        for (int k = 0; k < kNumRefl; ++k)
+        {
+            for (int e = 0; e < 2; ++e)
+            {
+                dampLP[k][e].prepare (sr);
+                fir[k][e].prepare (reflTaps, maxBlock, (int) (0.015f * sr));
+                gainSm[k][e].prepare (sr, 0.05f);  gainSm[k][e].snap (0.0f);
+                delaySm[k][e].prepare (sr, 0.05f); delaySm[k][e].snap (100.0f);
+                scratch[k][e].assign ((size_t) maxBlock, 0.0f);
+            }
+        }
+        coefL.assign ((size_t) db->numTaps(), 0.0f);
+        coefR.assign ((size_t) db->numTaps(), 0.0f);
+        primed = false;
+        lastValid = false;
     }
 
     void reset()
     {
         line.reset();
-        for (auto& lp : dampLP) lp.reset();
+        for (int k = 0; k < kNumRefl; ++k)
+            for (int e = 0; e < 2; ++e) { dampLP[k][e].reset(); fir[k][e].reset(); }
+        primed = false;
     }
 
-    // Recompute image sources; call at block rate (cheap).
-    void update (const Vec3& srcPos, const RoomParams& rp) noexcept
+    // Recompute image sources; call at block rate (cheap, and skipped when nothing moved).
+    void update (const HrtfDatabase* db, const Vec3& srcPos, const RoomParams& rp,
+                 float headRadius) noexcept
     {
+        if (lastValid && db == lastDb && srcPos.x == lastPos.x && srcPos.y == lastPos.y
+            && srcPos.z == lastPos.z && rp.size == lastSize && rp.damping == lastDamping)
+            return;
+        lastDb = db; lastPos = srcPos; lastSize = rp.size; lastDamping = rp.damping;
+        lastValid = true;
         // shoebox scales with size: 3–14 m wide, listener at center
         const float W = 3.0f + 11.0f * rp.size;    // x extent
         const float D = 3.5f + 12.0f * rp.size;    // z extent
@@ -68,45 +98,93 @@ public:
         const float reflCoef = 0.72f;
         const float dampFc = 12000.0f - 9500.0f * rp.damping;
 
+        (void) earY;
         for (int i = 0; i < kNumRefl; ++i)
         {
             const float dist = std::max (images[i].length(), 0.4f);
-            delaySm[i].setTarget (clampf (dist / kSpeedOfSound * sr, 8.0f, 0.24f * sr));
-            gainSm[i].setTarget (reflCoef / dist);
-            // pan from image azimuth (x/z plane), equal-power
-            panSm[i].setTarget (std::atan2 (images[i].x, images[i].z)); // -pi..pi
-            dampLP[i].setCutoff (dampFc + earY);
+            const Vec3 dir { images[i].x / dist, images[i].y / dist, images[i].z / dist };
+            const float azDeg = wrapDeg (juceless_atan2Deg (dir.x, dir.z));
+            const float elDeg = clampf (std::asin (clampf (dir.y, -1.0f, 1.0f)) * 180.0f / kPi,
+                                        -90.0f, 90.0f);
+            dampLP[i][0].setCutoff (dampFc);
+            dampLP[i][1].setCutoff (dampFc);
+
+            // per-ear arrival: far-field head geometry is enough for an image several
+            // metres away, and it gives the reflection a correct ITD
+            for (int e = 0; e < 2; ++e)
+            {
+                const float sign = e == 0 ? -1.0f : 1.0f;
+                const float path = dist + earPathOffsetFarField (dir, headRadius, sign);
+                delaySm[i][e].setTarget (clampf (path / kSpeedOfSound * sr, 8.0f, 0.24f * sr));
+                gainSm[i][e].setTarget (reflCoef / dist);
+            }
+
+            // directional filter for this image
+            db->interpolate (azDeg, elDeg, coefL.data(), coefR.data());
+            fadeTail (coefL.data());
+            fadeTail (coefR.data());
+            if (! primed)
+            {
+                fir[i][0].setCoefficientsImmediate (coefL.data(), reflTaps);
+                fir[i][1].setCoefficientsImmediate (coefR.data(), reflTaps);
+            }
+            else
+            {
+                fir[i][0].setCoefficients (coefL.data(), reflTaps);
+                fir[i][1].setCoefficients (coefR.data(), reflTaps);
+            }
         }
+        primed = true;
     }
 
-    // monoIn: room feed. Adds into outL/outR.
+    // monoIn: room feed. Adds into outL/outR. n <= maxBlock.
     void process (const float* monoIn, float* outL, float* outR, int n) noexcept
     {
         for (int i = 0; i < n; ++i)
         {
             line.push (monoIn[i]);
-            float l = 0, r = 0;
             for (int k = 0; k < kNumRefl; ++k)
-            {
-                const float d = delaySm[k].next();
-                const float g = gainSm[k].next();
-                const float az = panSm[k].next();
-                float v = dampLP[k].process (line.read (d) * g);
-                // equal-power pan; small widen from |az| toward rear
-                const float p = clampf (std::sin (az), -1.0f, 1.0f) * 0.5f + 0.5f;
-                l += v * std::cos (p * kPi * 0.5f);
-                r += v * std::sin (p * kPi * 0.5f);
-            }
-            outL[i] += l;
-            outR[i] += r;
+                for (int e = 0; e < 2; ++e)
+                    scratch[k][e][(size_t) i] =
+                        dampLP[k][e].process (line.read (delaySm[k][e].next())
+                                              * gainSm[k][e].next());
         }
+
+        for (int k = 0; k < kNumRefl; ++k)
+            for (int e = 0; e < 2; ++e)
+            {
+                float* s = scratch[k][e].data();
+                fir[k][e].process (s, s, n);
+                float* out = e == 0 ? outL : outR;
+                for (int i = 0; i < n; ++i) out[i] += s[i];
+            }
     }
 
 private:
+    // atan2 in degrees, kept local so the DSP core stays dependency-free
+    static float juceless_atan2Deg (float y, float x) noexcept
+    {
+        return std::atan2 (y, x) * 180.0f / kPi;
+    }
+
+    // Soften the truncation edge so the shortened HRIR has no spectral ripple step.
+    void fadeTail (float* c) const noexcept
+    {
+        for (int k = reflTaps - 6; k < reflTaps; ++k)
+            c[k] *= 0.5f + 0.5f * std::cos (kPi * (float) (k - (reflTaps - 6)) / 6.0f);
+    }
+
     FractionalDelay line;
-    OnePoleLP dampLP[kNumRefl];
-    LinearSmoother gainSm[kNumRefl], delaySm[kNumRefl], panSm[kNumRefl];
+    OnePoleLP dampLP[kNumRefl][2];              // one state per ear stream
+    CrossfadeFir fir[kNumRefl][2];
+    LinearSmoother gainSm[kNumRefl][2], delaySm[kNumRefl][2];
+    std::vector<float> scratch[kNumRefl][2], coefL, coefR;
+    const HrtfDatabase* lastDb = nullptr;
+    Vec3 lastPos;
+    float lastSize = -1.0f, lastDamping = -1.0f;
     float sr = 48000.0f;
+    int reflTaps = 32;
+    bool primed = false, lastValid = false;
 };
 
 class FdnReverb
