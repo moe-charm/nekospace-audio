@@ -162,16 +162,18 @@ public:
                                                  nsbui::col::bg2, 0, (float) getHeight(), false));
         g.fillAll();
 
-        // header title
-        auto header = getLocalBounds().removeFromTop (44);
+        // header title — "BINAURAL" is dropped rather than overlapping the combos when
+        // the title area is squeezed
+        auto title = titleArea.withTrimmedLeft (14);
         g.setColour (nsbui::col::accent);
         g.setFont (juce::Font (juce::FontOptions (20.0f)).boldened());
-        g.drawText ("NEKOSPACE", header.removeFromLeft (140).withTrimmedLeft (14),
-                    juce::Justification::centredLeft);
-        g.setColour (nsbui::col::textDim);
-        g.setFont (juce::Font (juce::FontOptions (20.0f)));
-        g.drawText ("BINAURAL", header.removeFromLeft (110),
-                    juce::Justification::centredLeft);
+        g.drawText ("NEKOSPACE", title.removeFromLeft (130), juce::Justification::centredLeft);
+        if (title.getWidth() >= 100)
+        {
+            g.setColour (nsbui::col::textDim);
+            g.setFont (juce::Font (juce::FontOptions (20.0f)));
+            g.drawText ("BINAURAL", title, juce::Justification::centredLeft);
+        }
         g.setColour (nsbui::col::panelLine);
         g.drawLine (0, 44, (float) getWidth(), 44, 1.0f);
 
@@ -237,11 +239,29 @@ public:
         proc.uiHeight.store (getHeight());
         auto b = getLocalBounds();
         auto header = b.removeFromTop (44);
-        header.removeFromLeft (260);
-        presetBox.setBounds (header.removeFromLeft (190).reduced (4, 9));
-        modeBox.setBounds (header.removeFromLeft (150).reduced (4, 9));
-        qualityBox.setBounds (header.removeFromLeft (120).reduced (4, 9));
-        profileBox.setBounds (header.removeFromLeft (170).reduced (4, 9));
+
+        // The header combos share whatever is left after the title, shrinking together
+        // toward a readable minimum. With fixed widths the last box (HRTF profile)
+        // collapsed to an unreadable stub on narrower windows.
+        titleArea = header.removeFromLeft (juce::jlimit (150, 260, header.getWidth() / 5));
+
+        struct Slot { juce::ComboBox* box; int preferred, minimum; };
+        const Slot slots[] = {
+            { &presetBox,  190, 120 }, { &modeBox,    150, 110 },
+            { &qualityBox, 120,  95 }, { &profileBox, 170, 130 },
+        };
+        int preferredTotal = 0, minimumTotal = 0;
+        for (const auto& s : slots) { preferredTotal += s.preferred; minimumTotal += s.minimum; }
+
+        const float squeeze = (preferredTotal > minimumTotal)
+            ? juce::jlimit (0.0f, 1.0f, (float) (preferredTotal - header.getWidth())
+                                          / (float) (preferredTotal - minimumTotal))
+            : 0.0f;
+        for (const auto& s : slots)
+        {
+            const int w = juce::roundToInt (s.preferred + (s.minimum - s.preferred) * squeeze);
+            s.box->setBounds (header.removeFromLeft (w).reduced (4, 9));
+        }
 
         // full-width footer strip: always has room for the info + licence line
         infoArea = b.removeFromBottom (18).reduced (12, 2);
@@ -461,7 +481,7 @@ private:
     juce::OwnedArray<juce::TextButton> snapButtons;
     std::vector<Preset> presets;
 
-    juce::Rectangle<int> spaceCaption, infoArea;
+    juce::Rectangle<int> spaceCaption, infoArea, titleArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceEditor)
 };

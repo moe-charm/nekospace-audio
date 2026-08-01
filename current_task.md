@@ -71,7 +71,31 @@ KU100 must not be run through this plugin at all — that would apply the head t
       pack that is skipped when it has not been generated
 - [x] Build with `NSB_WITH_KU100=ON`, verified in the standalone: the profile is
       selectable, actually engages at 48 kHz, and the footer shows the BY-SA attribution
-- [ ] **← you are here: listen and decide**
+- [x] **Listening round 1 — inconclusive for KU100, and the same verdict for A/B/KU100**
+
+## Listening round 1 result (2026-08-01)
+
+Setup: Sony MDR-Z1R, dedicated DAC and amp.
+
+> "音の変化ははっきりとあるけど 上下がやはりわかりにくい"
+
+All three profiles produce a **clear timbre change** with elevation, but none produce a
+convincing **up/down percept**. KU100 is not obviously better than Analytic B by ear,
+despite measuring slightly wider.
+
+This is the textbook outcome for static, non-individualised spectral elevation cues, so
+it is not evidence that the KU100 conversion is broken — the tests show it loaded, is
+oriented correctly and is level-matched. It is evidence that **spectral cues alone are
+not the lever**, and that swapping datasets will not fix it.
+
+Consequences:
+
+- KU100 is **not promoted**. It stays behind `NSB_WITH_KU100` as a reference point.
+- The next work is on cues that do not depend on matching the listener's pinnae:
+  torso/shoulder reflections, and early reflections rendered through the HRTF at their
+  real image directions instead of being panned.
+- Round 2 must be listened to **with the room engine on**, not dry. The dry test isolates
+  the HRTF, which is exactly the cue that turns out to be weak.
 
 ## Measured results so far (numbers only — the ear decides)
 
