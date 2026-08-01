@@ -27,4 +27,7 @@ Reserved for future versions (do not reuse for anything else):
 - `quality.mode` value `High` (partitioned FFT — must update reported latency).
 - `source.mode` value `Mid-Side`.
 
-State serialization: APVTS tree tagged with `schemaVersion` (integer, currently 1).
+State serialization: see [state-format.md](state-format.md). In short — IDs are permanent,
+new parameters are appended with an incremented version hint, and **choice parameters are
+stored by name**, because adding an option changes what every previously saved normalised
+value decodes to.

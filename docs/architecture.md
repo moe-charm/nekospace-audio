@@ -61,7 +61,9 @@ Key DSP decisions:
 8. Filter changes are published atomically and crossfaded.
 9. Parameter IDs are permanent and must never be renamed after release
    (see parameter-contract.md).
-10. Every serialized state carries an explicit schema version.
+10. Every serialized state carries an explicit schema version, and that version is
+    actually read on load. Choice parameters are stored by name, never by index or
+    normalised value. Unknown fields are ignored, never rejected. See state-format.md.
 11. The plugin must process correctly while the UI is closed.
 12. New DSP features require standalone unit tests (JUCE-free) before GUI integration.
 13. Room processing must reduce to exact direct rendering at `room.amount = 0`.

@@ -9,6 +9,8 @@
 #include <vector>
 #include <random>
 #include "../src/dsp/BinauralEngine.h"
+#include "../src/core/StateSchema.h"
+#include <string>
 
 using namespace nsb;
 
@@ -860,6 +862,42 @@ static void testElevationMacros()
     CHECK (allFinite (L) && allFinite (R), "macros: engine renders a macro-built model");
 }
 
+// Choice parameters must survive their option list growing. Storing the normalised value
+// meant "Analytic B" (index 1 of 3 = 0.5) decoded to index 2 of 4 once KU100 and Custom
+// were added — a different profile, silently, in every existing project.
+static void testChoiceNamesSurviveListGrowth()
+{
+    const std::vector<std::string> v2 = { "Analytic A (legacy)", "Analytic B" };
+    const std::vector<std::string> v3 = { "Analytic A (legacy)", "Analytic B",
+                                          "KU100 48k (experimental)" };
+    const std::vector<std::string> v4 = { "Analytic A (legacy)", "Analytic B",
+                                          "KU100 48k (experimental)",
+                                          "Custom (Elevation Lab)" };
+
+    // what the old normalised value would have decoded to, for the record
+    const float savedNormalised = 1.0f / (float) (v2.size() - 1);          // 1.0
+    const int decodedInV4 = (int) (savedNormalised * (float) (v4.size() - 1) + 0.5f);
+    std::printf ("  [state] normalised restore would pick index %d (%s) instead of "
+                 "Analytic B\n", decodedInV4, v4[(size_t) decodedInV4].c_str());
+    CHECK (decodedInV4 != 1, "state: the normalised route really is broken (guards the fix)");
+
+    // by name it lands correctly no matter how the list grew
+    for (const auto& list : { v2, v3, v4 })
+        CHECK (indexForChoiceName (list, "Analytic B", 0) == 1,
+               "state: a stored choice name resolves across list growth");
+
+    // unknown names fall back rather than guessing
+    CHECK (indexForChoiceName (v4, "Analytic Z", 2) == 2,
+           "state: an unknown choice name falls back to the current value");
+    CHECK (indexForChoiceName (v4, "", 3) == 3, "state: an empty name falls back");
+
+    // reordering is also survived, which index-based storage would not be
+    const std::vector<std::string> reordered = { "Custom (Elevation Lab)", "Analytic B",
+                                                 "Analytic A (legacy)" };
+    CHECK (indexForChoiceName (reordered, "Analytic A (legacy)", 0) == 2,
+           "state: names survive reordering");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -888,6 +926,7 @@ int main()
     testNearFieldSpansPannerToEarWhisper();
     testCustomProfileAnchors();
     testElevationMacros();
+    testChoiceNamesSurviveListGrowth();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

@@ -96,7 +96,7 @@ NekoSpaceProcessor::NekoSpaceProcessor()
                           .withOutput ("Output", AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "NekoSpaceState", createLayout())
 {
-    apvts.state.setProperty ("schemaVersion", 1, nullptr);
+    apvts.state.setProperty ("schemaVersion", nsb::kStateSchemaVersion, nullptr);
 
     auto raw = [this] (const char* id) { return apvts.getRawParameterValue (id); };
     pAz = raw (nsb::pid::azimuth);       pEl = raw (nsb::pid::elevation);
@@ -233,17 +233,102 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     tailSeconds.store (engine.tailSeconds(), std::memory_order_relaxed);
 }
 
+// ---------------------------------------------------------------- state ----
+// Layout and the rules that keep it loadable as the plugin grows: docs/state-format.md.
+
+static const juce::Identifier kExtraTag   { "NEKOSPACE_EXTRA" };
+static const juce::Identifier kChoicesTag { "CHOICES" };
+static const juce::Identifier kChoiceTag  { "CHOICE" };
+static const juce::Identifier kElevTag    { "ELEVATION" };
+static const juce::Identifier kAnchorTag  { "ANCHOR" };
+static const juce::Identifier kMacrosTag  { "MACROS" };
+
+// Every choice parameter in the plugin. Anything added later goes on the end.
+static const char* const kChoiceParamIds[] = {
+    nsb::pid::mode, nsb::pid::quality, nsb::pid::hrtfProfile
+};
+
+static void writeAnchorTree (juce::ValueTree& parent, const char* which,
+                             const nsb::ElevationAnchor& a)
+{
+    juce::ValueTree t (kAnchorTag);
+    t.setProperty ("which", which, nullptr);
+    t.setProperty ("notchHz", a.notchHz, nullptr);
+    t.setProperty ("notchDb", a.notchDb, nullptr);
+    t.setProperty ("notchQ", a.notchQ, nullptr);
+    t.setProperty ("peakRatio", a.peakRatio, nullptr);
+    t.setProperty ("peakDb", a.peakDb, nullptr);
+    t.setProperty ("shelfDb", a.shelfDb, nullptr);
+    t.setProperty ("torsoMs", a.torsoMs, nullptr);
+    t.setProperty ("torsoAmt", a.torsoAmt, nullptr);
+    parent.appendChild (t, nullptr);
+}
+
+static void readAnchorTree (const juce::ValueTree& elev, const char* which,
+                            nsb::ElevationAnchor& a)
+{
+    for (int i = 0; i < elev.getNumChildren(); ++i)
+    {
+        const auto t = elev.getChild (i);
+        if (! t.hasType (kAnchorTag) || t.getProperty ("which").toString() != which)
+            continue;
+        // unknown or missing fields keep their default: adding a field later must not
+        // invalidate an older project
+        auto get = [&] (const char* key, float fallback)
+        {
+            const auto v = t.getProperty (key);
+            return v.isVoid() ? fallback : (float) v;
+        };
+        a.notchHz   = get ("notchHz", a.notchHz);
+        a.notchDb   = get ("notchDb", a.notchDb);
+        a.notchQ    = get ("notchQ", a.notchQ);
+        a.peakRatio = get ("peakRatio", a.peakRatio);
+        a.peakDb    = get ("peakDb", a.peakDb);
+        a.shelfDb   = get ("shelfDb", a.shelfDb);
+        a.torsoMs   = get ("torsoMs", a.torsoMs);
+        a.torsoAmt  = get ("torsoAmt", a.torsoAmt);
+        return;
+    }
+}
+
 void NekoSpaceProcessor::getStateInformation (MemoryBlock& destData)
 {
-    auto state = apvts.copyState();          // mutating the copy is safe; the live tree is not
-    state.setProperty ("schemaVersion", 1, nullptr);
-    writeAnchor (state, "elevBelow", elevModel.below);
-    writeAnchor (state, "elevLevel", elevModel.level);
-    writeAnchor (state, "elevAbove", elevModel.above);
-    state.setProperty ("elevUp", elevMacros.up, nullptr);
-    state.setProperty ("elevDown", elevMacros.down, nullptr);
-    state.setProperty ("elevBody", elevMacros.body, nullptr);
-    state.setProperty ("elevFocus", elevMacros.focus, nullptr);
+    auto state = apvts.copyState();      // mutating the copy is safe; the live tree is not
+    state.setProperty ("schemaVersion", nsb::kStateSchemaVersion, nullptr);
+
+    // a previous restore may have left an EXTRA block on the tree; never write two
+    while (state.getChildWithName (kExtraTag).isValid())
+        state.removeChild (state.getChildWithName (kExtraTag), nullptr);
+
+    juce::ValueTree extra (kExtraTag);
+    extra.setProperty ("version", 1, nullptr);
+
+    // Choice parameters by name, so a longer list later cannot reinterpret this project.
+    juce::ValueTree choices (kChoicesTag);
+    for (const char* id : kChoiceParamIds)
+        if (auto* c = dynamic_cast<AudioParameterChoice*> (apvts.getParameter (id)))
+        {
+            juce::ValueTree ch (kChoiceTag);
+            ch.setProperty ("id", id, nullptr);
+            ch.setProperty ("name", c->choices[c->getIndex()], nullptr);
+            choices.appendChild (ch, nullptr);
+        }
+    extra.appendChild (choices, nullptr);
+
+    juce::ValueTree elev (kElevTag);
+    writeAnchorTree (elev, "below", elevModel.below);
+    writeAnchorTree (elev, "level", elevModel.level);
+    writeAnchorTree (elev, "above", elevModel.above);
+    juce::ValueTree macros (kMacrosTag);
+    macros.setProperty ("up", elevMacros.up, nullptr);
+    macros.setProperty ("down", elevMacros.down, nullptr);
+    macros.setProperty ("body", elevMacros.body, nullptr);
+    macros.setProperty ("focus", elevMacros.focus, nullptr);
+    elev.appendChild (macros, nullptr);
+    extra.appendChild (elev, nullptr);
+
+    state.appendChild (extra, nullptr);
+
     if (auto xml = state.createXml())
     {
         xml->setAttribute ("uiWidth", uiWidth.load());
@@ -254,32 +339,77 @@ void NekoSpaceProcessor::getStateInformation (MemoryBlock& destData)
 
 void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-    {
-        if (! xml->hasTagName (apvts.state.getType()))
-            return;
-        uiWidth.store (xml->getIntAttribute ("uiWidth", 1000));
-        uiHeight.store (xml->getIntAttribute ("uiHeight", 640));
-        const auto restored = juce::ValueTree::fromXml (*xml);
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
+        return;
 
-        nsb::ElevationModel m = nsb::ElevationModel::analyticBDefaults();
+    uiWidth.store (xml->getIntAttribute ("uiWidth", 1000));
+    uiHeight.store (xml->getIntAttribute ("uiHeight", 640));
+    const auto restored = juce::ValueTree::fromXml (*xml);
+    const int version = (int) restored.getProperty ("schemaVersion", 1);
+
+    apvts.replaceState (restored);
+
+    nsb::ElevationModel m = nsb::ElevationModel::analyticBDefaults();
+    nsb::ElevationMacros mac;
+
+    const auto extra = restored.getChildWithName (kExtraTag);
+    if (extra.isValid())
+    {
+        // schema 2+: choices by name win over whatever the normalised value decoded to
+        const auto choices = extra.getChildWithName (kChoicesTag);
+        for (int i = 0; i < choices.getNumChildren(); ++i)
+        {
+            const auto ch = choices.getChild (i);
+            auto* param = dynamic_cast<AudioParameterChoice*> (
+                apvts.getParameter (ch.getProperty ("id").toString()));
+            if (param == nullptr) continue;      // parameter retired in a later version
+
+            std::vector<std::string> names;
+            for (const auto& n : param->choices) names.push_back (n.toStdString());
+            const int idx = nsb::indexForChoiceName (
+                names, ch.getProperty ("name").toString().toStdString(), param->getIndex());
+            param->setValueNotifyingHost (param->convertTo0to1 ((float) idx));
+        }
+
+        const auto elev = extra.getChildWithName (kElevTag);
+        if (elev.isValid())
+        {
+            readAnchorTree (elev, "below", m.below);
+            readAnchorTree (elev, "level", m.level);
+            readAnchorTree (elev, "above", m.above);
+            const auto mt = elev.getChildWithName (kMacrosTag);
+            auto get = [&] (const char* key, float fallback)
+            {
+                const auto v = mt.getProperty (key);
+                return v.isVoid() ? fallback : (float) v;
+            };
+            mac.up    = get ("up", 1.0f);
+            mac.down  = get ("down", 1.0f);
+            mac.body  = get ("body", 1.0f);
+            mac.focus = get ("focus", 1.0f);
+        }
+    }
+    else if (version <= 1)
+    {
+        // schema 1: elevation values sat loose on the root, choices were index-based
         readAnchor (restored, "elevBelow", m.below);
         readAnchor (restored, "elevLevel", m.level);
         readAnchor (restored, "elevAbove", m.above);
-        elevModel = m;
         auto macro = [&] (const char* key, float fallback)
         {
             const auto v = restored.getProperty (key);
             return v.isVoid() ? fallback : (float) v;
         };
-        elevMacros.up    = macro ("elevUp", 1.0f);
-        elevMacros.down  = macro ("elevDown", 1.0f);
-        elevMacros.body  = macro ("elevBody", 1.0f);
-        elevMacros.focus = macro ("elevFocus", 1.0f);
-        engine.rebuildCustom (elevModel);
-
-        apvts.replaceState (restored);
+        mac.up    = macro ("elevUp", 1.0f);
+        mac.down  = macro ("elevDown", 1.0f);
+        mac.body  = macro ("elevBody", 1.0f);
+        mac.focus = macro ("elevFocus", 1.0f);
     }
+
+    elevModel = m;
+    elevMacros = mac;
+    engine.rebuildCustom (elevModel);
 }
 
 juce::AudioProcessorEditor* NekoSpaceProcessor::createEditor()

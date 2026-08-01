@@ -67,6 +67,7 @@ cmake -B build -DNSB_WITH_KU100=ON
 
 - [architecture.md](docs/architecture.md) — signal path + Architecture Contract (binding)
 - [parameter-contract.md](docs/parameter-contract.md) — permanent parameter IDs
+- [state-format.md](docs/state-format.md) — what gets saved into a host project, and the rules that keep old projects loading
 - [realtime-contract.md](docs/realtime-contract.md) — thread rules
 - [hrtf-format.md](docs/hrtf-format.md) — HRTF data pipeline, licensing notes
 - [roadmap.md](docs/roadmap.md) — task breakdown with acceptance criteria
