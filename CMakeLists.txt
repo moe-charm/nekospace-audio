@@ -20,8 +20,8 @@ target_include_directories(nsb_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # --- Plugin ---
 juce_add_plugin(NekoSpaceBinaural
-    COMPANY_NAME "TextureVoice"
-    PLUGIN_MANUFACTURER_CODE Txvc
+    COMPANY_NAME "NekoSpace Audio"
+    PLUGIN_MANUFACTURER_CODE NkSp
     PLUGIN_CODE Nksb
     FORMATS VST3 Standalone
     PRODUCT_NAME "NekoSpace Binaural"

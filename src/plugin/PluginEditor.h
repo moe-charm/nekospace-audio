@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 TextureVoice
+// SPDX-FileCopyrightText: 2026 charmpic
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #pragma once
@@ -207,10 +207,10 @@ public:
             g.setColour (nsbui::col::textDim.withAlpha (0.75f));
             g.drawText (hrtfInfoText(), infoArea, juce::Justification::centredLeft);
             g.drawText (fitting (f, infoArea.getWidth() - 280,
-                                 { "NekoSpace Binaural  |  Copyright (C) 2026 TextureVoice  |  "
+                                 { "NekoSpace Binaural  |  Copyright (C) 2026 charmpic  |  "
                                    "AGPLv3, NO WARRANTY  |  see LICENSE",
-                                   "(C) 2026 TextureVoice  |  AGPLv3, NO WARRANTY",
-                                   "(C) 2026 TextureVoice  |  AGPLv3" }),
+                                   "(C) 2026 charmpic  |  AGPLv3, NO WARRANTY",
+                                   "(C) 2026 charmpic  |  AGPLv3" }),
                         infoArea, juce::Justification::centredRight);
         }
     }

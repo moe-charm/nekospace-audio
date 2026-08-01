@@ -1,5 +1,7 @@
 # NekoSpace Binaural
 
+Part of **NekoSpace Audio** — https://github.com/moe-charm/nekospace-audio
+
 Voice-focused 3D binaural spatializer plugin. 音声作品向けの、耳元表現に強い軽量バイノーラル・パンナー。
 
 - **Format (v1):** VST3 Effect (Windows x64) + Standalone
@@ -29,7 +31,7 @@ Copy the `.vst3` folder to `C:\Program Files\Common Files\VST3\` (or add the art
 NekoSpace Binaural is free software, licensed under the
 **GNU Affero General Public License v3.0 or later** (see [LICENSE](LICENSE)).
 
-    Copyright (C) 2026 TextureVoice
+    Copyright (C) 2026 charmpic
 
     This program is free software: you can redistribute it and/or modify it under
     the terms of the GNU Affero General Public License as published by the Free
@@ -68,6 +70,7 @@ cmake -B build -DNSB_WITH_KU100=ON
 - [architecture.md](docs/architecture.md) — signal path + Architecture Contract (binding)
 - [parameter-contract.md](docs/parameter-contract.md) — permanent parameter IDs
 - [state-format.md](docs/state-format.md) — what gets saved into a host project, and the rules that keep old projects loading
+- [identity.md](docs/identity.md) — copyright holder vs brand, and the VST3/AU codes that are permanent after release
 - [realtime-contract.md](docs/realtime-contract.md) — thread rules
 - [hrtf-format.md](docs/hrtf-format.md) — HRTF data pipeline, licensing notes
 - [roadmap.md](docs/roadmap.md) — task breakdown with acceptance criteria

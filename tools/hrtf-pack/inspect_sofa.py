@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 TextureVoice
+# SPDX-FileCopyrightText: 2026 charmpic
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Dump the metadata of a SOFA file so the conversion assumptions can be checked."""
 import sys
