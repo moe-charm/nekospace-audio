@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JUCE is fetched by CMake; cache it so CI is not re-cloning it every run
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-${{ runner.os }}-9.0.0
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # The DSP core is JUCE-free, so the acceptance tests run without a host or a
+      # display. NSB_WITH_KU100 stays off: that data is CC BY-SA and untracked.
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: NekoSpaceBinaural-VST3
+          path: build/plugins/binaural/NekoSpaceBinaural_artefacts/Release/VST3/

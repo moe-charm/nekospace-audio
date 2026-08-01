@@ -622,7 +622,8 @@ static void testPackFallsBackOffFortyEight()
 static void testRealPackIfPresent()
 {
     const char* candidates[] = {
-        "resources/hrtf/ku100_48k.bhrtf",
+        "resources/hrtf/ku100_48k.bhrtf",                       // ctest sets this cwd
+        "plugins/binaural/resources/hrtf/ku100_48k.bhrtf",      // repo root
         "../resources/hrtf/ku100_48k.bhrtf",
         "../../resources/hrtf/ku100_48k.bhrtf",
     };

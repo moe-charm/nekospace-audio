@@ -1,0 +1,47 @@
+# Repository Layout
+
+```
+nekospace-audio/
+├─ CMakeLists.txt     fetches JUCE once, adds each product
+├─ plugins/
+│  └─ binaural/       CMakeLists, src/, tests/, docs/, tools/, resources/
+├─ shared/            code proven to be needed by more than one plugin
+├─ docs/              contracts that apply across products
+└─ cmake/             build helpers
+```
+
+## Why one repository
+
+Four products that share DSP and UI. A monorepo lets a change to shared code and the
+plugins that use it land in a single commit, with one CI run. Separate repositories would
+need a submodule or a package for the shared layer — real overhead for a solo developer,
+bought with no benefit at this size.
+
+## Why `shared/` starts empty
+
+**Nothing is promoted to `shared/` until a second plugin actually needs it.**
+
+Promoting early creates a published API with exactly one consumer: every later change has
+to be justified against a contract nobody is holding you to yet, and the code ends up
+shaped for an imagined second user rather than the real one. Waiting costs one mechanical
+move later; not waiting costs design freedom now.
+
+Concretely, Binaural currently owns plenty that *looks* shareable — `FractionalDelay`,
+`CrossfadeFir`, `FdnReverb`, the smoothers and biquad helpers. It keeps them until
+Reverb is real and says what it needs.
+
+The genuinely binaural-specific parts — `HrtfDatabase`, `ElevationModel`,
+`BinauralEngine`, the head-and-ear geometry — stay in the plugin permanently.
+
+## Which docs live where
+
+**Top-level `docs/`** — anything true of every product: the identity and plugin-code
+reservations, the state-format rules, the realtime contract, third-party licensing.
+
+**`plugins/<product>/docs/`** — anything true of one product: its architecture, its
+parameter contract, its roadmap, its data formats.
+
+Parameter IDs are per-plugin, so the *contract* is per-plugin; the *rules* those contracts
+obey are shared. `docs/state-format.md` currently carries Binaural's layout as its worked
+example; when a second plugin gains its own state, that layout section moves down to
+`plugins/binaural/docs/` and the rules stay here.
