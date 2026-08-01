@@ -17,17 +17,19 @@ All parameters use JUCE `ParameterID` version hint 1 unless noted.
 | `room.size`          | float  | 0 … 100 %                     | 35      | continuous shoebox + T60 scale |
 | `room.damping`       | float  | 0 … 100 %                     | 50      | HF absorption |
 | `room.early_late`    | float  | 0 … 100 %                     | 35      | 0 = all early, 100 = all late |
-| `hrtf.profile`       | choice | Analytic A (legacy) / Analytic B | Analytic B | B has the working height cue; A is kept for comparison. Both grids stay resident, so switching is a block-boundary swap + crossfade. Not meant for continuous automation |
+| `hrtf.profile`       | choice | Analytic A (legacy) / Analytic B / KU100 48k (experimental) / Custom (Elevation Lab) | Analytic B | Choice order is frozen for host automation compatibility. B has the working height cue; A is kept for comparison. Not meant for continuous automation |
 | `quality.mode`       | choice | Economy / Standard            | Standard | Standard = full HRIR window (~2.7 ms), Economy = half. Tap counts scale with sample rate — 128/64 at 48 kHz, 256/128 at 96 kHz and above |
 | `output.gain`        | float  | -24 … +12 dB                  | 0       | |
 | `output.bypass_room` | bool   | Off / On                      | Off     | A/B compare |
 
 Reserved for future versions (do not reuse for anything else):
 
-- `quality.mode` value `High` (partitioned FFT — must update reported latency).
-- `source.mode` value `Mid-Side`.
+- A future `High` quality mode must use a new parameter ID (partitioned FFT must also
+  update reported latency); do not append it to the released `quality.mode` choice.
+- A future `Mid-Side` source mode must use a new parameter ID; do not append it to the
+  released `source.mode` choice.
 
 State serialization: see [state-format.md](state-format.md). In short — IDs are permanent,
-new parameters are appended with an incremented version hint, and **choice parameters are
-stored by name**, because adding an option changes what every previously saved normalised
-value decodes to.
+new parameters use an incremented version hint, and choice state uses permanent machine
+keys. Choice lists themselves are frozen after release because host automation remains
+normalised and cannot be protected by the plugin state format.

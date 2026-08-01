@@ -12,9 +12,9 @@ parameter contract and this document together define compatibility.
   ...
   <NEKOSPACE_EXTRA version="1">
     <CHOICES>
-      <CHOICE id="source.mode"  name="Mono Object"/>
-      <CHOICE id="quality.mode" name="Standard"/>
-      <CHOICE id="hrtf.profile" name="Analytic B"/>
+      <CHOICE id="source.mode"  key="mono_object" name="Mono Object"/>
+      <CHOICE id="quality.mode" key="standard" name="Standard"/>
+      <CHOICE id="hrtf.profile" key="analytic_b" name="Analytic B"/>
     </CHOICES>
     <ELEVATION>
       <ANCHOR which="below" notchHz="4967" notchDb="-8.4" .../>
@@ -34,17 +34,18 @@ version independent of the schema version.
 
 1. **Parameter IDs are permanent.** Never rename, never reuse. Retiring one means it
    stops being written; a state that still contains it is ignored, not rejected.
-2. **New parameters are appended**, never inserted, and take an **incremented version
-   hint** in `ParameterID { id, versionHint }` — that is what the hint is for.
-3. **Choice parameters are stored by name, never by index or normalised value.**
-   A choice normalises as `index / (count - 1)`, so adding one option rewrites what every
-   existing project means: "Analytic B" saved as 0.5 of three options decodes to index 2
-   of four — a different profile. `hrtf.profile` has already gone from two options to
-   four, so this is a bug that was live, not a precaution. On load the name wins over the
-   normalised value; an unrecognised name falls back to whatever the parameter already
-   holds.
-4. **Adding a choice option is safe. Renaming one is not** — it silently becomes
-   "unknown" for older projects. Rename only with a migration.
+2. **New parameters use a higher `versionHint` than every earlier release.** The hint
+   preserves Audio Unit ordering in Logic/GarageBand; appending also keeps host display
+   order predictable, but the hint is not a state-schema version.
+3. **Choice values get permanent machine keys.** `name` is only a readable snapshot and a
+   compatibility bridge for early schema-2 development states. Keys such as `analytic_b`
+   are never renamed, translated, reordered, or reused. APVTS stores the denormalised
+   choice index in each root `PARAM`; the key wins over that index on state load, and an
+   unknown key retains the pre-restore parameter value.
+4. **Choice lists are frozen after release.** Stable keys protect plugin state, but hosts
+   store automation as `index / (count - 1)`, which keys cannot repair. Adding, removing,
+   or reordering an option after release requires a new parameter ID. Display names may
+   change freely because they are not identifiers.
 5. **Unknown properties and children are ignored, never rejected.** A project written by
    a newer build must still open in an older one, minus the features it does not have.
 6. **Missing fields keep their defaults.** Every reader supplies a fallback, so adding a
@@ -58,8 +59,20 @@ version independent of the schema version.
 
 | Schema | Change |
 | --- | --- |
-| 1 | Original. Elevation values were loose properties on the root; choice parameters relied on the normalised value, so growing a choice list reinterpreted old projects. |
-| 2 | `NEKOSPACE_EXTRA` child with its own version; choice parameters stored by name. Schema 1 states still load: the loose elevation properties are read, and choices fall back to the normalised value. |
+| 1 | Original. Elevation values were loose properties on the root; APVTS choice values were stored as raw indices. |
+| 2 | `NEKOSPACE_EXTRA` child with its own version; choice values also stored by stable key. Early schema-2 development states that contain only `name` still load. Schema 1 raw choice indices and loose elevation properties remain readable. |
+
+### APVTS state versus host automation
+
+These are deliberately treated as separate formats. JUCE APVTS serialises the
+**denormalised** choice index (`1` for the second item), so appending an item does not turn
+an old index 1 into another choice. VST3/AU automation is host-owned and uses a normalised
+0..1 value, so changing the number or order of choices can reinterpret existing automation.
+The stable-key layer protects project/preset state; rule 4 protects automation.
+
+`NEKOSPACE_EXTRA.version` is read independently from `schemaVersion`. Readers parse the
+fields they understand from version 1 and later and ignore unknown children, preserving
+forward compatibility.
 
 ## Known semantic change, pre-release
 

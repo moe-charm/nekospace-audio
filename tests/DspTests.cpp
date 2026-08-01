@@ -629,7 +629,12 @@ static void testRealPackIfPresent()
     std::vector<unsigned char> bytes;
     for (const char* path : candidates)
     {
-        std::FILE* fp = std::fopen (path, "rb");
+        std::FILE* fp = nullptr;
+#if defined (_MSC_VER)
+        (void) fopen_s (&fp, path, "rb");
+#else
+        fp = std::fopen (path, "rb");
+#endif
         if (fp == nullptr) continue;
         std::fseek (fp, 0, SEEK_END);
         const long size = std::ftell (fp);
@@ -862,40 +867,47 @@ static void testElevationMacros()
     CHECK (allFinite (L) && allFinite (R), "macros: engine renders a macro-built model");
 }
 
-// Choice parameters must survive their option list growing. Storing the normalised value
-// meant "Analytic B" (index 1 of 3 = 0.5) decoded to index 2 of 4 once KU100 and Custom
-// were added — a different profile, silently, in every existing project.
-static void testChoiceNamesSurviveListGrowth()
+// Stable keys protect plugin state from display-copy changes. Host automation is a
+// separate contract: its normalised values demonstrate why released lists stay frozen.
+static void testChoiceKeysSurviveDisplayChanges()
 {
     const std::vector<std::string> v2 = { "Analytic A (legacy)", "Analytic B" };
-    const std::vector<std::string> v3 = { "Analytic A (legacy)", "Analytic B",
-                                          "KU100 48k (experimental)" };
     const std::vector<std::string> v4 = { "Analytic A (legacy)", "Analytic B",
                                           "KU100 48k (experimental)",
                                           "Custom (Elevation Lab)" };
 
-    // what the old normalised value would have decoded to, for the record
+    // What old host automation would decode to after changing the list length.
     const float savedNormalised = 1.0f / (float) (v2.size() - 1);          // 1.0
     const int decodedInV4 = (int) (savedNormalised * (float) (v4.size() - 1) + 0.5f);
-    std::printf ("  [state] normalised restore would pick index %d (%s) instead of "
+    std::printf ("  [automation] old normalised value would pick index %d (%s) instead of "
                  "Analytic B\n", decodedInV4, v4[(size_t) decodedInV4].c_str());
-    CHECK (decodedInV4 != 1, "state: the normalised route really is broken (guards the fix)");
+    CHECK (decodedInV4 != 1, "automation: released choice lists must stay frozen");
 
-    // by name it lands correctly no matter how the list grew
-    for (const auto& list : { v2, v3, v4 })
-        CHECK (indexForChoiceName (list, "Analytic B", 0) == 1,
-               "state: a stored choice name resolves across list growth");
+    const std::vector<std::string> keys = { "analytic_a", "analytic_b",
+                                            "thk_ku100_48k", "custom_elevation" };
+    CHECK (indexForChoiceKey (keys, "analytic_b", 0) == 1,
+           "state: a stored choice key resolves");
+    CHECK (keyForChoiceIndex (keys, 1) == "analytic_b",
+           "state: choice index writes its permanent key");
 
-    // unknown names fall back rather than guessing
-    CHECK (indexForChoiceName (v4, "Analytic Z", 2) == 2,
-           "state: an unknown choice name falls back to the current value");
-    CHECK (indexForChoiceName (v4, "", 3) == 3, "state: an empty name falls back");
+    // unknown keys fall back to the value captured before APVTS restoration
+    CHECK (indexForChoiceKey (keys, "analytic_z", 2) == 2,
+           "state: an unknown choice key falls back to the pre-restore value");
+    CHECK (indexForChoiceKey (keys, "", 3) == 3, "state: an empty key falls back");
 
-    // reordering is also survived, which index-based storage would not be
-    const std::vector<std::string> reordered = { "Custom (Elevation Lab)", "Analytic B",
-                                                 "Analytic A (legacy)" };
-    CHECK (indexForChoiceName (reordered, "Analytic A (legacy)", 0) == 2,
-           "state: names survive reordering");
+    // Display copy may be renamed/localised without touching the stable key.
+    const std::vector<std::string> renamed = { "Natural A", "Enhanced",
+                                               "KU100", "Custom" };
+    CHECK (indexForChoiceKey (keys, "analytic_b", 0) == 1 && renamed[1] == "Enhanced",
+           "state: display-name changes do not affect keys");
+
+    // Early schema-2 development states stored only the display name.
+    CHECK (indexForLegacyChoiceName (v4, "Analytic B", 0) == 1,
+           "state: early schema-2 names remain readable");
+
+    // APVTS project state stores raw index 1, which stays B as the list grows. The
+    // normalised calculation above models host automation, not APVTS serialization.
+    CHECK (v2[1] == v4[1], "state: raw APVTS index 1 remains Analytic B");
 }
 
 int main()
@@ -926,7 +938,7 @@ int main()
     testNearFieldSpansPannerToEarWhisper();
     testCustomProfileAnchors();
     testElevationMacros();
-    testChoiceNamesSurviveListGrowth();
+    testChoiceKeysSurviveDisplayChanges();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

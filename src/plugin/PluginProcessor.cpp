@@ -126,21 +126,6 @@ bool NekoSpaceProcessor::isBusesLayoutSupported (const BusesLayout& layouts) con
     return in == AudioChannelSet::stereo() || in == AudioChannelSet::mono();
 }
 
-// Elevation Lab model <-> state tree. Stored as plain properties: it is design data that
-// gets frozen into code once tuned, not something a host should automate.
-static void writeAnchor (juce::ValueTree& t, const char* prefix, const nsb::ElevationAnchor& a)
-{
-    const juce::String p (prefix);
-    t.setProperty (p + "NotchHz",   a.notchHz,   nullptr);
-    t.setProperty (p + "NotchDb",   a.notchDb,   nullptr);
-    t.setProperty (p + "NotchQ",    a.notchQ,    nullptr);
-    t.setProperty (p + "PeakRatio", a.peakRatio, nullptr);
-    t.setProperty (p + "PeakDb",    a.peakDb,    nullptr);
-    t.setProperty (p + "ShelfDb",   a.shelfDb,   nullptr);
-    t.setProperty (p + "TorsoMs",   a.torsoMs,   nullptr);
-    t.setProperty (p + "TorsoAmt",  a.torsoAmt,  nullptr);
-}
-
 static void readAnchor (const juce::ValueTree& t, const char* prefix, nsb::ElevationAnchor& a)
 {
     const juce::String p (prefix);
@@ -243,10 +228,38 @@ static const juce::Identifier kElevTag    { "ELEVATION" };
 static const juce::Identifier kAnchorTag  { "ANCHOR" };
 static const juce::Identifier kMacrosTag  { "MACROS" };
 
-// Every choice parameter in the plugin. Anything added later goes on the end.
+// Permanent machine keys for choice values. These are state-format identifiers, not UI
+// copy: never rename/reorder/reuse a key after release.
 static const char* const kChoiceParamIds[] = {
     nsb::pid::mode, nsb::pid::quality, nsb::pid::hrtfProfile
 };
+
+static std::vector<std::string> choiceKeysFor (const juce::String& id)
+{
+    if (id == nsb::pid::mode)        return { "mono_object", "linked_stereo" };
+    if (id == nsb::pid::quality)     return { "economy", "standard" };
+    if (id == nsb::pid::hrtfProfile) return { "analytic_a", "analytic_b",
+                                               "thk_ku100_48k", "custom_elevation" };
+    return {};
+}
+
+// Frozen aliases for the short-lived schema-2 development format that saved only the
+// display name. Do not derive these from current UI copy: that would break after a rename.
+static std::vector<std::string> legacyChoiceNamesFor (const juce::String& id)
+{
+    if (id == nsb::pid::mode)        return { "Mono Object", "Linked Stereo" };
+    if (id == nsb::pid::quality)     return { "Economy", "Standard" };
+    if (id == nsb::pid::hrtfProfile) return { "Analytic A (legacy)", "Analytic B",
+                                               "KU100 48k (experimental)",
+                                               "Custom (Elevation Lab)" };
+    return {};
+}
+
+static juce::ValueTree parameterNode (const juce::ValueTree& state,
+                                      const juce::String& id)
+{
+    return state.getChildWithProperty ("id", id);
+}
 
 static void writeAnchorTree (juce::ValueTree& parent, const char* which,
                              const nsb::ElevationAnchor& a)
@@ -303,13 +316,18 @@ void NekoSpaceProcessor::getStateInformation (MemoryBlock& destData)
     juce::ValueTree extra (kExtraTag);
     extra.setProperty ("version", 1, nullptr);
 
-    // Choice parameters by name, so a longer list later cannot reinterpret this project.
+    // Stable keys protect plugin state from display renames/localisation. The name is a
+    // readable snapshot and lets early schema-2 development states keep loading.
     juce::ValueTree choices (kChoicesTag);
     for (const char* id : kChoiceParamIds)
         if (auto* c = dynamic_cast<AudioParameterChoice*> (apvts.getParameter (id)))
         {
+            const auto keys = choiceKeysFor (id);
+            jassert (keys.size() == (size_t) c->choices.size());
             juce::ValueTree ch (kChoiceTag);
             ch.setProperty ("id", id, nullptr);
+            ch.setProperty ("key", juce::String (nsb::keyForChoiceIndex (
+                                        keys, c->getIndex())), nullptr);
             ch.setProperty ("name", c->choices[c->getIndex()], nullptr);
             choices.appendChild (ch, nullptr);
         }
@@ -345,31 +363,41 @@ void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
 
     uiWidth.store (xml->getIntAttribute ("uiWidth", 1000));
     uiHeight.store (xml->getIntAttribute ("uiHeight", 640));
-    const auto restored = juce::ValueTree::fromXml (*xml);
+    auto restored = juce::ValueTree::fromXml (*xml);
     const int version = (int) restored.getProperty ("schemaVersion", 1);
-
-    apvts.replaceState (restored);
 
     nsb::ElevationModel m = nsb::ElevationModel::analyticBDefaults();
     nsb::ElevationMacros mac;
 
     const auto extra = restored.getChildWithName (kExtraTag);
-    if (extra.isValid())
+    const int extraVersion = extra.isValid() ? (int) extra.getProperty ("version", 1) : 0;
+    if (extra.isValid() && extraVersion >= 1)
     {
-        // schema 2+: choices by name win over whatever the normalised value decoded to
+        // Resolve choices before replaceState. Unknown keys retain the pre-restore value;
+        // they must not guess from an unrecognised newer state.
         const auto choices = extra.getChildWithName (kChoicesTag);
         for (int i = 0; i < choices.getNumChildren(); ++i)
         {
             const auto ch = choices.getChild (i);
+            const auto id = ch.getProperty ("id").toString();
             auto* param = dynamic_cast<AudioParameterChoice*> (
-                apvts.getParameter (ch.getProperty ("id").toString()));
+                apvts.getParameter (id));
             if (param == nullptr) continue;      // parameter retired in a later version
 
-            std::vector<std::string> names;
-            for (const auto& n : param->choices) names.push_back (n.toStdString());
-            const int idx = nsb::indexForChoiceName (
-                names, ch.getProperty ("name").toString().toStdString(), param->getIndex());
-            param->setValueNotifyingHost (param->convertTo0to1 ((float) idx));
+            const auto keys = choiceKeysFor (id);
+            jassert (keys.size() == (size_t) param->choices.size());
+            const auto storedKey = ch.getProperty ("key").toString().toStdString();
+            int idx = nsb::indexForChoiceKey (keys, storedKey, param->getIndex());
+            if (storedKey.empty())
+                idx = nsb::indexForLegacyChoiceName (
+                    legacyChoiceNamesFor (id),
+                    ch.getProperty ("name").toString().toStdString(), idx);
+
+            // APVTS ValueTrees hold denormalised values (the choice index), unlike host
+            // automation which uses 0..1. Writing a normalised value here would corrupt
+            // the very state this layer is intended to protect.
+            if (auto node = parameterNode (restored, id); node.isValid())
+                node.setProperty ("value", idx, nullptr);
         }
 
         const auto elev = extra.getChildWithName (kElevTag);
@@ -392,7 +420,8 @@ void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
     }
     else if (version <= 1)
     {
-        // schema 1: elevation values sat loose on the root, choices were index-based
+        // APVTS already restores schema-1 choices by their stored raw index. Elevation
+        // values, however, sat loose on the root and need their legacy reader.
         readAnchor (restored, "elevBelow", m.below);
         readAnchor (restored, "elevLevel", m.level);
         readAnchor (restored, "elevAbove", m.above);
@@ -406,6 +435,10 @@ void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
         mac.body  = macro ("elevBody", 1.0f);
         mac.focus = macro ("elevFocus", 1.0f);
     }
+
+    // Apply the corrected tree once. This avoids notifying the host parameter-by-parameter
+    // during state restoration and ensures APVTS sees the stable-key result immediately.
+    apvts.replaceState (restored);
 
     elevModel = m;
     elevMacros = mac;
