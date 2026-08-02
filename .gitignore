@@ -15,9 +15,12 @@ JUCE/
 
 # Measured HRTF source data and generated packs: CC BY-SA third-party data, kept out of
 # the repository while the KU100 profile is an unpromoted experiment
-# (plugins/binaural/current_task.md).
+# (plugins/binaural/docs/elevation-findings.md).
 plugins/*/external/hrtf-data/
 plugins/*/resources/hrtf/*.bhrtf
 
 # local tool settings, not project configuration
 .claude/settings.local.json
+
+# anything that must not reach the public repository — see private/README.md
+private/

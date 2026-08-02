@@ -30,7 +30,7 @@ tail length reported to host.
 
 ## TASK 5.5 — measured KU100 listening prototype (in progress)
 Offline SOFA→`.bhrtf` converter, third `hrtf.profile` entry, development builds only
-(`NSB_WITH_KU100=ON`). See `current_task.md`; promotion depends on a listening result,
+(`NSB_WITH_KU100=ON`). See `elevation-findings.md`; promotion depends on a listening result,
 not on the numbers.
 
 ## TASK 6 — SOFA Import (next)

@@ -26,7 +26,7 @@ target_sources(NekoSpaceBinaural PRIVATE
 
 # --- Optional measured HRTF pack (development listening prototype) ---
 # OFF by default: the TH Köln KU100 data is CC BY-SA and is NOT part of the distributed
-# plugin until it wins the listening comparison. See current_task.md.
+# plugin until it wins the listening comparison. See docs/elevation-findings.md.
 #   python tools/hrtf-pack/sofa_to_bhrtf.py <in.sofa> resources/hrtf/ku100_48k.bhrtf
 #   cmake -B build -DNSB_WITH_KU100=ON
 option(NSB_WITH_KU100 "Embed the experimental measured KU100 HRTF pack (dev only)" OFF)

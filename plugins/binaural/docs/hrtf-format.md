@@ -58,7 +58,7 @@ Switching profiles is a pointer swap at a block boundary — both grids are resi
 ### KU100 48k (experimental, development builds only)
 
 A measured profile, off by default. Build with `-DNSB_WITH_KU100=ON` after generating the
-pack; see `current_task.md` for why it is not distributed yet.
+pack; see `elevation-findings.md` for why it is not distributed yet.
 
 ```bash
 python tools/hrtf-pack/sofa_to_bhrtf.py external/hrtf-data/HRIR_L2702.sofa resources/hrtf/ku100_48k.bhrtf

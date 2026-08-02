@@ -80,7 +80,7 @@ commercial, so an AGPLv3 release needs no paid JUCE tier. See
 
 ### Optional: experimental measured HRTF (development only)
 
-Not part of a normal build or of any distribution — see `current_task.md`.
+Not part of a normal build or of any distribution — see `elevation-findings.md`.
 
 ```bash
 python tools/hrtf-pack/sofa_to_bhrtf.py external/hrtf-data/HRIR_L2702.sofa resources/hrtf/ku100_48k.bhrtf
@@ -96,4 +96,5 @@ cmake -B build -DNSB_WITH_KU100=ON
 - [realtime-contract.md](../../docs/realtime-contract.md) — thread rules
 - [hrtf-format.md](docs/hrtf-format.md) — HRTF data pipeline, licensing notes
 - [roadmap.md](docs/roadmap.md) — task breakdown with acceptance criteria
+- [elevation-findings.md](docs/elevation-findings.md) — four attempts at a height cue, and what they ruled out
 - [third-party-licenses.md](../../docs/third-party-licenses.md) — dependency licensing SSOT
