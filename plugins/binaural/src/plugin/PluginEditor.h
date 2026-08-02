@@ -7,9 +7,12 @@
 #include "../ui/NekoLookAndFeel.h"
 #include "../ui/SpatialPad.h"
 #include "../ui/ElevationLab.h"
+#include "../ui/HelpText.h"
 
 // ---------------------------------------------------------------- meters ----
-class StereoMeter : public juce::Component, private juce::Timer
+class StereoMeter : public juce::Component,
+                    public juce::SettableTooltipClient,
+                    private juce::Timer
 {
 public:
     explicit StereoMeter (NekoSpaceProcessor& p) : proc (p) { startTimerHz (30); }
@@ -98,9 +101,6 @@ public:
         setupCombo (qualityBox, nsb::pid::quality, qualityAtt);
         setupCombo (profileBox, nsb::pid::hrtfProfile, profileAtt);
         profileBox.setTitle ("HRTF Profile");
-        profileBox.setTooltip ("Analytic B has the stronger height cue; A is the original "
-                               "model, kept for comparison; KU100 is the experimental "
-                               "measured profile (48 kHz sessions only)");
         profileBox.onChange = [this] { repaint(); };   // footer shows the active dataset
 
         // right-panel horizontal sliders
@@ -109,16 +109,11 @@ public:
         addRow (distSlider, distLabel, "DISTANCE", nsb::pid::distance, distSAtt);
         addRow (widthSlider, widthLabel, "WIDTH", nsb::pid::width, widthSAtt);
         addRow (nearSlider, nearLabel, "NEAR FIELD", nsb::pid::nearfield, nearSAtt);
-        nearSlider.setTooltip ("How much each ear gets its own distance to the source. "
-                               "0% behaves like a conventional panner (both ears equally "
-                               "far, level difference from head shadow only); 100% is the "
-                               "full ear-whisper geometry. Only matters up close.");
         addRow (headSlider, headLabel, "HEAD SIZE", nsb::pid::headRadius, headSAtt);
 
         // elevation big vertical slider next to pad
         elevBig.setSliderStyle (juce::Slider::LinearVertical);
         elevBig.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-        elevBig.setTooltip ("Elevation");
         elevBig.setTitle ("Elevation");
         pad.setTitle ("Spatial Pad");
         modeBox.setTitle ("Source Mode");
@@ -143,14 +138,11 @@ public:
         addKnob (dampKnob, dampLabel, "DAMPING", nsb::pid::roomDamping, dampAtt);
         addKnob (elKnob, elKnobLabel, "EARLY/LATE", nsb::pid::earlyLate, elKnobAtt);
         addKnob (duckKnob, duckLabel, "VOICE DUCK", nsb::pid::duckAmount, duckAtt);
-        duckKnob.setTooltip ("Holds the late reverb down while the voice is speaking, so a "
-                             "close voice stays close. Direct sound and early reflections "
-                             "are untouched, and the tail keeps building underneath.");
         addKnob (duckRelKnob, duckRelLabel, "DUCK REL", nsb::pid::duckRelease, duckRelAtt);
-        duckRelKnob.setTooltip ("How long the room takes to reappear after a phrase ends.");
         addKnob (gainKnob, gainLabel, "OUTPUT", nsb::pid::outputGain, gainAtt);
 
         bypassRoomBtn.setButtonText ("ROOM BYPASS");
+        bypassRoomBtn.setTooltip (nsbui::helpFor (nsb::pid::bypassRoom));
         bypassRoomBtn.setClickingTogglesState (true);
         addAndMakeVisible (bypassRoomBtn);
         bypassAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
@@ -159,9 +151,19 @@ public:
         setupPresets();
         setupSnaps();
 
+        // Help is shown in the footer on hover rather than in a popup or behind a help
+        // mode: a popup covers the control you are reading about, and a mode you must
+        // enter is a mode you forget exists. Listening on children too, so every control
+        // reports without each one needing its own handler.
+        pad.setTooltip (nsbui::helpFor ("ui.pad"));
+        presetBox.setTooltip (nsbui::helpFor ("ui.presets"));
+        elevBig.setTooltip (nsbui::helpFor ("ui.elevationSlider"));
+        labButton.setTooltip (nsbui::helpFor ("ui.lab"));
+        meter.setTooltip (nsbui::helpFor ("ui.meters"));
+        for (auto* b : snapButtons) b->setTooltip (nsbui::helpFor ("ui.snap"));
+        addMouseListener (this, true);
+
         labButton.setButtonText ("ELEVATION LAB");
-        labButton.setTooltip ("Tune the three elevation anchors by ear. Selects the "
-                              "Custom profile automatically.");
         labButton.onClick = [this] { openLab(); };
         addAndMakeVisible (labButton);
 
@@ -171,7 +173,14 @@ public:
                  juce::jlimit (520, 1200, proc.uiHeight.load()));
     }
 
-    ~NekoSpaceEditor() override { setLookAndFeel (nullptr); }
+    ~NekoSpaceEditor() override { removeMouseListener (this); setLookAndFeel (nullptr); }
+
+    void mouseEnter (const juce::MouseEvent& e) override { setHelp (helpUnder (e.eventComponent)); }
+    void mouseExit  (const juce::MouseEvent& e) override
+    {
+        // moving between a slider and its own text box should not blank the line
+        setHelp (helpUnder (e.eventComponent->getParentComponent()));
+    }
 
     void paint (juce::Graphics& g) override
     {
@@ -210,8 +219,18 @@ public:
 
             const juce::Font f (juce::FontOptions (9.5f));
             g.setFont (f);
-            g.setColour (nsbui::col::textDim.withAlpha (0.75f));
-            g.drawText (hrtfInfoText(), infoArea, juce::Justification::centredLeft);
+            if (helpLine.isNotEmpty())
+            {
+                // accent while hovering, so it reads as live information rather than a
+                // permanent label
+                g.setColour (nsbui::col::accent.withAlpha (0.95f));
+                g.drawText (helpLine, infoArea, juce::Justification::centredLeft);
+            }
+            else
+            {
+                g.setColour (nsbui::col::textDim.withAlpha (0.75f));
+                g.drawText (hrtfInfoText(), infoArea, juce::Justification::centredLeft);
+            }
             g.drawText (fitting (f, infoArea.getWidth() - 280,
                                  { "NekoSpace Binaural  |  Copyright (C) 2026 charmpic  |  "
                                    "AGPLv3, NO WARRANTY  |  see LICENSE",
@@ -219,6 +238,24 @@ public:
                                    "(C) 2026 charmpic  |  AGPLv3" }),
                         infoArea, juce::Justification::centredRight);
         }
+    }
+
+    // A slider's text box is a child component with no tooltip of its own, so walk up
+    // until something has one.
+    static juce::String helpUnder (juce::Component* c)
+    {
+        for (; c != nullptr; c = c->getParentComponent())
+            if (auto* t = dynamic_cast<juce::TooltipClient*> (c))
+                if (t->getTooltip().isNotEmpty())
+                    return t->getTooltip();
+        return {};
+    }
+
+    void setHelp (const juce::String& s)
+    {
+        if (s == helpLine) return;
+        helpLine = s;
+        repaint (infoArea);
     }
 
     // Attribution is a licence condition for the measured data (CC BY-SA), so it is
@@ -304,6 +341,7 @@ private:
     {
         auto* param = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (pid));
         box.addItemList (param->choices, 1);
+        box.setTooltip (nsbui::helpFor (pid));
         addAndMakeVisible (box);
         att = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
             proc.apvts, pid, box);
@@ -315,6 +353,7 @@ private:
         s.setSliderStyle (juce::Slider::LinearHorizontal);
         s.setTextBoxStyle (juce::Slider::TextBoxRight, false, 66, 18);
         s.setTitle (name); // accessibility name for screen readers
+        s.setTooltip (nsbui::helpFor (pid));
         addAndMakeVisible (s);
         att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, pid, s);
@@ -330,6 +369,7 @@ private:
         s.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 70, 16);
         s.setTitle (name); // accessibility name for screen readers
+        s.setTooltip (nsbui::helpFor (pid));
         addAndMakeVisible (s);
         att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, pid, s);
@@ -563,6 +603,7 @@ private:
     std::vector<Preset> presets;
 
     juce::Rectangle<int> spaceCaption, infoArea, titleArea;
+    juce::String helpLine;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceEditor)
 };

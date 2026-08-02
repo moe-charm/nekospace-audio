@@ -17,7 +17,9 @@
 
 namespace nsbui
 {
-class SpatialPad : public juce::Component, private juce::Timer
+class SpatialPad : public juce::Component,
+                   public juce::SettableTooltipClient,
+                   private juce::Timer
 {
 public:
     SpatialPad (juce::AudioProcessorValueTreeState& state,
