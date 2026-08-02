@@ -136,6 +136,7 @@ public:
         // room / output knobs
         addKnob (roomAmtKnob, roomAmtLabel, "ROOM", nsb::pid::roomAmount, roomAmtAtt);
         addKnob (roomSizeKnob, roomSizeLabel, "SIZE", nsb::pid::roomSize, roomSizeAtt);
+        addKnob (decayKnob, decayLabel, "DECAY", nsb::pid::roomDecay, decayAtt);
         addKnob (dampKnob, dampLabel, "DAMPING", nsb::pid::roomDamping, dampAtt);
         addKnob (elKnob, elKnobLabel, "EARLY/LATE", nsb::pid::earlyLate, elKnobAtt);
         addKnob (duckKnob, duckLabel, "VOICE DUCK", nsb::pid::duckAmount, duckAtt);
@@ -391,35 +392,41 @@ private:
         // quality are left alone: those are the user's, not the scene's.
         auto scene = [] (const char* name, const char* group, int mode, float az, float el,
                          float dist, float width, float near, float room, float size,
-                         float damp, float earlyLate, float duck, float duckRel)
+                         float decay, float damp, float earlyLate, float duck, float duckRel)
         {
             return Preset { name, group, {
                 { pid::mode, (float) mode }, { pid::azimuth, az }, { pid::elevation, el },
                 { pid::distance, dist },     { pid::width, width }, { pid::nearfield, near },
                 { pid::roomAmount, room },   { pid::roomSize, size },
-                { pid::roomDamping, damp },  { pid::earlyLate, earlyLate },
+                { pid::roomDecay, decay },   { pid::roomDamping, damp },
+                { pid::earlyLate, earlyLate },
                 { pid::duckAmount, duck },   { pid::duckRelease, duckRel } } };
         };
-        //                name                 group        mode  az     el   dist  width near room size damp  e/l  duck  rel
+        // Size and decay are now separate, so a scene can say "small but rings" - which
+        // is most of the rooms an audio drama actually needs.
+        //                name                 group        mode  az     el   dist  width near room size  decay damp  e/l  duck  rel
         presets = {
-            scene ("Whisper at Ear",          "Close",        0, -95,     0, 0.10f,  60, 100,   8,  15,  75,  20,  60, 0.30f),
-            scene ("Close and Intimate",      "Close",        0,   0,     0, 0.25f,  60,  90,  10,  20,  65,  25,  55, 0.35f),
-            scene ("Bedside",                 "Close",        0, -35,   -10, 0.50f,  60,  85,  25,  22,  70,  30,  60, 0.40f),
-            scene ("Behind You",              "Close",        0, 165,    -8, 0.40f,  60,  90,  15,  25,  60,  30,  55, 0.35f),
+            scene ("Whisper at Ear",          "Close",        0, -95,     0, 0.10f,  60, 100,   8,  15, 0.28f,  75,  20,  60, 0.30f),
+            scene ("Close and Intimate",      "Close",        0,   0,     0, 0.25f,  60,  90,  10,  20, 0.35f,  65,  25,  55, 0.35f),
+            scene ("Bedside",                 "Close",        0, -35,   -10, 0.50f,  60,  85,  25,  22, 0.40f,  70,  30,  60, 0.40f),
+            scene ("Behind You",              "Close",        0, 165,    -8, 0.40f,  60,  90,  15,  25, 0.38f,  60,  30,  55, 0.35f),
 
-            scene ("Small Room",              "Rooms",        0,  15,     0, 1.20f,  60,  50,  38,  30,  55,  35,  55, 0.45f),
-            scene ("Bathroom",                "Rooms",        0,  10,     0, 1.00f,  60,  55,  55,  22,  12,  45,  70, 0.25f),
-            scene ("Stairwell",               "Rooms",        0, -25,    25, 2.50f,  60,  20,  55,  70,  35,  60,  50, 0.90f),
-            scene ("Next Room",               "Rooms",        0, 120,     0, 3.00f,  60,  10,  60,  45,  80,  55,  40, 0.70f),
-            scene ("Overhead",                "Rooms",        0,   0,    70, 0.70f,  60,  70,  30,  35,  45,  25,  50, 0.50f),
+            scene ("Small Room",              "Rooms",        0,  15,     0, 1.20f,  60,  50,  38,  30, 0.55f,  55,  35,  55, 0.45f),
+            // The one that was impossible before: a tiled bathroom is a SMALL room with
+            // a LONG, bright tail. Under the old size-linked decay this preset rang for
+            // 0.37 s, which is why it never sounded like tile.
+            scene ("Bathroom",                "Rooms",        0,  10,     0, 1.00f,  60,  55,  55,  20, 1.15f,  10,  45,  70, 0.25f),
+            scene ("Stairwell",               "Rooms",        0, -25,    25, 2.50f,  60,  20,  55,  60, 2.30f,  30,  60,  50, 0.90f),
+            scene ("Next Room",               "Rooms",        0, 120,     0, 3.00f,  60,  10,  60,  45, 0.95f,  80,  55,  40, 0.70f),
+            scene ("Overhead",                "Rooms",        0,   0,    70, 0.70f,  60,  70,  30,  35, 0.60f,  45,  25,  50, 0.50f),
 
             // Linked Stereo, no near-field colouring: made to sit under a voice rather
             // than to be the thing you listen to.
-            scene ("Ambience / Music",        "Beds",         1,   0,     0, 3.00f, 110,   0,  30,  55,  50,  55,   0, 0.45f),
+            scene ("Ambience / Music",        "Beds",         1,   0,     0, 3.00f, 110,   0,  30,  55, 1.40f,  50,  55,   0, 0.45f),
 
             // Diagnostics: duck and near field off so nothing colours the judgement.
-            scene ("Height Check (dry)",      "Reference",    0,   0,     0, 1.00f,  60,   0,   0,  35,  50,  35,   0, 0.45f),
-            scene ("Height Check (room)",     "Reference",    0,   0,     0, 1.20f,  60,   0,  40,  40,  35,  20,   0, 0.45f),
+            scene ("Height Check (dry)",      "Reference",    0,   0,     0, 1.00f,  60,   0,   0,  35, 0.54f,  50,  35,   0, 0.45f),
+            scene ("Height Check (room)",     "Reference",    0,   0,     0, 1.20f,  60,   0,  40,  40, 0.70f,  35,  20,   0, 0.45f),
         };
         presetBox.setTextWhenNothingSelected ("Presets...");
         juce::String lastGroup;
@@ -532,9 +539,9 @@ private:
         roomDimmed = bypassed;
         const float a = bypassed ? 0.38f : 1.0f;
         for (auto* c : std::initializer_list<juce::Component*> {
-                 &roomAmtKnob, &roomSizeKnob, &dampKnob, &elKnob, &duckKnob, &duckRelKnob,
-                 &roomAmtLabel, &roomSizeLabel, &dampLabel, &elKnobLabel, &duckLabel,
-                 &duckRelLabel })
+                 &roomAmtKnob, &roomSizeKnob, &decayKnob, &dampKnob, &elKnob, &duckKnob,
+                 &duckRelKnob, &roomAmtLabel, &roomSizeLabel, &decayLabel, &dampLabel,
+                 &elKnobLabel, &duckLabel, &duckRelLabel })
             c->setAlpha (a);
         repaint();
     }
@@ -610,7 +617,7 @@ private:
         // the three buttons vertically rather than in a row costs one column instead of
         // three and hands roughly 200 px back to the knobs, which is why they no longer
         // need to shrink at ordinary window sizes.
-        constexpr int kKnobs = 7;                       // 6 SPACE + OUTPUT
+        constexpr int kKnobs = 8;                       // 7 SPACE + OUTPUT
         constexpr int kGapBeforeOutput = 16;
         // 92 rather than 100: at 100 the knobs claimed enough that the buttons were
         // still abbreviated on a comfortably wide window, which looks cramped for no
@@ -665,6 +672,7 @@ private:
 
         place (roomAmtKnob,  roomAmtLabel,  "ROOM",       "ROOM");
         place (roomSizeKnob, roomSizeLabel, "SIZE",       "SIZE");
+        place (decayKnob,    decayLabel,    "DECAY",      "DEC");
         place (dampKnob,     dampLabel,     "DAMPING",    "DAMP");
         place (elKnob,       elKnobLabel,   "EARLY/LATE", "E/L");
         place (duckKnob,     duckLabel,     "VOICE DUCK", "DUCK");
@@ -691,11 +699,12 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
         azSAtt, elSAtt, distSAtt, widthSAtt, nearSAtt, headSAtt;
 
-    juce::Slider roomAmtKnob, roomSizeKnob, dampKnob, elKnob, duckKnob, duckRelKnob, gainKnob;
-    juce::Label roomAmtLabel, roomSizeLabel, dampLabel, elKnobLabel, duckLabel,
+    juce::Slider roomAmtKnob, roomSizeKnob, decayKnob, dampKnob, elKnob, duckKnob,
+                 duckRelKnob, gainKnob;
+    juce::Label roomAmtLabel, roomSizeLabel, decayLabel, dampLabel, elKnobLabel, duckLabel,
                 duckRelLabel, gainLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
-        roomAmtAtt, roomSizeAtt, dampAtt, elKnobAtt, duckAtt, duckRelAtt, gainAtt;
+        roomAmtAtt, roomSizeAtt, decayAtt, dampAtt, elKnobAtt, duckAtt, duckRelAtt, gainAtt;
 
     juce::TextButton bypassRoomBtn;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAtt;

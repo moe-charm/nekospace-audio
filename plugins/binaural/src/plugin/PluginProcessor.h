@@ -98,7 +98,7 @@ private:
 
     // cached raw-value pointers (atomic loads in processBlock)
     std::atomic<float>* pAz, * pEl, * pDist, * pWidth, * pMode, * pNear, * pHead;
-    std::atomic<float>* pRoomAmt, * pRoomSize, * pRoomDamp, * pEarlyLate;
+    std::atomic<float>* pRoomAmt, * pRoomSize, * pRoomDamp, * pEarlyLate, * pRoomDecay;
     std::atomic<float>* pQuality, * pOutGain, * pBypassRoom, * pBypass, * pProfile;
     std::atomic<float>* pDuckAmount, * pDuckRelease;
     juce::AudioProcessorParameter* bypassParam = nullptr;

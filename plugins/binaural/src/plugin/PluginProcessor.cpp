@@ -104,6 +104,24 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
             AudioParameterFloatAttributes().withLabel ("dB")));
     lo.add (std::make_unique<AudioParameterBool> (ParameterID { nsb::pid::bypassRoom, 1 },
             "Room Bypass", false));
+
+    // --- added after v0.1.0-alpha: versionHint 2, appended so host display order does
+    // not shift for anyone who already has the plugin (docs/state-format.md rule 2).
+    // The default is the decay the old size-linked curve produced at the default size,
+    // so a fresh instance sounds exactly as it did before decay became its own control.
+    lo.add (std::make_unique<P> (ParameterID { nsb::pid::roomDecay, 2 }, "Room Decay",
+            NormalisableRange<float> (0.15f, 4.0f, 0.01f, 0.46f), 0.54f,
+            AudioParameterFloatAttributes()
+                .withStringFromValueFunction ([] (float v, int)
+                {
+                    return v < 1.0f ? String ((int) (v * 1000.0f + 0.5f)) + " ms"
+                                    : String (v, 2) + " s";
+                })
+                .withValueFromStringFunction ([] (const String& s)
+                {
+                    const float v = s.getFloatValue();
+                    return s.containsIgnoreCase ("ms") ? v * 0.001f : v;
+                })));
     return lo;
 }
 
@@ -121,6 +139,7 @@ NekoSpaceProcessor::NekoSpaceProcessor()
     pMode = raw (nsb::pid::mode);        pNear = raw (nsb::pid::nearfield);
     pHead = raw (nsb::pid::headRadius);  pRoomAmt = raw (nsb::pid::roomAmount);
     pRoomSize = raw (nsb::pid::roomSize);pRoomDamp = raw (nsb::pid::roomDamping);
+    pRoomDecay = raw (nsb::pid::roomDecay);
     pEarlyLate = raw (nsb::pid::earlyLate);
     pDuckAmount = raw (nsb::pid::duckAmount);
     pDuckRelease = raw (nsb::pid::duckRelease);
@@ -210,6 +229,7 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     p.roomAmount    = pRoomAmt->load() * 0.01f;
     p.roomSize      = pRoomSize->load() * 0.01f;
     p.roomDamping   = pRoomDamp->load() * 0.01f;
+    p.roomDecaySec  = pRoomDecay->load();
     p.roomEarlyLate = pEarlyLate->load() * 0.01f;
     p.duckAmount    = pDuckAmount->load() * 0.01f;
     p.duckRelease   = pDuckRelease->load();
@@ -386,6 +406,31 @@ void NekoSpaceProcessor::setStateInformation (const void* data, int sizeInBytes)
     uiHeight.store (xml->getIntAttribute ("uiHeight", 640));
     auto restored = juce::ValueTree::fromXml (*xml);
     const int version = (int) restored.getProperty ("schemaVersion", 1);
+
+    // Schema 3 took decay away from room.size. A state written before that has no
+    // room.decay node, and leaving it at the new default would silently re-voice every
+    // room in an existing project - so reconstruct the decay the old curve gave for the
+    // size that was actually saved. Writing it into the tree (rather than setting the
+    // parameter afterwards) means replaceState below restores it like any other value.
+    if (version < 3)
+    {
+        if (auto sizeNode = parameterNode (restored, nsb::pid::roomSize); sizeNode.isValid())
+        {
+            const float storedSize = (float) sizeNode.getProperty ("value", 35.0f);
+            if (auto decayNode = parameterNode (restored, nsb::pid::roomDecay);
+                decayNode.isValid())
+                decayNode.setProperty ("value", nsb::migratedRoomDecay (storedSize), nullptr);
+            else
+            {
+                // Take the node type from a node APVTS itself wrote, rather than hard
+                // coding "PARAM" here and having it drift if JUCE ever changes it.
+                juce::ValueTree n (sizeNode.getType());
+                n.setProperty ("id", nsb::pid::roomDecay, nullptr);
+                n.setProperty ("value", nsb::migratedRoomDecay (storedSize), nullptr);
+                restored.appendChild (n, nullptr);
+            }
+        }
+    }
 
     nsb::ElevationModel m = nsb::ElevationModel::analyticBDefaults();
     nsb::ElevationMacros mac;

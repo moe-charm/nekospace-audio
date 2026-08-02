@@ -21,6 +21,7 @@ inline constexpr const char* headRadius = "head.radius";
 inline constexpr const char* roomAmount = "room.amount";
 inline constexpr const char* roomSize   = "room.size";
 inline constexpr const char* roomDamping= "room.damping";
+inline constexpr const char* roomDecay  = "room.decay";   // added after v0.1.0-alpha
 inline constexpr const char* earlyLate  = "room.early_late";
 inline constexpr const char* duckAmount = "duck.amount";
 inline constexpr const char* duckRelease= "duck.release";

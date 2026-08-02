@@ -14,7 +14,8 @@ All parameters use JUCE `ParameterID` version hint 1 unless noted.
 | `nearfield.amount`   | float  | 0 … 100 %                     | 75      | how much each ear gets its *own* distance to the source. 0 % attenuates both ears by the same 1/r, so the level difference comes only from the head-shadow filter — a conventional panner. 100 % uses the exact per-ear sphere path, so a source at one ear is dramatically louder there. ITD is always per-ear and is never switched off; this only moves it from the Woodworth approximation to the exact path. Measured ILD at az −90°, 12 cm: **5.6 dB at 0 %, 24.2 dB at 100 %** |
 | `head.radius`        | float  | 0.075 … 0.100 m               | 0.0875  | |
 | `room.amount`        | float  | 0 … 100 %                     | 15      | 0 must equal exact direct render |
-| `room.size`          | float  | 0 … 100 %                     | 35      | continuous shoebox + T60 scale |
+| `room.size`          | float  | 0 … 100 %                     | 35      | shoebox dimensions only — **no longer sets T60** (schema 3) |
+| `room.decay`         | float  | 0.15 … 4.0 s                  | 0.54    | tail length, independent of size; versionHint 2, added after v0.1.0-alpha |
 | `room.damping`       | float  | 0 … 100 %                     | 50      | HF absorption |
 | `room.early_late`    | float  | 0 … 100 %                     | 35      | 0 = all early, 100 = all late |
 | `duck.amount`        | float  | 0 … 100 %                     | 50      | how far the **late bus only** is held down while the voice speaks. Direct sound and early reflections are never ducked. Detection is on the dry pre-room signal and normalised against recent level, so there is no threshold and the setting means the same for a whisper and a shout |

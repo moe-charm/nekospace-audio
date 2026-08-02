@@ -3,6 +3,37 @@
 Notable changes per release. Dates are ISO. This project follows the compatibility rules
 in [docs/state-format.md](docs/state-format.md) and [docs/identity.md](docs/identity.md).
 
+## [Unreleased]
+
+### Room: decay is its own control
+
+- **`DECAY` is separate from `SIZE`.** They used to be one knob — the tail was derived
+  from the room's dimensions as `0.25 + 2.4·size²` s — which made the most useful room in
+  audio drama impossible to build. A tiled bathroom is a *small* room with a *long*,
+  bright tail; deriving one from the other forced you to pick. The shipped `Bathroom`
+  preset rang for 0.37 s, which is why it never sounded like tile. It is now 1.15 s in a
+  room that is still small.
+  Measured: at size 20 %, decay 0.3 s gives a 0.18 s tail and decay 2.0 s gives 1.05 s;
+  at size 80 %, decay 0.3 s still gives 0.18 s — size no longer touches tail length.
+- **The FDN delay lines are modulated.** Eight fixed-length lines beat against each other
+  and ring metallically. Each line now wanders by a fraction of its length on its own slow
+  LFO, at rates chosen not to share factors so the lines never fall back into step. Depth
+  is small on purpose: enough to break up flutter, well short of audible pitch movement on
+  a sustained vowel.
+- Presets retuned around the split — `Stairwell` 2.3 s, `Next Room` 0.95 s through a wall,
+  `Ambience / Music` 1.4 s.
+
+### Compatibility
+
+- **State schema 3.** Adding a parameter would have needed no bump, but taking decay away
+  from `room.size` changes what an existing `room.size` value *means*, which is rule 8.
+  Projects saved under schema 2 have their decay reconstructed from the stored size with
+  the old curve, so they reload sounding as they were mixed. The new parameter's default
+  (0.54 s) is what that curve gave at the default size, so new instances are unchanged
+  too. See [docs/state-format.md](docs/state-format.md).
+- `room.decay` carries `versionHint` 2 and is appended, so host display order does not
+  shift for anyone who already has v0.1.0-alpha.
+
 ## [0.1.0-alpha] — 2026-08-03
 
 First public build of **NekoSpace Binaural**. Windows VST3 (x64) and Standalone.

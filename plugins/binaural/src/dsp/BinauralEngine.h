@@ -30,6 +30,7 @@ struct EngineParams
     float roomSize     = 0.35f;
     float roomDamping  = 0.5f;
     float roomEarlyLate= 0.35f;
+    float roomDecaySec = 0.54f;   // tail length, independent of roomSize
     float duckAmount   = 0.5f;    // 0..1, how far the late bus is held down while speaking
     float duckRelease  = 0.45f;   // seconds for the room to reappear after a phrase
     int   qualityMode  = 1;       // 0 = Economy(half taps), 1 = Standard(full)
@@ -398,7 +399,7 @@ private:
             roomCooldown = (int) (fdn.tailSeconds() * sr);
         if (roomOn || roomCooldown > 0)
         {
-            RoomParams rp { p.roomSize, p.roomDamping, p.roomEarlyLate };
+            RoomParams rp { p.roomSize, p.roomDamping, p.roomEarlyLate, p.roomDecaySec };
             early.update (db, sources[0].position(), rp, p.headRadiusM);
             fdn.setRoom (rp);
 

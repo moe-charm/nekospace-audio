@@ -70,8 +70,12 @@ inline std::vector<HelpSection> helpSections()
         { "Room",
           "ROOM sets how much of the room you hear. At 0 the output is exactly the dry "
           "binaural render, bit for bit.\n"
-          "SIZE moves the room's dimensions and its decay together - small is a booth, "
-          "large is a hall.\n"
+          "SIZE is how big the room sounds - its dimensions. Small is a booth, large is "
+          "a hall.\n"
+          "DECAY is how long it rings, and it is deliberately separate from SIZE. That "
+          "separation is the point: a tiled bathroom is a small room with a long, bright "
+          "tail, and you cannot build one if the two are welded together. Small and long "
+          "is tile; large and short is a treated studio.\n"
           "DAMPING is how absorbent the surfaces are. Higher is a softer room: curtains, "
           "carpet, bedding. Lower is tile and glass.\n"
           "EARLY/LATE chooses what you hear of it. Early reflections are the room's shape "
@@ -79,7 +83,7 @@ inline std::vector<HelpSection> helpSections()
           "rendered through the head model from the direction its image actually comes "
           "from, so a raised source really does get a floor bounce from below.",
           "Room（部屋）",
-          "ROOM は部屋をどれだけ聞かせるか。0のとき出力はドライのバイノーラルとビット単位で一致する。\nSIZE は部屋の寸法と残響の長さを同時に動かす。小さければブース、大きければホール。\nDAMPING は壁がどれだけ吸うか。高いほど柔らかい部屋 — カーテン、カーペット、寝具。低いとタイルやガラス。\nEARLY/LATE はそのうち何を聞くか。初期反射は部屋の形と広さの手がかり、後期残響は尻尾。6つの反射はそれぞれ、その像が実際に来る方向で頭部モデルを通してあるので、音源を上げれば床の反射がちゃんと下から返る。" },
+          "ROOM は部屋をどれだけ聞かせるか。0のとき出力はドライのバイノーラルとビット単位で一致する。\nSIZE は部屋の広さ、つまり寸法。小さければブース、大きければホール。\nDECAY は尻尾の長さで、SIZE とは意図的に切り離してある。ここが肝心で、タイル張りの浴室は「狭いのに長く明るく鳴る」部屋であり、両者が一体だと作れない。狭くて長ければタイル、広くて短ければ吸音した収録スタジオ。\nDAMPING は壁がどれだけ吸うか。高いほど柔らかい部屋 — カーテン、カーペット、寝具。低いとタイルやガラス。\nEARLY/LATE はそのうち何を聞くか。初期反射は部屋の形と広さの手がかり、後期残響は尻尾。6つの反射はそれぞれ、その像が実際に来る方向で頭部モデルを通してあるので、音源を上げれば床の反射がちゃんと下から返る。" },
 
         { "Voice Duck",
           "Reverb is what stops a close voice sounding close. Add enough room for the "

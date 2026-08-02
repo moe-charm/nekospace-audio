@@ -61,6 +61,7 @@ version independent of the schema version.
 | --- | --- |
 | 1 | Original. Elevation values were loose properties on the root; APVTS choice values were stored as raw indices. |
 | 2 | `NEKOSPACE_EXTRA` child with its own version; choice values also stored by stable key. Early schema-2 development states that contain only `name` still load. Schema 1 raw choice indices and loose elevation properties remain readable. |
+| 3 | `room.size` no longer sets the decay time; the new `room.decay` does. Adding a parameter is an addition, but *removing a meaning from an existing one* is rule 8, so this is a bump with a migration: a state below schema 3 has its decay reconstructed from the stored size with the schema-2 curve `0.25 + 2.4·size²` s. Old projects therefore reload sounding as they were mixed. |
 
 ### APVTS state versus host automation
 
@@ -73,6 +74,28 @@ The stable-key layer protects project/preset state; rule 4 protects automation.
 `NEKOSPACE_EXTRA.version` is read independently from `schemaVersion`. Readers parse the
 fields they understand from version 1 and later and ignore unknown children, preserving
 forward compatibility.
+
+## Worked example: the schema 3 bump
+
+This is what rule 8 looks like when it actually fires, and it is kept here because the
+reasoning is the part that is easy to get wrong.
+
+Splitting decay out of `room.size` *looks* like an addition — a new parameter ID, appended,
+with a higher `versionHint`, which rules 2, 5 and 6 handle on their own. It is not. The
+stored value of `room.size` used to mean "dimensions **and** decay" and now means
+"dimensions" alone, so an untouched `room.size` value in an old project describes a
+different room than it used to. That is a change of meaning, not an addition.
+
+The migration is therefore mandatory, and it is a one-liner precisely because the old
+behaviour was a pure function of one stored value:
+
+```
+if (schemaVersion < 3) room.decay = 0.25 + 2.4 * (room.size/100)^2
+```
+
+The new parameter's **default** is set to what that formula gives at the default size
+(0.54 s), so a fresh instance is unchanged as well — migration covers saved projects, the
+default covers new ones, and between them nobody's sound moves without them asking.
 
 ## Known semantic change, pre-release
 

@@ -1079,6 +1079,114 @@ static void testVoiceDuckIsLevelIndependent()
     CHECK (d.currentGain() > 0.95f, "duck: silence leaves the room open");
 }
 
+// Measures how long the room bus takes to fall 40 dB from its peak after the input
+// stops. Returns seconds; the direct path is excluded by rendering with the source
+// far away and reading only the decay after input ends.
+static float roomDecaySeconds (float sizePct, float decaySec, float fs)
+{
+    BinauralEngine eng; eng.prepare (fs, 512);
+    EngineParams p;
+    p.roomAmount = 1.0f; p.roomSize = sizePct * 0.01f; p.roomDecaySec = decaySec;
+    p.roomDamping = 0.05f;      // keep damping out of the measurement
+    p.roomEarlyLate = 1.0f;     // late bus only: that is what decay controls
+    p.duckAmount = 0.0f;        // ducking would shape the very tail being measured
+    p.distanceM = 2.0f;
+    eng.setParams (p);
+
+    const int excite = (int) (0.20f * fs);
+    const int tailN  = (int) (6.0f * fs);
+    std::vector<float> inL (256), inR (256), outL (256), outR (256);
+    std::mt19937 rng (11);
+    std::uniform_real_distribution<float> d (-0.5f, 0.5f);
+
+    std::vector<float> env;
+    env.reserve ((size_t) (tailN / 256 + 8));
+    for (int pos = 0; pos < excite + tailN; pos += 256)
+    {
+        const bool on = pos < excite;
+        for (int i = 0; i < 256; ++i) { inL[i] = inR[i] = on ? d (rng) : 0.0f; }
+        std::fill (outL.begin(), outL.end(), 0.0f);
+        std::fill (outR.begin(), outR.end(), 0.0f);
+        eng.process (inL.data(), inR.data(), outL.data(), outR.data(), 256);
+        if (! on)
+        {
+            double acc = 0;
+            for (int i = 0; i < 256; ++i) acc += (double) outL[i] * outL[i];
+            env.push_back ((float) std::sqrt (acc / 256.0));
+        }
+    }
+    if (env.empty()) return 0.0f;
+    const float peak = *std::max_element (env.begin(), env.end());
+    if (peak <= 0.0f) return 0.0f;
+    const float target = peak * 0.01f;          // -40 dB
+    for (size_t i = 0; i < env.size(); ++i)
+        if (env[i] <= target)
+            return (float) i * 256.0f / fs;
+    return (float) env.size() * 256.0f / fs;    // never got there
+}
+
+// The whole point of splitting decay off size: a small room must be able to ring for a
+// long time. Under the old size-linked curve this was unreachable.
+static void testDecayIsIndependentOfSize()
+{
+    const float fs = 48000.0f;
+    const float smallShort = roomDecaySeconds (20.0f, 0.3f, fs);
+    const float smallLong  = roomDecaySeconds (20.0f, 2.0f, fs);
+    const float largeShort = roomDecaySeconds (80.0f, 0.3f, fs);
+
+    std::printf ("  [decay] size 20%% -> %.2f s (short) vs %.2f s (long); "
+                 "size 80%% short -> %.2f s\n", smallShort, smallLong, largeShort);
+
+    CHECK (smallLong > smallShort * 2.0f,
+           "decay: a small room can be made to ring far longer than a short setting");
+    CHECK (std::fabs (largeShort - smallShort) < smallLong * 0.5f,
+           "decay: size no longer dominates the tail length");
+    CHECK (smallLong > 1.0f, "decay: 2 s setting actually produces a long tail");
+}
+
+// Old projects must reload sounding as they were mixed, not pick up the new default.
+static void testSchema2DecayMigration()
+{
+    // v0.1.0-alpha derived t60 = 0.25 + 2.4*size^2.
+    const float atDefault = nsb::migratedRoomDecay (35.0f);
+    const float atBathroom = nsb::migratedRoomDecay (22.0f);
+    const float atLarge = nsb::migratedRoomDecay (100.0f);
+    std::printf ("  [migration] size 35%% -> %.3f s, 22%% -> %.3f s, 100%% -> %.3f s\n",
+                 atDefault, atBathroom, atLarge);
+
+    CHECK (std::fabs (atDefault - 0.544f) < 0.002f,
+           "migration: default size reproduces the schema-2 decay");
+    CHECK (std::fabs (atBathroom - 0.366f) < 0.002f,
+           "migration: a small room reproduces its schema-2 decay");
+    CHECK (atLarge <= 4.0f && atLarge > 2.6f,
+           "migration: the largest room stays inside the new parameter range");
+    // and the shipped default matches what the old curve gave at the default size,
+    // so a NEW instance is unchanged too
+    CHECK (std::fabs (0.54f - atDefault) < 0.01f,
+           "migration: the new parameter's default matches the old default sound");
+}
+
+// The modulation runs inside the feedback loop, so a bad read index would show up as a
+// blow-up or a NaN rather than as a wrong number.
+static void testModulatedTailStaysSane()
+{
+    for (float fs : { 44100.0f, 48000.0f, 96000.0f })
+    {
+        BinauralEngine eng; eng.prepare (fs, 512);
+        EngineParams p;
+        p.roomAmount = 1.0f; p.roomEarlyLate = 1.0f; p.roomDamping = 0.0f;
+        p.roomSize = 1.0f; p.roomDecaySec = 4.0f;   // longest tail, deepest modulation
+        p.duckAmount = 0.0f;
+        std::vector<float> L, R;
+        renderAt (eng, p, 3.0f, fs, L, R);
+        CHECK (allFinite (L) && allFinite (R), "modulated tail stays finite");
+        float peak = 0.0f;
+        for (size_t i = 0; i < L.size(); ++i)
+            peak = std::max (peak, std::max (std::fabs (L[i]), std::fabs (R[i])));
+        CHECK (peak < 8.0f, "modulated FDN does not run away at maximum decay");
+    }
+}
+
 static void testVoiceDuckNoClicks()
 {
     const float fs = 48000.0f;
@@ -1140,6 +1248,9 @@ int main()
     testVoiceDuckLeavesDirectAndEarlyAlone();
     testVoiceDuckIsLevelIndependent();
     testVoiceDuckNoClicks();
+    testDecayIsIndependentOfSize();
+    testSchema2DecayMigration();
+    testModulatedTailStaysSane();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

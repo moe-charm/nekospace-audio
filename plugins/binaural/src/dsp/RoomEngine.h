@@ -20,7 +20,20 @@ struct RoomParams
     float size    = 0.35f;  // 0..1
     float damping = 0.5f;   // 0..1
     float earlyLate = 0.35f;// 0 = all early, 1 = all late
+    // How long the tail rings, in seconds, INDEPENDENT of size. These used to be one
+    // control (t60 derived from size), which made the most useful room in audio drama
+    // impossible to build: a tiled bathroom is small and rings for the best part of a
+    // second, and deriving decay from size forces you to choose one or the other.
+    float decaySeconds = 0.8f;
 };
+
+// The size-linked decay curve used before decay became its own control. Kept as the
+// migration path for projects saved under state schema 2, so they reload sounding the
+// same rather than picking up the new default; see docs/state-format.md rule 8.
+inline float legacyDecayForSize (float size) noexcept
+{
+    return 0.25f + 2.4f * size * size;   // 0.25 - 2.65 s
+}
 
 // Six first-order shoebox reflections, each rendered through the HRTF at its own image
 // direction rather than being panned. That is what makes a source above the listener
@@ -202,6 +215,8 @@ public:
             damp[i].prepare (sr);
             lenSm[i].prepare (sr, 0.08f);
             fbSm[i].prepare (sr, 0.08f);
+            lfoInc[i] = kTwoPi * lfoHz[i] / sr;
+            lfoPhase[i] = (float) i * 0.7853981f;   // spread the starts around the circle
         }
         setRoom ({});
         for (int i = 0; i < kLines; ++i) { lenSm[i].snap (len[i]); fbSm[i].snap (fb[i]); }
@@ -211,8 +226,11 @@ public:
 
     void setRoom (const RoomParams& rp) noexcept
     {
+        // Size sets the delay lengths — the room's dimensions and modal density.
+        // Decay sets how long it rings. Keeping them apart is what makes "small and
+        // long" (bathroom, tiled corridor, stairwell) reachable at all.
         const float scale = (0.35f + 0.85f * rp.size) * (sr / 48000.0f);
-        const float t60 = 0.25f + 2.4f * rp.size * rp.size; // 0.25–2.65 s
+        const float t60 = clampf (rp.decaySeconds, 0.15f, 4.0f);
         tail = t60;
         const float dampFc = 13000.0f - 10500.0f * rp.damping;
         for (int i = 0; i < kLines; ++i)
@@ -222,6 +240,11 @@ public:
             lenSm[i].setTarget (len[i]);   // smoothed per sample: size automation
             fbSm[i].setTarget (fb[i]);     // never steps the tail discontinuously
             damp[i].setCutoff (dampFc);
+            // Depth is a fraction of the line, so it scales with size and sample rate
+            // on its own. Small: eight fixed-length lines ring metallically, and a few
+            // samples of wander is enough to break that up. Large enough to hear as
+            // pitch movement on a sustained vowel is far too much for a voice reverb.
+            modDepth[i] = clampf (len[i] * 0.0016f, 0.8f, 5.0f);
         }
     }
 
@@ -233,7 +256,16 @@ public:
         {
             float d[kLines];
             for (int k = 0; k < kLines; ++k)
-                d[k] = damp[k].process (lines[k].read (lenSm[k].next()) * fbSm[k].next());
+            {
+                // Slow, mutually incommensurate wander on each line length. Without it
+                // eight fixed delays beat against each other and the tail rings.
+                const float m = modDepth[k] * std::sin (lfoPhase[k]);
+                lfoPhase[k] += lfoInc[k];
+                if (lfoPhase[k] >= kTwoPi) lfoPhase[k] -= kTwoPi;
+
+                const float rd = clampf (lenSm[k].next() + m, 2.0f, (float) (maxLen[k] - 2));
+                d[k] = damp[k].process (lines[k].read (rd) * fbSm[k].next());
+            }
 
             // 8x8 Hadamard via butterfly, scaled 1/sqrt(8)
             float s[kLines];
@@ -261,13 +293,19 @@ public:
     }
 
 private:
+    static constexpr float kTwoPi = 2.0f * kPi;
     static constexpr int baseLen[kLines] = { 1123, 1327, 1523, 1723, 1931, 2129, 2333, 2539 };
     static constexpr float inGain[kLines] = { 0.5f, -0.4f, 0.45f, -0.35f, 0.4f, -0.45f, 0.35f, -0.5f };
+    // Deliberately not harmonically related: shared factors would put the lines back in
+    // step periodically, which is the flutter the modulation exists to remove.
+    static constexpr float lfoHz[kLines] = { 0.31f, 0.43f, 0.57f, 0.67f,
+                                             0.79f, 0.91f, 1.03f, 1.17f };
     FractionalDelay lines[kLines];
     OnePoleLP damp[kLines];
     LinearSmoother lenSm[kLines], fbSm[kLines];
     int maxLen[kLines] = {};
     float len[kLines] = {}, fb[kLines] = {};
+    float modDepth[kLines] = {}, lfoPhase[kLines] = {}, lfoInc[kLines] = {};
     float sr = 48000.0f, tail = 1.0f;
 };
 } // namespace nsb
