@@ -7,6 +7,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "NekoLookAndFeel.h"
 #include "HelpContent.h"
+#include "Language.h"
 
 namespace nsbui
 {
@@ -25,10 +26,10 @@ public:
 
         for (const auto& s : sections)
         {
-            blocks.add ({ makeLayout (s.heading, textW, true), y, true });
+            blocks.add ({ makeLayout (pick (s.heading, s.headingJa), textW, true), y, true });
             y += (int) blocks.getLast().layout.getHeight() + 6;
 
-            blocks.add ({ makeLayout (s.body, textW, false), y, false });
+            blocks.add ({ makeLayout (pick (s.body, s.bodyJa), textW, false), y, false });
             y += (int) blocks.getLast().layout.getHeight() + kSectionGap;
         }
         contentHeight = y + kMargin;
@@ -85,19 +86,54 @@ public:
         viewport.setViewedComponent (&body, false);
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
+
+        // The switch lives here because the moment you want another language is the
+        // moment you are reading the manual - and it costs the main window nothing.
+        // The choice is a property of the person, so it is stored in the user's own
+        // settings and applies to every project; see Language.h.
+        for (auto* b : { &enButton, &jaButton })
+        {
+            b->setRadioGroupId (1);
+            b->setClickingTogglesState (true);
+            b->setConnectedEdges (b == &enButton ? juce::Button::ConnectedOnRight
+                                                 : juce::Button::ConnectedOnLeft);
+            addAndMakeVisible (b);
+        }
+        enButton.setButtonText ("EN");
+        jaButton.setButtonText (juce::String::fromUTF8 ("日本語"));
+        enButton.setToggleState (currentLanguage() == Language::en, juce::dontSendNotification);
+        jaButton.setToggleState (currentLanguage() == Language::ja, juce::dontSendNotification);
+        enButton.onClick = [this] { switchTo (Language::en); };
+        jaButton.onClick = [this] { switchTo (Language::ja); };
+
         setSize (720, 560);
     }
 
     void resized() override
     {
-        viewport.setBounds (getLocalBounds());
+        auto b = getLocalBounds();
+        auto head = b.removeFromTop (30).reduced (10, 3);
+        jaButton.setBounds (head.removeFromRight (72));
+        enButton.setBounds (head.removeFromRight (44));
+        viewport.setBounds (b);
         const int w = viewport.getMaximumVisibleWidth();
         body.setSize (w, body.layoutForWidth (w));
     }
 
 private:
+    void switchTo (Language l)
+    {
+        if (l == currentLanguage()) return;
+        setCurrentLanguage (l);
+        const int w = viewport.getMaximumVisibleWidth();
+        body.setSize (w, body.layoutForWidth (w));
+        viewport.setViewPosition (0, 0);
+        body.repaint();
+    }
+
     juce::Viewport viewport;
     HelpBody body;
+    juce::TextButton enButton, jaButton;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HelpPanel)
 };

@@ -330,6 +330,9 @@ private:
         s.setTextBoxStyle (juce::Slider::TextBoxRight, false, 66, 18);
         s.setTitle (name); // accessibility name for screen readers
         s.setTooltip (nsbui::helpFor (pid));
+        // double-click to reset: people try it before reading anything
+        if (auto* prm = proc.apvts.getParameter (pid))
+            s.setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
         addAndMakeVisible (s);
         att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, pid, s);
@@ -346,6 +349,9 @@ private:
         s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 70, 16);
         s.setTitle (name); // accessibility name for screen readers
         s.setTooltip (nsbui::helpFor (pid));
+        // double-click to reset: people try it before reading anything
+        if (auto* prm = proc.apvts.getParameter (pid))
+            s.setDoubleClickReturnValue (true, prm->convertFrom0to1 (prm->getDefaultValue()));
         addAndMakeVisible (s);
         att = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
             proc.apvts, pid, s);
@@ -357,6 +363,8 @@ private:
     }
 
     // ---- presets (factory) ----
+    static constexpr int kResetItemId = 9000;
+
     struct Preset { const char* name; std::vector<std::pair<const char*, float>> vals; };
 
     void setupPresets()
@@ -399,8 +407,25 @@ private:
         presetBox.setTextWhenNothingSelected ("Presets...");
         for (int i = 0; i < (int) presets.size(); ++i)
             presetBox.addItem (presets[(size_t) i].name, i + 1);
+        // Reset lives in a menu you open on purpose rather than as a button that can be
+        // hit by accident, and it goes through proper gestures so the host can undo it.
+        presetBox.addSeparator();
+        presetBox.addItem ("Reset all to defaults", kResetItemId);
         presetBox.onChange = [this]
         {
+            if (presetBox.getSelectedId() == kResetItemId)
+            {
+                for (auto* prm : proc.getParameters())
+                    if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (prm))
+                        if (rp->getParameterID() != nsb::pid::bypass)   // leave host bypass alone
+                        {
+                            rp->beginChangeGesture();
+                            rp->setValueNotifyingHost (rp->getDefaultValue());
+                            rp->endChangeGesture();
+                        }
+                presetBox.setSelectedId (0, juce::dontSendNotification);
+                return;
+            }
             const int idx = presetBox.getSelectedId() - 1;
             if (idx < 0 || idx >= (int) presets.size()) return;
             for (auto& [pid, v] : presets[(size_t) idx].vals)
