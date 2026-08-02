@@ -2,23 +2,38 @@
 
 Part of **NekoSpace Audio** — https://github.com/moe-charm/nekospace-audio
 
-Noise removal for whispered and breathy voice. **v1 prototype: command line only.**
+Noise removal for whispered and breathy voice. **v1 prototype: a small desktop app, plus a command-line tool.**
 
 The design and its sources are in [reference-denoise.md](../../docs/reference-denoise.md);
 this file is how to run it.
 
-- **Format:** command-line tool. No GUI, no plugin, no realtime.
-- **Stack:** C++17, no dependencies — **not even JUCE**. WAV I/O and the FFT are in-tree.
+- **Format:** standalone app (`NekoSpace CleanVoice`) and a CLI (`cleanvoice`). No plugin,
+  no realtime, yet.
+- **Stack:** C++17. The **DSP links no JUCE at all** — WAV I/O and the FFT are in-tree, and
+  JUCE appears only in the app's GUI layer. A VST3 later is a wrapper, not a rewrite.
 - **Input:** WAV, PCM 16/24/32-bit or 32-bit float, any channel count, any sample rate.
 - **Output:** 32-bit float WAV at the input's sample rate.
 
-## Why there is no window
+## The app
 
-The only question v1 has to answer is whether the hiss can go without thinning the
-whisper. A GUI does not help answer it, and building one first is how a prototype stops
-being a prototype. Two files come out, and you listen.
+Open a take, drag over a stretch with no voice in it, press **Learn Noise + Process**, then
+switch between **Original / Clean / Removed Noise** while it plays.
 
-## Use
+The three buttons share one playhead, because the difference between two renders is only
+audible if you hear the same moment in each. The waveform follows whichever one you are
+monitoring, so speech left in the removed signal is visible as well as audible.
+
+Drop a `.wav` on the window, or pass one on the command line, to skip the file dialog.
+
+**Reduction** and **Smoothing** are on the front. **Preserve Breath** and
+**Oversubtraction** are behind *Advanced*, and Preserve Breath starts at 0 on purpose: the
+first listen has to be the unprotected behaviour, or there is no way to know what the
+protection is for.
+
+Long processing runs on its own thread with a progress bar and a Cancel button; the window
+stays responsive.
+
+## The command line
 
 ```bash
 cleanvoice take01.wav --noise 12.5 15.0
@@ -76,7 +91,10 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-Binary at `build/plugins/cleanvoice/Release/cleanvoice.exe`.
+Binaries:
+
+- `build/plugins/cleanvoice/CleanVoiceApp_artefacts/Release/NekoSpace CleanVoice.exe`
+- `build/plugins/cleanvoice/Release/cleanvoice.exe`
 
 ## Tests
 
@@ -96,8 +114,8 @@ Binary at `build/plugins/cleanvoice/Release/cleanvoice.exe`.
 
 ## Not in v1
 
-Adaptive noise tracking, machine learning, automatic silence detection, a GUI, VST3,
-de-click, de-reverb, batch processing. Each has a reason recorded in
+Adaptive noise tracking, machine learning, automatic silence detection, spectral editing,
+VST3, de-click, de-reverb, batch processing. Each has a reason recorded in
 [reference-denoise.md](../../docs/reference-denoise.md); the short version is that adaptive
 tracking absorbs sustained breath into the noise floor, and everything else is scope.
 

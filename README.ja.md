@@ -7,7 +7,7 @@ English: [README.md](README.md)
 | 製品 | 状態 | |
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
-| **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、コマンドライン — [readme](plugins/cleanvoice/README.md) |
+| **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、アプリ + CLI — [readme](plugins/cleanvoice/README.md) |
 | NekoSpace Reverb | 予定 | |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |

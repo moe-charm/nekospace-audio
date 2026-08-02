@@ -26,6 +26,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <functional>
 #include "Stft.h"
 #include "NoiseProfile.h"
 
@@ -46,10 +47,14 @@ public:
     // channels: de-interleaved input. Returns the cleaned signal, same shape.
     // "removed" is computed by the caller as input - clean, so that clean + removed is
     // exactly the original and nothing can hide in the difference.
+    // onProgress is called every few frames with 0..1 and returns false to abort, which
+    // is how the GUI keeps its thread responsive and offers a Cancel button. Returning an
+    // empty result means cancelled. Still no JUCE here - std::function is enough.
     static std::vector<std::vector<float>> process (
         const Stft& stft, const NoiseProfile& profile,
         const std::vector<std::vector<float>>& channels, int numSamples,
-        const DenoiseParams& p)
+        const DenoiseParams& p,
+        const std::function<bool (float)>& onProgress = {})
     {
         const int nCh = (int) channels.size();
         const int bins = stft.numBins();
@@ -76,6 +81,10 @@ public:
 
         for (int f = 0; f < frames; ++f)
         {
+            if (onProgress && (f & 63) == 0
+                && ! onProgress ((float) f / (float) std::max (frames, 1)))
+                return {};                       // cancelled
+
             for (int c = 0; c < nCh; ++c)
                 stft.analyse (channels[(size_t) c].data(), numSamples, f, spec[(size_t) c]);
 
