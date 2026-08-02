@@ -168,9 +168,12 @@ inline std::vector<HelpSection> helpSections()
           "The audio you make with this is yours. The licence covers the plugin's own "
           "source and binaries; a rendered file is not a derivative work of the software, "
           "so recordings and audio dramas made with it carry no obligation.\n"
+          "There is NO WARRANTY, to the extent permitted by law. You may redistribute it "
+          "under the terms of the licence; the full text ships as LICENSE alongside this "
+          "plugin and is at gnu.org/licenses/agpl-3.0.html.\n"
           "Source: github.com/moe-charm/nekospace-audio",
           "ライセンス",
-          "GNU Affero General Public License v3.0 以降のフリーソフトウェア。\nCopyright (C) 2026 charmpic. NekoSpace Audio.\nこれで作った音声は君のもの。ライセンスが対象にするのはプラグイン自身のソースとバイナリで、書き出したファイルはソフトウェアの派生物ではない。このプラグインで制作した録音や音声作品に義務は一切かからない。\nソース: github.com/moe-charm/nekospace-audio" },
+          "GNU Affero General Public License v3.0 以降のフリーソフトウェア。\nCopyright (C) 2026 charmpic. NekoSpace Audio.\nこれで作った音声は君のもの。ライセンスが対象にするのはプラグイン自身のソースとバイナリで、書き出したファイルはソフトウェアの派生物ではない。このプラグインで制作した録音や音声作品に義務は一切かからない。\n法律が許す範囲で無保証。ライセンスの条件のもとで再配布できる。全文はこのプラグインに同梱の LICENSE、および gnu.org/licenses/agpl-3.0.html にある。\nソース: github.com/moe-charm/nekospace-audio" },
     };
 }
 } // namespace nsbui
