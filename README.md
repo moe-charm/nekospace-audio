@@ -1,13 +1,35 @@
 # NekoSpace Audio
 
+日本語版は [README.ja.md](README.ja.md) にゃ。
+
 Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 
 | Product | Status | |
 | --- | --- | --- |
 | **NekoSpace Binaural** | in development | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
+
 | NekoSpace Reverb | planned | |
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
+
+## Status — honest version
+
+Pre-release. Nothing here has shipped, so parameter IDs and plugin codes are settled but
+the sound is not.
+
+**NekoSpace Binaural** works: left/right, front/back, distance and near-field "at the ear"
+placement all do what they claim, validated by 30 JUCE-free acceptance tests and
+`pluginval --strictness-level 10`.
+
+**Elevation is the weak axis.** It produces a real, audible change and a mild sense of
+vertical movement, but it is not a dependable "that is above me" cue. This is the known
+ceiling of static, non-individualised binaural rather than a bug we have not found yet:
+the spectral cues that carry height depend on the shape of *your* pinnae, and headphones
+colour exactly the 5–12 kHz band those cues live in. Four approaches were tried and
+measured — an analytic redesign, a measured KU100 dataset, torso reflections plus early
+reflections rendered through the HRTF, and per-listener tuning. Each improved the numbers;
+none produced a decisive percept. Treat elevation as a colour, not as a load-bearing
+narrative cue.
 
 ## Build
 

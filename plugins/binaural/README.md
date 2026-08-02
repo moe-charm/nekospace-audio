@@ -9,6 +9,28 @@ Voice-focused 3D binaural spatializer plugin. 音声作品向けの、耳元表�
 - **Stack:** C++17 / JUCE (pinned) / CMake
 - **Primary test DAW:** FL Studio (Windows)
 
+## What works, and what does not
+
+| Axis | State |
+| --- | --- |
+| Left / right | solid — geometric ITD from the exact rigid-sphere path, plus head shadow |
+| Distance | solid — per-ear 1/r with a safety limiter |
+| Near field ("at the ear") | solid — 5.6 dB ILD at 0 %, 24.2 dB at 100 %, az −90° / 12 cm |
+| Front / back | usable |
+| **Up / down** | **weak — see below** |
+
+Elevation produces a real, audible change and a mild sense of vertical movement, but it is
+not a dependable cue. Four approaches were built and measured: an analytic model redesign
+(up/down spectral spread 2.0 → 5.8 dB), a measured TH Köln KU100 dataset (6.4 dB), torso
+reflections plus early reflections rendered through the HRTF at their image directions,
+and per-listener tuning via the Elevation Lab. Every one improved the numbers; none
+produced a decisive percept on the author's own ears and headphones.
+
+That is the ceiling of static, non-individualised binaural — height depends on the shape
+of the listener's pinnae, and headphones colour the same 5–12 kHz band. The strongest
+remaining lever, head tracking, does not apply when the deliverable is a rendered file.
+Use elevation as a colour; convey height through the script and the room.
+
 ## Build
 
 Requires: CMake ≥ 3.22, Visual Studio 2022, git (JUCE is fetched automatically on first configure).

@@ -199,6 +199,34 @@ A macro of exactly 1.00 restores Analytic B bit-for-bit, so Reset really resets.
 macro afterwards rebuilds from the macros and discards those edits — one direction of
 authority, no silent conflict.
 
+## Listening round 3 result (2026-08-02)
+
+Setup: Sony MDR-Z1R, dedicated DAC and amp, Elevation Lab macros.
+
+> "一応上下に動いた感はあったけど まだまだ弱いかんじはした"
+
+Some sense of vertical movement, but still weak. Better than rounds 1 and 2 — the
+direction is no longer absent — but not yet a confident "it is above me".
+
+**Accepted status: the feature exists and is honest about its strength.** Elevation is
+shipped as a working control that produces a real, audible change, not as a reliable
+localisation cue. That framing goes in the README rather than being quietly implied.
+
+What this rules out: more spectral modelling on the direct path. Three rounds of it
+(analytic redesign, measured KU100, torso + HRTF-rendered reflections, per-listener
+tuning) each produced a measurable improvement and none produced a decisive percept.
+That is the known ceiling of static, non-individualised binaural, and for a distributed
+audio drama the strongest remaining lever — head tracking — is unavailable in principle,
+because the listener plays back a file.
+
+Remaining options, in the order worth trying:
+
+1. Leave elevation as a colour and lean on production convention (script, footsteps,
+   room character) for height — what audio drama actually does.
+2. Individual measurement or a per-listener calibration flow, if this ever becomes a
+   product other people use.
+3. Head tracking, only if a real-time/interactive use case appears.
+
 ### Tuning order
 
 1. Room OFF, real voice material, `Height Check (dry)`.
