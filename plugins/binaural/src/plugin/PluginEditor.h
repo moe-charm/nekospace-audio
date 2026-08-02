@@ -304,8 +304,11 @@ public:
             s.box->setBounds (header.removeFromLeft (w).reduced (4, 9));
         }
 
-        // full-width footer strip: always has room for the info + licence line
-        infoArea = b.removeFromBottom (18).reduced (12, 2);
+        // full-width footer strip: always has room for the info + licence line.
+        // setResizable puts a corner grip in the bottom-right, so the licence line has to
+        // stop short of it - otherwise the grip is drawn straight through "see LICENSE",
+        // which is exactly the text the AGPL wants legible.
+        infoArea = b.removeFromBottom (18).reduced (12, 2).withTrimmedRight (14);
 
         auto bottom = b.removeFromBottom (150).reduced (10, 6);
         layoutBottom (bottom);

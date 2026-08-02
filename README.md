@@ -11,6 +11,8 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
 
+![NekoSpace Binaural](docs/images/gui-main.png)
+
 ## Status — honest version
 
 First alpha. Parameter IDs, plugin codes and the choice lists are frozen as of
@@ -29,6 +31,26 @@ measured — an analytic redesign, a measured KU100 dataset, torso reflections p
 reflections rendered through the HRTF, and per-listener tuning. Each improved the numbers;
 none produced a decisive percept. Treat elevation as a colour, not as a load-bearing
 narrative cue.
+
+## A closer look
+
+| | |
+| --- | --- |
+| **Presets are complete scenes.** Each one sets every sound-shaping parameter, so a name always means the same sound. The JUMP TO buttons in the main window do the opposite job — they move the source and leave the room you built alone. | ![Preset menu](docs/images/presets.png) |
+
+**Elevation Lab** — four macros over the height model, tuned by ear on your own headphones
+and then frozen. `Advanced…` opens the 24 raw anchor values behind them, and `Copy as C++`
+emits the block that makes a curve permanent.
+
+![Elevation Lab](docs/images/elevation-lab.png)
+
+**The manual is in the plugin**, in English and Japanese, switched from inside the window.
+The choice follows the OS on first run and is stored per user, so an old session never
+opens in the wrong language.
+
+![Help, English](docs/images/help-en.png)
+
+![Help, Japanese](docs/images/help-ja.png)
 
 ## Install
 

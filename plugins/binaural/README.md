@@ -9,6 +9,8 @@ Voice-focused 3D binaural spatializer plugin. 音声作品向けの、耳元表�
 - **Stack:** C++17 / JUCE (pinned) / CMake
 - **Primary test DAW:** FL Studio (Windows)
 
+![NekoSpace Binaural](../../docs/images/gui-main.png)
+
 ## What works, and what does not
 
 | Axis | State |
