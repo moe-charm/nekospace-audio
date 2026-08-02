@@ -110,6 +110,7 @@ why `shared/` starts empty.
 - [state-format.md](docs/state-format.md) — what gets written into a host project and the rules that keep old projects loading
 - [realtime-contract.md](docs/realtime-contract.md) — thread rules
 - [third-party-licenses.md](docs/third-party-licenses.md) — dependency licensing SSOT
+- [reference-iem.md](docs/reference-iem.md) — what we read the IEM Plug-in Suite for, what we deliberately do not take, and where the GPL line sits
 
 ## License
 

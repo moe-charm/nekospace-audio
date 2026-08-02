@@ -102,6 +102,7 @@ nekospace-audio/
 - [state-format.md](docs/state-format.md) — ホストのプロジェクトに何を保存するか、古いプロジェクトを読み続けるためのルール
 - [realtime-contract.md](docs/realtime-contract.md) — スレッド規約
 - [third-party-licenses.md](docs/third-party-licenses.md) — 依存ライセンスのSSOT
+- [reference-iem.md](docs/reference-iem.md) — IEM Plug-in Suite から何を学び、何を採らないか、GPLとの線引き
 
 ## ライセンス
 
