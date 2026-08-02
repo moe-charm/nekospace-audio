@@ -6,7 +6,7 @@ English: [README.md](README.md)
 
 | 製品 | 状態 | |
 | --- | --- | --- |
-| **NekoSpace Binaural** | v0.1.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
+| **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
 | NekoSpace Reverb | 予定 | |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |
@@ -15,11 +15,11 @@ English: [README.md](README.md)
 
 ## 現状 — 正直版
 
-最初のalphaにゃ。パラメーターID・プラグインコード・選択肢リストは `v0.1.0-alpha` の時点で
-凍結にゃ（[CHANGELOG.md](CHANGELOG.md) 参照）。音のほうはまだ固まってないにゃ。
+alphaにゃ。パラメーターID・プラグインコード・選択肢リストは `v0.1.0-alpha` で凍結して、
+それ以降変えていないにゃ（[CHANGELOG.md](CHANGELOG.md) 参照）。音のほうはまだ固まってないにゃ。
 
 **NekoSpace Binaural は動くにゃ。** 左右・前後・距離、そして耳元の「耳のすぐそば」表現は
-どれも宣伝どおりに機能するにゃ。JUCE非依存の受け入れテスト30本と
+どれも宣伝どおりに機能するにゃ。JUCE非依存の受け入れテスト33本と
 `pluginval --strictness-level 10` で検証済みにゃ。
 
 **弱いのは上下にゃ。** 音は確かに変わるし、多少の上下動は感じられるけど、

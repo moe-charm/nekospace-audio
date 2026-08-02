@@ -3,7 +3,9 @@
 Notable changes per release. Dates are ISO. This project follows the compatibility rules
 in [docs/state-format.md](docs/state-format.md) and [docs/identity.md](docs/identity.md).
 
-## [Unreleased]
+## [0.2.0-alpha] — 2026-08-03
+
+Minor rather than patch: this adds a parameter and bumps the state schema.
 
 ### Room: decay is its own control
 
@@ -33,6 +35,24 @@ in [docs/state-format.md](docs/state-format.md) and [docs/identity.md](docs/iden
   too. See [docs/state-format.md](docs/state-format.md).
 - `room.decay` carries `versionHint` 2 and is appended, so host display order does not
   shift for anyone who already has v0.1.0-alpha.
+- Choice lists, plugin codes and every existing parameter ID are unchanged, so
+  v0.1.0-alpha projects open normally.
+
+### Fixed
+
+- **The right-hand column drew over the knob row on a short window.** Its layout was built
+  from fixed heights and nothing checked they fit; below about 640 px the JUMP TO grid ran
+  past the end of its own area and painted over the SPACE captions and the OUTPUT knob.
+  Rows and buttons now give way together as the window gets shorter, the way the bottom
+  bar already did. The normal size is untouched.
+- The window's resize grip was drawn straight through the end of "see LICENSE" in the
+  footer — the AGPL notice being the text least suited to being scribbled on.
+
+### Docs
+
+- Screenshots in both READMEs: the main window, the grouped preset menu, the Elevation
+  Lab, and the built-in manual in English and Japanese.
+- Install instructions written for someone holding the release zip, in both languages.
 
 ## [0.1.0-alpha] — 2026-08-03
 

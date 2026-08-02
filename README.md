@@ -6,7 +6,7 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 
 | Product | Status | |
 | --- | --- | --- |
-| **NekoSpace Binaural** | v0.1.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
+| **NekoSpace Binaural** | v0.2.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
 | NekoSpace Reverb | planned | |
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
@@ -15,11 +15,11 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 
 ## Status — honest version
 
-First alpha. Parameter IDs, plugin codes and the choice lists are frozen as of
-`v0.1.0-alpha` — see [CHANGELOG.md](CHANGELOG.md). The sound is not frozen.
+Alpha. Parameter IDs, plugin codes and the choice lists were frozen at `v0.1.0-alpha`
+and have not changed since — see [CHANGELOG.md](CHANGELOG.md). The sound is not frozen.
 
 **NekoSpace Binaural** works: left/right, front/back, distance and near-field "at the ear"
-placement all do what they claim, validated by 30 JUCE-free acceptance tests and
+placement all do what they claim, validated by 33 JUCE-free acceptance tests and
 `pluginval --strictness-level 10`.
 
 **Elevation is the weak axis.** It produces a real, audible change and a mild sense of
