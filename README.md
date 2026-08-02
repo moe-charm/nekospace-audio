@@ -38,7 +38,7 @@ builds, **runs the acceptance tests**, packages the VST3 and Standalone with the
 and notices, and opens a draft GitHub Release. A build that has not passed its own tests
 is not released.
 
-Nothing has been tagged yet. See [CHANGELOG.md](CHANGELOG.md).
+See [CHANGELOG.md](CHANGELOG.md) for what each release contains and what it freezes.
 
 ## Build
 

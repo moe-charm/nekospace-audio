@@ -3,7 +3,7 @@
 Notable changes per release. Dates are ISO. This project follows the compatibility rules
 in [docs/state-format.md](docs/state-format.md) and [docs/identity.md](docs/identity.md).
 
-## [0.1.0-alpha] — unreleased
+## [0.1.0-alpha] — 2026-08-02
 
 First public build of **NekoSpace Binaural**. Windows VST3 (x64) and Standalone.
 
