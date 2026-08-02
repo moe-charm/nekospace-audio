@@ -7,6 +7,7 @@ English: [README.md](README.md)
 | 製品 | 状態 | |
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
+| **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、コマンドライン — [readme](plugins/cleanvoice/README.md) |
 | NekoSpace Reverb | 予定 | |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |
@@ -87,7 +88,8 @@ ctest --test-dir build -C Release
 ```
 nekospace-audio/
 ├─ plugins/          製品ごとに1ディレクトリ、自己完結
-│  └─ binaural/      src, tests, docs, tools, resources
+│  ├─ binaural/      src, tests, docs, tools, resources
+│  └─ cleanvoice/    src, tests, tools — JUCE非依存、コマンドラインのみ
 ├─ shared/           複数プラグインが実際に必要としたコードだけ
 ├─ docs/             製品横断の契約
 └─ cmake/            ビルド補助
