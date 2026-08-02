@@ -17,6 +17,8 @@ All parameters use JUCE `ParameterID` version hint 1 unless noted.
 | `room.size`          | float  | 0 … 100 %                     | 35      | continuous shoebox + T60 scale |
 | `room.damping`       | float  | 0 … 100 %                     | 50      | HF absorption |
 | `room.early_late`    | float  | 0 … 100 %                     | 35      | 0 = all early, 100 = all late |
+| `duck.amount`        | float  | 0 … 100 %                     | 50      | how far the **late bus only** is held down while the voice speaks. Direct sound and early reflections are never ducked. Detection is on the dry pre-room signal and normalised against recent level, so there is no threshold and the setting means the same for a whisper and a shout |
+| `duck.release`       | float  | 0.05 … 2 s (skewed)           | 0.45 s  | how long the room takes to reappear after a phrase. Ducking itself is fast (~8 ms); the asymmetry is the effect |
 | `hrtf.profile`       | choice | Analytic A (legacy) / Analytic B / KU100 48k (experimental) / Custom (Elevation Lab) | Analytic B | Choice order is frozen for host automation compatibility. B has the working height cue; A is kept for comparison. Not meant for continuous automation |
 | `quality.mode`       | choice | Economy / Standard            | Standard | Standard = full HRIR window (~2.7 ms), Economy = half. Tap counts scale with sample rate — 128/64 at 48 kHz, 256/128 at 96 kHz and above |
 | `output.gain`        | float  | -24 … +12 dB                  | 0       | |

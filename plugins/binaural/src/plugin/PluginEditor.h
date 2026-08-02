@@ -142,6 +142,12 @@ public:
         addKnob (roomSizeKnob, roomSizeLabel, "SIZE", nsb::pid::roomSize, roomSizeAtt);
         addKnob (dampKnob, dampLabel, "DAMPING", nsb::pid::roomDamping, dampAtt);
         addKnob (elKnob, elKnobLabel, "EARLY/LATE", nsb::pid::earlyLate, elKnobAtt);
+        addKnob (duckKnob, duckLabel, "VOICE DUCK", nsb::pid::duckAmount, duckAtt);
+        duckKnob.setTooltip ("Holds the late reverb down while the voice is speaking, so a "
+                             "close voice stays close. Direct sound and early reflections "
+                             "are untouched, and the tail keeps building underneath.");
+        addKnob (duckRelKnob, duckRelLabel, "DUCK REL", nsb::pid::duckRelease, duckRelAtt);
+        duckRelKnob.setTooltip ("How long the room takes to reappear after a phrase ends.");
         addKnob (gainKnob, gainLabel, "OUTPUT", nsb::pid::outputGain, gainAtt);
 
         bypassRoomBtn.setButtonText ("ROOM BYPASS");
@@ -499,7 +505,7 @@ private:
     void layoutBottom (juce::Rectangle<int> b)
     {
         spaceCaption = b.removeFromTop (14);
-        const int knobW = juce::jmin (110, b.getWidth() / 7);
+        const int knobW = juce::jmin (110, b.getWidth() / 8);   // 6 SPACE knobs + OUTPUT
         auto place = [&] (juce::Slider& s, juce::Label& l)
         {
             auto cell = b.removeFromLeft (knobW);
@@ -520,6 +526,8 @@ private:
         place (roomSizeKnob, roomSizeLabel);
         place (dampKnob, dampLabel);
         place (elKnob, elKnobLabel);
+        place (duckKnob, duckLabel);
+        place (duckRelKnob, duckRelLabel);
         b.removeFromLeft (16);
         place (gainKnob, gainLabel);
     }
@@ -539,10 +547,11 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
         azSAtt, elSAtt, distSAtt, widthSAtt, nearSAtt, headSAtt;
 
-    juce::Slider roomAmtKnob, roomSizeKnob, dampKnob, elKnob, gainKnob;
-    juce::Label roomAmtLabel, roomSizeLabel, dampLabel, elKnobLabel, gainLabel;
+    juce::Slider roomAmtKnob, roomSizeKnob, dampKnob, elKnob, duckKnob, duckRelKnob, gainKnob;
+    juce::Label roomAmtLabel, roomSizeLabel, dampLabel, elKnobLabel, duckLabel,
+                duckRelLabel, gainLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
-        roomAmtAtt, roomSizeAtt, dampAtt, elKnobAtt, gainAtt;
+        roomAmtAtt, roomSizeAtt, dampAtt, elKnobAtt, duckAtt, duckRelAtt, gainAtt;
 
     juce::TextButton bypassRoomBtn;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAtt;

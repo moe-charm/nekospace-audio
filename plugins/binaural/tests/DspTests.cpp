@@ -911,6 +911,202 @@ static void testChoiceKeysSurviveDisplayChanges()
     CHECK (v2[1] == v4[1], "state: raw APVTS index 1 remains Analytic B");
 }
 
+// ---- Late-only Voice Duck ---------------------------------------------------
+// The behaviour being guarded: while a phrase is running the late reverb is held down,
+// and at the end of the phrase it opens. Early reflections and the direct sound are
+// never touched, and the FDN keeps being fed, so what appears at the end is a tail that
+// was building all along rather than one starting from nothing.
+
+// A phrase of speech-like bursts, then silence.
+static void speechLike (std::vector<float>& v, float fs, float phraseSeconds,
+                        float tailSeconds)
+{
+    const int n = (int) ((phraseSeconds + tailSeconds) * fs);
+    v.assign ((size_t) n, 0.0f);
+    std::mt19937 rng (99);
+    std::uniform_real_distribution<float> d (-1.0f, 1.0f);
+    const int phraseEnd = (int) (phraseSeconds * fs);
+    float lp = 0.0f;
+    for (int i = 0; i < phraseEnd; ++i)
+    {
+        // syllables at ~5 Hz so the detector sees real gaps, not a steady tone
+        const float syl = 0.5f + 0.5f * std::sin (2.0f * kPi * 5.0f * (float) i / fs);
+        lp = 0.85f * lp + 0.15f * d (rng);
+        v[(size_t) i] = lp * 0.4f * syl * syl;
+    }
+}
+
+static float windowRms (const std::vector<float>& v, int from, int to)
+{
+    from = std::max (0, from); to = std::min ((int) v.size(), to);
+    if (to <= from) return 0.0f;
+    double acc = 0;
+    for (int i = from; i < to; ++i) acc += (double) v[(size_t) i] * v[(size_t) i];
+    return (float) std::sqrt (acc / (double) (to - from));
+}
+
+static void testVoiceDuckOpensAtEndOfPhrase()
+{
+    const float fs = 48000.0f;
+    const float phrase = 1.5f, tail = 1.5f;
+
+    auto render = [&] (float depth, float roomAmount, std::vector<float>& L)
+    {
+        BinauralEngine e;
+        EngineParams p;
+        p.azimuthDeg = 0.0f; p.distanceM = 0.5f; p.nearField = 0.0f;
+        p.roomAmount = roomAmount; p.roomSize = 0.5f; p.roomDamping = 0.3f;
+        p.roomEarlyLate = 1.0f;          // late only, so the effect is not diluted
+        p.duckAmount = depth; p.duckRelease = 0.4f;
+        e.setParams (p);                 // before prepare, so the smoothers start settled
+        e.prepare (fs, 512);
+        e.setParams (p);
+
+        std::vector<float> in;
+        speechLike (in, fs, phrase, tail);
+        const int n = (int) in.size();
+        L.assign ((size_t) n, 0.0f);
+        std::vector<float> R ((size_t) n, 0.0f);
+        for (int pos = 0; pos < n; pos += 512)
+        {
+            const int m = std::min (512, n - pos);
+            e.process (in.data() + pos, in.data() + pos, L.data() + pos, R.data() + pos, m);
+        }
+    };
+
+    // Measure the ROOM, not the total. During a phrase the direct sound is far louder
+    // than the reverb, so a 14 dB cut to the late bus is only ~1.5 dB of the sum — the
+    // duck would look broken while working perfectly. Subtracting a dry render isolates
+    // it; the direct path is identical in all three, so the difference is purely room.
+    std::vector<float> dry, off, on;
+    render (0.0f, 0.0f, dry);
+    render (0.0f, 0.8f, off);
+    render (0.8f, 0.8f, on);
+    for (size_t i = 0; i < dry.size(); ++i) { off[i] -= dry[i]; on[i] -= dry[i]; }
+
+    CHECK (allFinite (on), "duck: no NaN");
+
+    // during the phrase the late bus should be measurably quieter
+    const int during0 = (int) (0.6f * fs), during1 = (int) (1.4f * fs);
+    const float duringOff = windowRms (off, during0, during1);
+    const float duringOn  = windowRms (on,  during0, during1);
+
+    // well after the phrase the tail should have returned to roughly where it would be
+    const int after0 = (int) ((phrase + 0.9f) * fs), after1 = (int) ((phrase + 1.4f) * fs);
+    const float afterOff = windowRms (off, after0, after1);
+    const float afterOn  = windowRms (on,  after0, after1);
+
+    const float duringDb = 20.0f * std::log10 ((duringOn + 1e-12f) / (duringOff + 1e-12f));
+    const float afterDb  = 20.0f * std::log10 ((afterOn + 1e-12f) / (afterOff + 1e-12f));
+    std::printf ("  [duck] during phrase %.1f dB, after phrase %.1f dB (vs duck off)\n",
+                 duringDb, afterDb);
+
+    CHECK (duringDb < -2.0f, "duck: late bus is held down while the phrase runs");
+    CHECK (afterDb > duringDb + 1.5f, "duck: the room opens again after the phrase");
+    CHECK (afterDb > -3.0f, "duck: the recovered tail is close to the undicked level");
+}
+
+static void testVoiceDuckLeavesDirectAndEarlyAlone()
+{
+    const float fs = 48000.0f;
+    auto render = [&] (float depth, float earlyLate, float roomAmount, std::vector<float>& L)
+    {
+        BinauralEngine e;
+        EngineParams p;
+        p.azimuthDeg = 25.0f; p.distanceM = 0.6f; p.nearField = 0.0f;
+        p.roomAmount = roomAmount; p.roomSize = 0.5f; p.roomDamping = 0.3f;
+        p.roomEarlyLate = earlyLate;
+        p.duckAmount = depth; p.duckRelease = 0.4f;
+        e.setParams (p);                 // before prepare, so early/late starts settled
+        e.prepare (fs, 512);
+        e.setParams (p);
+        std::vector<float> in;
+        speechLike (in, fs, 1.0f, 0.2f);
+        const int n = (int) in.size();
+        L.assign ((size_t) n, 0.0f);
+        std::vector<float> R ((size_t) n, 0.0f);
+        for (int pos = 0; pos < n; pos += 512)
+            e.process (in.data() + pos, in.data() + pos, L.data() + pos, R.data() + pos,
+                       std::min (512, n - pos));
+    };
+
+    // room off: the duck must be inaudible, because there is no late bus to duck
+    std::vector<float> dryOff, dryOn;
+    render (0.0f, 0.5f, 0.0f, dryOff);
+    render (1.0f, 0.5f, 0.0f, dryOn);
+    float maxDiff = 0.0f;
+    for (size_t i = 0; i < dryOff.size(); ++i)
+        maxDiff = std::max (maxDiff, std::fabs (dryOff[i] - dryOn[i]));
+    CHECK (maxDiff == 0.0f, "duck: with room off the output is bit-identical");
+
+    // early only: still untouched, the duck acts on the late bus alone
+    std::vector<float> earlyOff, earlyOn;
+    render (0.0f, 0.0f, 0.8f, earlyOff);
+    render (1.0f, 0.0f, 0.8f, earlyOn);
+    maxDiff = 0.0f;
+    for (size_t i = 0; i < earlyOff.size(); ++i)
+        maxDiff = std::max (maxDiff, std::fabs (earlyOff[i] - earlyOn[i]));
+    CHECK (maxDiff == 0.0f, "duck: early reflections are never ducked");
+}
+
+static void testVoiceDuckIsLevelIndependent()
+{
+    // No threshold to set: a whisper and a shout should be ducked by the same amount.
+    const float fs = 48000.0f;
+    VoiceDuck d;
+    auto steadyGain = [&] (float level)
+    {
+        d.prepare (fs);
+        d.setParams (0.8f, 0.4f);
+        double ph = 0.0;
+        for (int i = 0; i < (int) (2.0f * fs); ++i)
+        {
+            ph += 2.0 * 3.14159265358979 * 220.0 / fs;
+            d.next (level * (float) std::sin (ph));
+        }
+        return d.currentGain();
+    };
+    const float loud = steadyGain (0.5f);     // shout
+    const float quiet = steadyGain (0.004f);  // whisper, ~-48 dBFS
+    std::printf ("  [duck] steady gain: loud %.3f, whisper %.3f\n", loud, quiet);
+    CHECK (std::fabs (loud - quiet) < 0.05f, "duck: same reduction at any input level");
+    CHECK (loud < 0.35f, "duck: depth 0.8 actually reduces the bus");
+
+    // and true silence must not be mistaken for voice
+    d.prepare (fs);
+    d.setParams (0.8f, 0.4f);
+    for (int i = 0; i < (int) (2.0f * fs); ++i) d.next (0.0f);
+    CHECK (d.currentGain() > 0.95f, "duck: silence leaves the room open");
+}
+
+static void testVoiceDuckNoClicks()
+{
+    const float fs = 48000.0f;
+    BinauralEngine e; e.prepare (fs, 512);
+    EngineParams p;
+    p.distanceM = 0.8f; p.roomAmount = 0.7f; p.roomEarlyLate = 0.8f;
+    p.duckRelease = 0.3f;
+    const int n = (int) (3.0f * fs);
+    std::vector<float> in (512), L (n, 0.0f), R (n, 0.0f);
+    double ph = 0.0; const double dph = 2.0 * 3.14159265358979 * 300.0 / fs;
+    for (int pos = 0; pos < n; pos += 512)
+    {
+        const int m = std::min (512, n - pos);
+        // sweep the duck controls hard while audio runs
+        const float t = (float) pos / fs;
+        p.duckAmount  = 0.5f + 0.5f * std::sin (t * 4.0f);
+        p.duckRelease = 0.05f + 1.5f * (0.5f + 0.5f * std::sin (t * 2.3f));
+        e.setParams (p);
+        for (int i = 0; i < m; ++i) { in[(size_t) i] = 0.25f * (float) std::sin (ph); ph += dph; }
+        e.process (in.data(), in.data(), L.data() + pos, R.data() + pos, m);
+    }
+    CHECK (allFinite (L) && allFinite (R), "duck: automation produces no NaN");
+    float maxJump = 0.0f;
+    for (int i = (int) (0.3f * fs); i < n; ++i)
+        maxJump = std::max (maxJump, std::fabs (L[i] - L[i - 1]));
+    CHECK (maxJump < 0.1f, "duck: automating amount and release produces no clicks");
+}
+
 int main()
 {
     std::printf ("NekoSpace DSP tests\n");
@@ -940,6 +1136,10 @@ int main()
     testCustomProfileAnchors();
     testElevationMacros();
     testChoiceKeysSurviveDisplayChanges();
+    testVoiceDuckOpensAtEndOfPhrase();
+    testVoiceDuckLeavesDirectAndEarlyAlone();
+    testVoiceDuckIsLevelIndependent();
+    testVoiceDuckNoClicks();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d failure(s)\n", failures);
     return 1;

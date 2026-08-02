@@ -27,6 +27,9 @@ Crossfading FIR Convolvers   dual coefficient sets, ~10 ms output crossfade
    │                    │
    │                    ▼
    │              Late Room FDN (8 lines, Hadamard)
+   │                    │  × Voice Duck  ← late bus only; the FDN is still
+   │                    │                  fed in full, so the tail stays
+   │                    │                  charged and opens at phrase end
    │                    │
    └────────┬───────────┘
             ▼

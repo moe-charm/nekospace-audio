@@ -17,6 +17,12 @@ First public build of **NekoSpace Binaural**. Windows VST3 (x64) and Standalone.
   per-ear geometry (100 %, 24.2 dB).
 - Room: six first-order shoebox reflections, each rendered through the HRTF at its own
   image direction, plus an 8-line FDN late reverb. `room.amount = 0` is bit-exact direct.
+- **Late-only Voice Duck**: the late reverb is held down while the voice speaks and opens
+  at the end of a phrase, so a close voice stays close in a live room. Direct sound and
+  early reflections are never touched, and the FDN keeps being fed at full level — what
+  appears at the end of a line is a tail that was building all along. No threshold to
+  set: detection normalises against recent level, so one setting suits a whisper and a
+  shout. Measured on the isolated room bus: −13.1 dB during a phrase, −0.7 dB after it.
 - Four HRTF profiles: Analytic A (legacy), Analytic B (default), an experimental measured
   KU100 pack (development builds only), and Custom via the Elevation Lab.
 - Zero-latency direct path; the reported 2 ms is the near-field base delay, so host PDC

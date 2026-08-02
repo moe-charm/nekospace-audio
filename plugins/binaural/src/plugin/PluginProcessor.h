@@ -25,6 +25,8 @@ inline constexpr const char* hrtfProfile= "hrtf.profile";
 inline constexpr const char* quality    = "quality.mode";
 inline constexpr const char* outputGain = "output.gain";
 inline constexpr const char* bypassRoom = "output.bypass_room";
+inline constexpr const char* duckAmount = "duck.amount";
+inline constexpr const char* duckRelease= "duck.release";
 inline constexpr const char* bypass     = "global.bypass";
 }
 
@@ -119,6 +121,7 @@ private:
     std::atomic<float>* pAz, * pEl, * pDist, * pWidth, * pMode, * pNear, * pHead;
     std::atomic<float>* pRoomAmt, * pRoomSize, * pRoomDamp, * pEarlyLate;
     std::atomic<float>* pQuality, * pOutGain, * pBypassRoom, * pBypass, * pProfile;
+    std::atomic<float>* pDuckAmount, * pDuckRelease;
     juce::AudioProcessorParameter* bypassParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceProcessor)

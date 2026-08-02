@@ -13,6 +13,7 @@
 #include "HrtfDatabase.h"
 #include "FirConvolver.h"
 #include "RoomEngine.h"
+#include "VoiceDuck.h"
 
 namespace nsb
 {
@@ -29,6 +30,8 @@ struct EngineParams
     float roomSize     = 0.35f;
     float roomDamping  = 0.5f;
     float roomEarlyLate= 0.35f;
+    float duckAmount   = 0.5f;    // 0..1, how far the late bus is held down while speaking
+    float duckRelease  = 0.45f;   // seconds for the room to reappear after a phrase
     int   qualityMode  = 1;       // 0 = Economy(half taps), 1 = Standard(full)
     int   hrtfProfile  = 1;       // 0 = Analytic A (legacy), 1 = Analytic B, 2 = measured
     float outputGainDb = 0.0f;
@@ -258,6 +261,7 @@ public:
         outGainSm.prepare (sr, 0.02f); outGainSm.snap (1.0f);
         roomAmtSm.prepare (sr, 0.05f); roomAmtSm.snap (0.0f); // room fades in; amount 0 stays bit-exact direct
         earlyLateSm.prepare (sr, 0.05f); earlyLateSm.snap (params.roomEarlyLate);
+        duck.prepare (sr);
         modeFade.prepare (sr, 0.008f); modeFade.snap (1.0f);
         limiterRelease = std::exp (-1.0f / (0.120f * sr));
         monoBuf.assign (kChunk, 0.0f);
@@ -273,7 +277,8 @@ public:
     void reset()
     {
         for (auto& s : sources) s.reset();
-        early.reset(); fdn.reset();
+        early.reset(); fdn.reset(); duck.reset();
+        lastDuckGain = 1.0f;
         peakL = peakR = 0.0f;
         limiterEnv = 0.0f;
     }
@@ -302,6 +307,7 @@ public:
     float lastPeakL() const noexcept { return peakL; }
     float lastPeakR() const noexcept { return peakR; }
     float lastGainReduction() const noexcept { return lastGr; } // linear, 1 = none
+    float lastDuck() const noexcept { return lastDuckGain; }    // linear, 1 = room open
     int   hrtfTaps() const noexcept { return hrtf[0].numTaps(); }
     const HrtfDatabase& database (int profile) const noexcept
     {
@@ -412,12 +418,19 @@ private:
             if (roomOn)
             {
                 earlyLateSm.setTarget (p.roomEarlyLate);
+                duck.setParams (p.duckAmount, p.duckRelease);
                 for (int i = 0; i < n; ++i)
                 {
                     const float amt = roomAmtSm.next();
                     const float b = earlyLateSm.next();
-                    outL[i] += amt * (erL[i] * (1.0f - b) + fdnL[i] * b) * 1.6f;
-                    outR[i] += amt * (erR[i] * (1.0f - b) + fdnR[i] * b) * 1.6f;
+                    // Detect on the dry room feed, never on the wet output, or the
+                    // reverb would drive its own ducking. The FDN above was fed the
+                    // full signal: only its output is held down, so the tail stays
+                    // charged and is revealed at the end of a phrase.
+                    const float d = duck.next (feed[i]);
+                    outL[i] += amt * (erL[i] * (1.0f - b) + fdnL[i] * b * d) * 1.6f;
+                    outR[i] += amt * (erR[i] * (1.0f - b) + fdnR[i] * b * d) * 1.6f;
+                    lastDuckGain = d;
                 }
             }
             else
@@ -469,6 +482,8 @@ private:
     float peakL = 0.0f, peakR = 0.0f;
     int activeMode = 0;
     int roomCooldown = 0;
+    VoiceDuck duck;
+    float lastDuckGain = 1.0f;
     bool fadingMode = false;
     const void* packData = nullptr;
     size_t packBytes = 0;

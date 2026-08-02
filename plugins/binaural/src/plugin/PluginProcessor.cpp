@@ -73,6 +73,23 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceProcessor::createLayout()
             AudioParameterFloatAttributes().withLabel ("%")));
     lo.add (std::make_unique<P> (ParameterID { nsb::pid::earlyLate, 1 }, "Early/Late", pct, 35.0f,
             AudioParameterFloatAttributes().withLabel ("%")));
+    // versionHint stays 1: nothing has been released yet, so these belong to the first
+    // release like every other parameter. Anything added after v0.1.0-alpha needs 2.
+    lo.add (std::make_unique<P> (ParameterID { nsb::pid::duckAmount, 1 }, "Voice Duck",
+            pct, 50.0f, AudioParameterFloatAttributes().withLabel ("%")));
+    lo.add (std::make_unique<P> (ParameterID { nsb::pid::duckRelease, 1 }, "Duck Release",
+            NormalisableRange<float> (0.05f, 2.0f, 0.005f, 0.5f), 0.45f,
+            AudioParameterFloatAttributes()
+                .withStringFromValueFunction ([] (float v, int)
+                {
+                    return v < 1.0f ? String ((int) (v * 1000.0f + 0.5f)) + " ms"
+                                    : String (v, 2) + " s";
+                })
+                .withValueFromStringFunction ([] (const String& s)
+                {
+                    const float v = s.getFloatValue();
+                    return s.containsIgnoreCase ("ms") ? v * 0.001f : v;
+                })));
     // The choice always lists every profile so the parameter's range never changes with
     // the build configuration (a host project must restore the same index either way).
     // Selecting a profile that is not present falls back to Analytic B in the engine.
@@ -105,6 +122,8 @@ NekoSpaceProcessor::NekoSpaceProcessor()
     pHead = raw (nsb::pid::headRadius);  pRoomAmt = raw (nsb::pid::roomAmount);
     pRoomSize = raw (nsb::pid::roomSize);pRoomDamp = raw (nsb::pid::roomDamping);
     pEarlyLate = raw (nsb::pid::earlyLate);
+    pDuckAmount = raw (nsb::pid::duckAmount);
+    pDuckRelease = raw (nsb::pid::duckRelease);
     pQuality = raw (nsb::pid::quality);  pOutGain = raw (nsb::pid::outputGain);
     pBypassRoom = raw (nsb::pid::bypassRoom);
     pBypass = raw (nsb::pid::bypass);
@@ -192,6 +211,8 @@ void NekoSpaceProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
     p.roomSize      = pRoomSize->load() * 0.01f;
     p.roomDamping   = pRoomDamp->load() * 0.01f;
     p.roomEarlyLate = pEarlyLate->load() * 0.01f;
+    p.duckAmount    = pDuckAmount->load() * 0.01f;
+    p.duckRelease   = pDuckRelease->load();
     p.qualityMode   = (int) pQuality->load();
     p.hrtfProfile   = (int) pProfile->load();
     p.outputGainDb  = pOutGain->load();
