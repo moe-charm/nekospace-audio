@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    # Pinned for reproducibility — see the note in ci.yml. A release must be built with
+    # a known toolchain, not with whatever the latest runner image happens to carry.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 

@@ -7,7 +7,11 @@ on:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    # Pinned, not windows-latest: that image no longer carries Visual Studio 2022, and
+    # this matches the toolchain the plugin is actually developed and listened to on, so
+    # a green CI run means the same thing as a green local build. Move it deliberately
+    # when the image is retired.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
