@@ -535,40 +535,80 @@ private:
     {
         spaceCaption = b.removeFromTop (14);
 
-        // Reserve the right-hand controls FIRST, then divide what is left among the
-        // knobs. Sizing the knobs against the full width and only afterwards taking the
-        // buttons out pushed the last two off the end when HELP was added.
-        // meters pinned to the right edge so the bar never ends in dead space
-        meter.setBounds (b.removeFromRight (72).reduced (4, 2));
-        b.removeFromRight (12);
-        bypassRoomBtn.setBounds (b.removeFromRight (116).withSizeKeepingCentre (110, 30));
-        b.removeFromRight (10);
-        // the bottom bar is always full width, so this never gets squeezed out the way
-        // it did in the right panel
-        labButton.setBounds (b.removeFromRight (150).withSizeKeepingCentre (144, 30));
-        b.removeFromRight (8);
-        helpButton.setBounds (b.removeFromRight (74).withSizeKeepingCentre (68, 30));
-        b.removeFromRight (10);
-
+        // The knobs are the actual controls, so the buttons and meters give way first.
+        // Fixed widths here meant the right-hand group always claimed ~440 px, which on
+        // a narrower window squeezed the last knobs down to a dot — the same mistake the
+        // header combos had.
         constexpr int kKnobs = 7;                       // 6 SPACE + OUTPUT
         constexpr int kGapBeforeOutput = 16;
-        const int knobW = juce::jlimit (54, 110,
-                                        (b.getWidth() - kGapBeforeOutput) / kKnobs);
-        auto place = [&] (juce::Slider& s, juce::Label& l)
+        // 92 rather than 100: at 100 the knobs claimed enough that the buttons were
+        // still abbreviated on a comfortably wide window, which looks cramped for no
+        // reason. At 92 both fit fully from about 1400 px upward.
+        constexpr int kKnobPreferred = 92, kKnobMinimum = 68;
+
+        struct Slot { juce::Component* c; int preferred, minimum, inset; };
+        const Slot right[] = {
+            { &helpButton,    74, 56, 6 },
+            { &labButton,    150, 92, 6 },
+            { &bypassRoomBtn, 116, 84, 6 },
+            { &meter,         72, 50, 4 },
+        };
+        int rightPreferred = 0, rightMinimum = 0;
+        for (const auto& s : right) { rightPreferred += s.preferred; rightMinimum += s.minimum; }
+        constexpr int kRightGaps = 10 + 8 + 10 + 12;
+
+        const int forKnobs = kKnobs * kKnobPreferred + kGapBeforeOutput;
+        const int available = b.getWidth() - kRightGaps;
+        // shrink the right-hand group toward its minimum before touching the knobs
+        const float squeeze = (rightPreferred > rightMinimum)
+            ? juce::jlimit (0.0f, 1.0f, (float) (forKnobs + rightPreferred - available)
+                                          / (float) (rightPreferred - rightMinimum))
+            : 0.0f;
+
+        auto placeRight = [&] (const Slot& s, int gapAfter)
         {
+            const int w = juce::roundToInt (s.preferred + (s.minimum - s.preferred) * squeeze);
+            auto cell = b.removeFromRight (w);
+            if (auto* btn = dynamic_cast<juce::TextButton*> (s.c))
+                btn->setBounds (cell.withSizeKeepingCentre (w - 6, 30));
+            else
+                s.c->setBounds (cell.reduced (s.inset, 2));
+            b.removeFromRight (gapAfter);
+        };
+        placeRight (right[3], 12);   // meters pinned to the right edge
+        placeRight (right[2], 10);
+        placeRight (right[1], 8);
+        placeRight (right[0], 10);
+
+        // Below a certain width the full captions no longer fit, so say less rather than
+        // showing an ellipsis.
+        const bool tight = labButton.getWidth() < 120;
+        labButton.setButtonText (tight ? "ELEV LAB" : "ELEVATION LAB");
+        bypassRoomBtn.setButtonText (bypassRoomBtn.getWidth() < 100 ? "BYPASS" : "ROOM BYPASS");
+
+        // No lower clamp: a minimum wider than the space actually left just pushes the
+        // last knob off the end, which is exactly what a floor of 68 did here.
+        const int knobW = juce::jmin (kKnobPreferred,
+                                      (b.getWidth() - kGapBeforeOutput) / kKnobs);
+        const bool shortCaptions = knobW < kKnobMinimum;
+
+        auto place = [&] (juce::Slider& s, juce::Label& l,
+                          const char* full, const char* brief)
+        {
+            l.setText (shortCaptions ? brief : full, juce::dontSendNotification);
             auto cell = b.removeFromLeft (knobW);
             l.setBounds (cell.removeFromTop (14));
             s.setBounds (cell.reduced (2));
         };
 
-        place (roomAmtKnob, roomAmtLabel);
-        place (roomSizeKnob, roomSizeLabel);
-        place (dampKnob, dampLabel);
-        place (elKnob, elKnobLabel);
-        place (duckKnob, duckLabel);
-        place (duckRelKnob, duckRelLabel);
+        place (roomAmtKnob,  roomAmtLabel,  "ROOM",       "ROOM");
+        place (roomSizeKnob, roomSizeLabel, "SIZE",       "SIZE");
+        place (dampKnob,     dampLabel,     "DAMPING",    "DAMP");
+        place (elKnob,       elKnobLabel,   "EARLY/LATE", "E/L");
+        place (duckKnob,     duckLabel,     "VOICE DUCK", "DUCK");
+        place (duckRelKnob,  duckRelLabel,  "DUCK REL",   "REL");
         b.removeFromLeft (kGapBeforeOutput);
-        place (gainKnob, gainLabel);
+        place (gainKnob,     gainLabel,     "OUTPUT",     "OUT");
     }
 
     NekoSpaceProcessor& proc;
