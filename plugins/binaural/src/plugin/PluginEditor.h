@@ -212,6 +212,15 @@ public:
         g.setFont (juce::Font (juce::FontOptions (11.0f)).boldened());
         if (! spaceCaption.isEmpty())
             g.drawText ("SPACE", spaceCaption, juce::Justification::centredLeft);
+        // Says what these buttons are, because a preset menu sits a few centimetres away
+        // doing something that looks similar and is not.
+        if (! snapCaption.isEmpty())
+        {
+            g.setFont (juce::Font (juce::FontOptions (10.0f)));
+            g.setColour (nsbui::col::textDim.withAlpha (0.8f));
+            g.drawText ("JUMP TO  (position only)", snapCaption,
+                        juce::Justification::centredLeft);
+        }
 
         // Info + AGPL Appropriate Legal Notices (LICENSE sections 0 and 5d).
         // ASCII only: keeps rendering identical regardless of host source encoding.
@@ -365,48 +374,61 @@ private:
     // ---- presets (factory) ----
     static constexpr int kResetItemId = 9000;
 
-    struct Preset { const char* name; std::vector<std::pair<const char*, float>> vals; };
+    struct Preset { const char* name; const char* group;
+                    std::vector<std::pair<const char*, float>> vals; };
 
     void setupPresets()
     {
         using namespace nsb;
+        // Presets are complete scenes, snap buttons are position only. They used to
+        // overlap - "Front 1 m" and "Above" were snaps with extra steps - and worse,
+        // no preset set width, source mode or the duck controls, so the same preset
+        // sounded different depending on what you had been doing beforehand. Every
+        // preset now sets every sound-shaping parameter. Output gain, HRTF profile and
+        // quality are left alone: those are the user's, not the scene's.
+        auto scene = [] (const char* name, const char* group, int mode, float az, float el,
+                         float dist, float width, float near, float room, float size,
+                         float damp, float earlyLate, float duck, float duckRel)
+        {
+            return Preset { name, group, {
+                { pid::mode, (float) mode }, { pid::azimuth, az }, { pid::elevation, el },
+                { pid::distance, dist },     { pid::width, width }, { pid::nearfield, near },
+                { pid::roomAmount, room },   { pid::roomSize, size },
+                { pid::roomDamping, damp },  { pid::earlyLate, earlyLate },
+                { pid::duckAmount, duck },   { pid::duckRelease, duckRel } } };
+        };
+        //                name                 group        mode  az     el   dist  width near room size damp  e/l  duck  rel
         presets = {
-            { "Front 1 m",          { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.0f },
-                                      { pid::nearfield, 75.0f }, { pid::roomAmount, 15.0f } } },
-            { "Front Intimate 20 cm",{ { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.2f },
-                                      { pid::nearfield, 90.0f }, { pid::roomAmount, 8.0f } } },
-            { "Left Ear 3 cm",      { { pid::azimuth, -95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.12f },
-                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 5.0f } } },
-            { "Left Ear 8 cm",      { { pid::azimuth, -95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.17f },
-                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 6.0f } } },
-            { "Right Ear 3 cm",     { { pid::azimuth, 95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.12f },
-                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 5.0f } } },
-            { "Right Ear 8 cm",     { { pid::azimuth, 95.0f }, { pid::elevation, 0.0f }, { pid::distance, 0.17f },
-                                      { pid::nearfield, 100.0f }, { pid::roomAmount, 6.0f } } },
-            { "Behind Shoulder L",  { { pid::azimuth, -150.0f }, { pid::elevation, -12.0f }, { pid::distance, 0.35f },
-                                      { pid::nearfield, 90.0f }, { pid::roomAmount, 12.0f } } },
-            { "Behind Shoulder R",  { { pid::azimuth, 150.0f }, { pid::elevation, -12.0f }, { pid::distance, 0.35f },
-                                      { pid::nearfield, 90.0f }, { pid::roomAmount, 12.0f } } },
-            { "Above",              { { pid::azimuth, 0.0f }, { pid::elevation, 75.0f }, { pid::distance, 0.8f },
-                                      { pid::nearfield, 80.0f }, { pid::roomAmount, 15.0f } } },
-            { "Small Quiet Room",   { { pid::azimuth, 20.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.4f },
-                                      { pid::nearfield, 60.0f }, { pid::roomAmount, 35.0f },
-                                      { pid::roomSize, 20.0f }, { pid::roomDamping, 70.0f } } },
-            // Dry reference for judging height: room and near-field colouring off, so
-            // only the HRTF elevation cue is audible. Sweep ELEVATION from here.
-            { "Height Check (dry)", { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.0f },
-                                      { pid::nearfield, 0.0f }, { pid::roomAmount, 0.0f } } },
-            // The one to judge height with. Reflections are rendered through the HRTF at
-            // their image directions, so a raised source gets a floor bounce that really
-            // arrives from below — a cue that does not depend on the listener's pinnae.
-            { "Height Check (room)", { { pid::azimuth, 0.0f }, { pid::elevation, 0.0f }, { pid::distance, 1.2f },
-                                      { pid::nearfield, 0.0f }, { pid::roomAmount, 40.0f },
-                                      { pid::roomSize, 40.0f }, { pid::roomDamping, 35.0f },
-                                      { pid::earlyLate, 20.0f } } },
+            scene ("Whisper at Ear",          "Close",        0, -95,     0, 0.10f,  60, 100,   8,  15,  75,  20,  60, 0.30f),
+            scene ("Close and Intimate",      "Close",        0,   0,     0, 0.25f,  60,  90,  10,  20,  65,  25,  55, 0.35f),
+            scene ("Bedside",                 "Close",        0, -35,   -10, 0.50f,  60,  85,  25,  22,  70,  30,  60, 0.40f),
+            scene ("Behind You",              "Close",        0, 165,    -8, 0.40f,  60,  90,  15,  25,  60,  30,  55, 0.35f),
+
+            scene ("Small Room",              "Rooms",        0,  15,     0, 1.20f,  60,  50,  38,  30,  55,  35,  55, 0.45f),
+            scene ("Bathroom",                "Rooms",        0,  10,     0, 1.00f,  60,  55,  55,  22,  12,  45,  70, 0.25f),
+            scene ("Stairwell",               "Rooms",        0, -25,    25, 2.50f,  60,  20,  55,  70,  35,  60,  50, 0.90f),
+            scene ("Next Room",               "Rooms",        0, 120,     0, 3.00f,  60,  10,  60,  45,  80,  55,  40, 0.70f),
+            scene ("Overhead",                "Rooms",        0,   0,    70, 0.70f,  60,  70,  30,  35,  45,  25,  50, 0.50f),
+
+            // Linked Stereo, no near-field colouring: made to sit under a voice rather
+            // than to be the thing you listen to.
+            scene ("Ambience / Music",        "Beds",         1,   0,     0, 3.00f, 110,   0,  30,  55,  50,  55,   0, 0.45f),
+
+            // Diagnostics: duck and near field off so nothing colours the judgement.
+            scene ("Height Check (dry)",      "Reference",    0,   0,     0, 1.00f,  60,   0,   0,  35,  50,  35,   0, 0.45f),
+            scene ("Height Check (room)",     "Reference",    0,   0,     0, 1.20f,  60,   0,  40,  40,  35,  20,   0, 0.45f),
         };
         presetBox.setTextWhenNothingSelected ("Presets...");
+        juce::String lastGroup;
         for (int i = 0; i < (int) presets.size(); ++i)
+        {
+            if (lastGroup != juce::StringRef (presets[(size_t) i].group))
+            {
+                lastGroup = presets[(size_t) i].group;
+                presetBox.addSectionHeading (lastGroup);
+            }
             presetBox.addItem (presets[(size_t) i].name, i + 1);
+        }
         // Reset lives in a menu you open on purpose rather than as a button that can be
         // hit by accident, and it goes through proper gestures so the host can undo it.
         presetBox.addSeparator();
@@ -489,6 +511,7 @@ private:
         row (headLabel, headSlider);
 
         r.removeFromTop (8);
+        snapCaption = r.removeFromTop (13);
         auto grid = r.removeFromTop (66);
         const int bw = grid.getWidth() / 3, bh = 30;
         for (int i = 0; i < snapButtons.size(); ++i)
@@ -680,7 +703,7 @@ private:
     juce::OwnedArray<juce::TextButton> snapButtons;
     std::vector<Preset> presets;
 
-    juce::Rectangle<int> spaceCaption, infoArea, titleArea;
+    juce::Rectangle<int> spaceCaption, snapCaption, infoArea, titleArea;
     bool roomDimmed = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceEditor)
