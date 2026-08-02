@@ -103,6 +103,7 @@ nekospace-audio/
 - [realtime-contract.md](docs/realtime-contract.md) — スレッド規約
 - [third-party-licenses.md](docs/third-party-licenses.md) — 依存ライセンスのSSOT
 - [reference-iem.md](docs/reference-iem.md) — IEM Plug-in Suite から何を学び、何を採らないか、GPLとの線引き
+- [reference-denoise.md](docs/reference-denoise.md) — 囁き・息のノイズ除去。調波前提の手法が使えない理由と、バイノーラル素材に左右共通ゲインが要る理由
 
 ## ライセンス
 

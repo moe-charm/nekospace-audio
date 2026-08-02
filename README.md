@@ -111,6 +111,7 @@ why `shared/` starts empty.
 - [realtime-contract.md](docs/realtime-contract.md) — thread rules
 - [third-party-licenses.md](docs/third-party-licenses.md) — dependency licensing SSOT
 - [reference-iem.md](docs/reference-iem.md) — what we read the IEM Plug-in Suite for, what we deliberately do not take, and where the GPL line sits
+- [reference-denoise.md](docs/reference-denoise.md) — noise reduction for whispered and breathy voice: why harmonic-based methods do not apply, and why binaural material needs one gain for both ears
 
 ## License
 
