@@ -148,9 +148,15 @@ public:
         addAndMakeVisible (bypassRoomBtn);
         bypassAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
             proc.apvts, nsb::pid::bypassRoom, bypassRoomBtn);
+        // Dimming rather than disabling: bypass is for A/B, and setting the room up
+        // while comparing against dry is a normal thing to want. This shows what the
+        // button affects instead of explaining it, which is also why OUTPUT stays lit -
+        // the trim keeps working while the room is bypassed.
+        bypassRoomBtn.onStateChange = [this] { refreshRoomDim(); };
 
         setupPresets();
         setupSnaps();
+        refreshRoomDim();
 
         // Tooltip strings stay: they are the accessible description of each control and
         // cost nothing. What was removed is the footer line that followed the mouse -
@@ -468,6 +474,20 @@ private:
         }
     }
 
+    void refreshRoomDim()
+    {
+        const bool bypassed = bypassRoomBtn.getToggleState();
+        if (bypassed == roomDimmed) return;
+        roomDimmed = bypassed;
+        const float a = bypassed ? 0.38f : 1.0f;
+        for (auto* c : std::initializer_list<juce::Component*> {
+                 &roomAmtKnob, &roomSizeKnob, &dampKnob, &elKnob, &duckKnob, &duckRelKnob,
+                 &roomAmtLabel, &roomSizeLabel, &dampLabel, &elKnobLabel, &duckLabel,
+                 &duckRelLabel })
+            c->setAlpha (a);
+        repaint();
+    }
+
     void openHelp()
     {
         if (helpWindow == nullptr)
@@ -535,56 +555,47 @@ private:
     {
         spaceCaption = b.removeFromTop (14);
 
-        // The knobs are the actual controls, so the buttons and meters give way first.
-        // Fixed widths here meant the right-hand group always claimed ~440 px, which on
-        // a narrower window squeezed the last knobs down to a dot — the same mistake the
-        // header combos had.
+        // The knobs are the actual controls, so the utilities give way first. Stacking
+        // the three buttons vertically rather than in a row costs one column instead of
+        // three and hands roughly 200 px back to the knobs, which is why they no longer
+        // need to shrink at ordinary window sizes.
         constexpr int kKnobs = 7;                       // 6 SPACE + OUTPUT
         constexpr int kGapBeforeOutput = 16;
         // 92 rather than 100: at 100 the knobs claimed enough that the buttons were
         // still abbreviated on a comfortably wide window, which looks cramped for no
-        // reason. At 92 both fit fully from about 1400 px upward.
+        // reason.
         constexpr int kKnobPreferred = 92, kKnobMinimum = 68;
 
-        struct Slot { juce::Component* c; int preferred, minimum, inset; };
-        const Slot right[] = {
-            { &helpButton,    74, 56, 6 },
-            { &labButton,    150, 92, 6 },
-            { &bypassRoomBtn, 116, 84, 6 },
-            { &meter,         72, 50, 4 },
-        };
-        int rightPreferred = 0, rightMinimum = 0;
-        for (const auto& s : right) { rightPreferred += s.preferred; rightMinimum += s.minimum; }
-        constexpr int kRightGaps = 10 + 8 + 10 + 12;
+        constexpr int kMeterW = 72, kMeterMin = 50;
+        constexpr int kColPreferred = 152, kColMin = 104;
 
         const int forKnobs = kKnobs * kKnobPreferred + kGapBeforeOutput;
-        const int available = b.getWidth() - kRightGaps;
-        // shrink the right-hand group toward its minimum before touching the knobs
-        const float squeeze = (rightPreferred > rightMinimum)
-            ? juce::jlimit (0.0f, 1.0f, (float) (forKnobs + rightPreferred - available)
-                                          / (float) (rightPreferred - rightMinimum))
-            : 0.0f;
+        const int available = b.getWidth() - 12 - 14;   // gaps around the right group
+        const int rightPreferred = kColPreferred + kMeterW;
+        const int rightMinimum = kColMin + kMeterMin;
+        const float squeeze = juce::jlimit (0.0f, 1.0f,
+            (float) (forKnobs + rightPreferred - available)
+              / (float) juce::jmax (1, rightPreferred - rightMinimum));
 
-        auto placeRight = [&] (const Slot& s, int gapAfter)
-        {
-            const int w = juce::roundToInt (s.preferred + (s.minimum - s.preferred) * squeeze);
-            auto cell = b.removeFromRight (w);
-            if (auto* btn = dynamic_cast<juce::TextButton*> (s.c))
-                btn->setBounds (cell.withSizeKeepingCentre (w - 6, 30));
-            else
-                s.c->setBounds (cell.reduced (s.inset, 2));
-            b.removeFromRight (gapAfter);
-        };
-        placeRight (right[3], 12);   // meters pinned to the right edge
-        placeRight (right[2], 10);
-        placeRight (right[1], 8);
-        placeRight (right[0], 10);
+        // meters pinned to the right edge so the bar never ends in dead space
+        const int meterW = juce::roundToInt (kMeterW + (kMeterMin - kMeterW) * squeeze);
+        meter.setBounds (b.removeFromRight (meterW).reduced (4, 2));
+        b.removeFromRight (12);
 
-        // Below a certain width the full captions no longer fit, so say less rather than
-        // showing an ellipsis.
-        const bool tight = labButton.getWidth() < 120;
+        const int colW = juce::roundToInt (kColPreferred + (kColMin - kColPreferred) * squeeze);
+        auto col = b.removeFromRight (colW);
+        b.removeFromRight (14);
+        const int rowH = juce::jmin (30, (col.getHeight() - 8) / 3);
+        col = col.withSizeKeepingCentre (colW, rowH * 3 + 8);
+        helpButton.setBounds (col.removeFromTop (rowH));
+        col.removeFromTop (4);
+        labButton.setBounds (col.removeFromTop (rowH));
+        col.removeFromTop (4);
+        bypassRoomBtn.setBounds (col.removeFromTop (rowH));
+
+        const bool tight = colW < 130;
         labButton.setButtonText (tight ? "ELEV LAB" : "ELEVATION LAB");
-        bypassRoomBtn.setButtonText (bypassRoomBtn.getWidth() < 100 ? "BYPASS" : "ROOM BYPASS");
+        bypassRoomBtn.setButtonText (tight ? "BYPASS" : "ROOM BYPASS");
 
         // No lower clamp: a minimum wider than the space actually left just pushes the
         // last knob off the end, which is exactly what a floor of 68 did here.
@@ -608,6 +619,10 @@ private:
         place (duckKnob,     duckLabel,     "VOICE DUCK", "DUCK");
         place (duckRelKnob,  duckRelLabel,  "DUCK REL",   "REL");
         b.removeFromLeft (kGapBeforeOutput);
+        // OUTPUT is not part of SPACE - it is the output trim and keeps working while
+        // the room is bypassed. No caption for it: the knob is already labelled OUTPUT,
+        // and a second OUTPUT above it just read as a mistake. What actually shows the
+        // boundary is the dimming when ROOM BYPASS is on.
         place (gainKnob,     gainLabel,     "OUTPUT",     "OUT");
     }
 
@@ -641,6 +656,7 @@ private:
     std::vector<Preset> presets;
 
     juce::Rectangle<int> spaceCaption, infoArea, titleArea;
+    bool roomDimmed = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceEditor)
 };
