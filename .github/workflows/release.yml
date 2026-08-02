@@ -1,0 +1,49 @@
+name: release
+
+# Cutting a release is deliberately a manual act: push a tag such as v0.1.0-alpha.
+# Nothing here runs on an ordinary commit.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # A release that has not passed its own acceptance tests is not a release.
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = "dist/NekoSpaceBinaural-${{ github.ref_name }}-Windows-x64"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $art = "build/plugins/binaural/NekoSpaceBinaural_artefacts/Release"
+          Copy-Item -Recurse "$art/VST3/NekoSpace Binaural.vst3" $out
+          Copy-Item "$art/Standalone/NekoSpace Binaural.exe" $out
+          # AGPL section 4: a binary distribution carries its licence and its notices
+          Copy-Item LICENSE $out
+          Copy-Item CHANGELOG.md $out
+          Copy-Item README.md $out
+          Copy-Item docs/third-party-licenses.md $out
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip"
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          body_path: CHANGELOG.md
+          draft: true          # review before it goes live
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}

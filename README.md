@@ -31,6 +31,15 @@ reflections rendered through the HRTF, and per-listener tuning. Each improved th
 none produced a decisive percept. Treat elevation as a colour, not as a load-bearing
 narrative cue.
 
+## Releases
+
+Builds are published from a tag: pushing `v*` runs the release workflow, which configures,
+builds, **runs the acceptance tests**, packages the VST3 and Standalone with the licence
+and notices, and opens a draft GitHub Release. A build that has not passed its own tests
+is not released.
+
+Nothing has been tagged yet. See [CHANGELOG.md](CHANGELOG.md).
+
 ## Build
 
 Requires CMake ≥ 3.22, a C++17 compiler (Visual Studio 2022 on Windows), and git — JUCE

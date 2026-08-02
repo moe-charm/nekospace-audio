@@ -1,6 +1,7 @@
 build/
 build-*/
 out/
+dist/
 .vs/
 .vscode/
 .idea/

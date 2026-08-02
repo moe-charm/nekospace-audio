@@ -36,3 +36,14 @@ Rules:
 This changed once, before any release: the manufacturer was `Txvc` (TextureVoice), which
 is a separate and unrelated project. That rename was free only because nothing had
 shipped.
+
+## The freeze point
+
+These codes become permanent at the **first tagged release, v0.1.0-alpha**. Up to that
+tag they are free to change; after it, changing either code gives the plugin a new
+identity and every project that used the old one stops finding it.
+
+The same tag freezes the parameter IDs and the released choice option lists — see
+[parameter-contract.md](../plugins/binaural/docs/parameter-contract.md) and
+[state-format.md](state-format.md). Anything that needs changing should be changed
+before the tag, not after.

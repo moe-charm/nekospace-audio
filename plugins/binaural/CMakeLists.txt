@@ -6,6 +6,7 @@ target_include_directories(nsb_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # --- Plugin ---
 juce_add_plugin(NekoSpaceBinaural
+    VERSION ${PROJECT_VERSION}              # single-sourced from the top-level project
     COMPANY_NAME "NekoSpace Audio"
     PLUGIN_MANUFACTURER_CODE NkSp
     PLUGIN_CODE Nksb
