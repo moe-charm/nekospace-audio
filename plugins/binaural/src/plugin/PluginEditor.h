@@ -8,6 +8,7 @@
 #include "../ui/SpatialPad.h"
 #include "../ui/ElevationLab.h"
 #include "../ui/HelpText.h"
+#include "../ui/HelpPanel.h"
 
 // ---------------------------------------------------------------- meters ----
 class StereoMeter : public juce::Component,
@@ -151,17 +152,20 @@ public:
         setupPresets();
         setupSnaps();
 
-        // Help is shown in the footer on hover rather than in a popup or behind a help
-        // mode: a popup covers the control you are reading about, and a mode you must
-        // enter is a mode you forget exists. Listening on children too, so every control
-        // reports without each one needing its own handler.
+        // Tooltip strings stay: they are the accessible description of each control and
+        // cost nothing. What was removed is the footer line that followed the mouse -
+        // it moved in the corner of your eye whether or not you wanted help. The manual
+        // is behind the HELP button instead, where it can be as long as it needs to be.
         pad.setTooltip (nsbui::helpFor ("ui.pad"));
         presetBox.setTooltip (nsbui::helpFor ("ui.presets"));
         elevBig.setTooltip (nsbui::helpFor ("ui.elevationSlider"));
         labButton.setTooltip (nsbui::helpFor ("ui.lab"));
         meter.setTooltip (nsbui::helpFor ("ui.meters"));
         for (auto* b : snapButtons) b->setTooltip (nsbui::helpFor ("ui.snap"));
-        addMouseListener (this, true);
+
+        helpButton.setButtonText ("HELP");
+        helpButton.onClick = [this] { openHelp(); };
+        addAndMakeVisible (helpButton);
 
         labButton.setButtonText ("ELEVATION LAB");
         labButton.onClick = [this] { openLab(); };
@@ -173,14 +177,8 @@ public:
                  juce::jlimit (520, 1200, proc.uiHeight.load()));
     }
 
-    ~NekoSpaceEditor() override { removeMouseListener (this); setLookAndFeel (nullptr); }
+    ~NekoSpaceEditor() override { setLookAndFeel (nullptr); }
 
-    void mouseEnter (const juce::MouseEvent& e) override { setHelp (helpUnder (e.eventComponent)); }
-    void mouseExit  (const juce::MouseEvent& e) override
-    {
-        // moving between a slider and its own text box should not blank the line
-        setHelp (helpUnder (e.eventComponent->getParentComponent()));
-    }
 
     void paint (juce::Graphics& g) override
     {
@@ -219,18 +217,8 @@ public:
 
             const juce::Font f (juce::FontOptions (9.5f));
             g.setFont (f);
-            if (helpLine.isNotEmpty())
-            {
-                // accent while hovering, so it reads as live information rather than a
-                // permanent label
-                g.setColour (nsbui::col::accent.withAlpha (0.95f));
-                g.drawText (helpLine, infoArea, juce::Justification::centredLeft);
-            }
-            else
-            {
-                g.setColour (nsbui::col::textDim.withAlpha (0.75f));
-                g.drawText (hrtfInfoText(), infoArea, juce::Justification::centredLeft);
-            }
+            g.setColour (nsbui::col::textDim.withAlpha (0.75f));
+            g.drawText (hrtfInfoText(), infoArea, juce::Justification::centredLeft);
             g.drawText (fitting (f, infoArea.getWidth() - 280,
                                  { "NekoSpace Binaural  |  Copyright (C) 2026 charmpic  |  "
                                    "AGPLv3, NO WARRANTY  |  see LICENSE",
@@ -238,24 +226,6 @@ public:
                                    "(C) 2026 charmpic  |  AGPLv3" }),
                         infoArea, juce::Justification::centredRight);
         }
-    }
-
-    // A slider's text box is a child component with no tooltip of its own, so walk up
-    // until something has one.
-    static juce::String helpUnder (juce::Component* c)
-    {
-        for (; c != nullptr; c = c->getParentComponent())
-            if (auto* t = dynamic_cast<juce::TooltipClient*> (c))
-                if (t->getTooltip().isNotEmpty())
-                    return t->getTooltip();
-        return {};
-    }
-
-    void setHelp (const juce::String& s)
-    {
-        if (s == helpLine) return;
-        helpLine = s;
-        repaint (infoArea);
     }
 
     // Attribution is a licence condition for the measured data (CC BY-SA), so it is
@@ -498,6 +468,23 @@ private:
         }
     }
 
+    void openHelp()
+    {
+        if (helpWindow == nullptr)
+        {
+            auto* content = new nsbui::HelpPanel();
+            content->setLookAndFeel (&lnf);
+            helpWindow = std::make_unique<PlainWindow> ("NekoSpace Binaural - Help");
+            helpWindow->setLookAndFeel (&lnf);
+            helpWindow->setContentOwned (content, true);
+            helpWindow->setResizable (true, true);
+            helpWindow->setResizeLimits (420, 320, 1400, 1200);
+            helpWindow->centreWithSize (helpWindow->getWidth(), helpWindow->getHeight());
+        }
+        helpWindow->setVisible (true);
+        helpWindow->toFront (true);
+    }
+
     void openLab()
     {
         if (labWindow == nullptr)
@@ -513,7 +500,7 @@ private:
             // Safe: labWindow is declared after lnf, so it is destroyed first.
             content->setLookAndFeel (&lnf);
 
-            labWindow = std::make_unique<LabWindow>();
+            labWindow = std::make_unique<PlainWindow> ("Elevation Lab");
             labWindow->setLookAndFeel (&lnf);
             labWindow->setContentOwned (content, true);
             labWindow->setResizable (true, true);
@@ -532,26 +519,25 @@ private:
         }
     }
 
-    struct LabWindow : juce::DocumentWindow
+    struct PlainWindow : juce::DocumentWindow
     {
-        LabWindow() : juce::DocumentWindow ("Elevation Lab", nsbui::col::bg,
-                                            juce::DocumentWindow::closeButton)
+        explicit PlainWindow (const juce::String& title)
+            : juce::DocumentWindow (title, nsbui::col::bg, juce::DocumentWindow::closeButton)
         {
             setUsingNativeTitleBar (true);
         }
+        // hide rather than destroy: reopening keeps the scroll position and costs nothing
         void closeButtonPressed() override { setVisible (false); }
     };
+    using LabWindow = PlainWindow;
 
     void layoutBottom (juce::Rectangle<int> b)
     {
         spaceCaption = b.removeFromTop (14);
-        const int knobW = juce::jmin (110, b.getWidth() / 8);   // 6 SPACE knobs + OUTPUT
-        auto place = [&] (juce::Slider& s, juce::Label& l)
-        {
-            auto cell = b.removeFromLeft (knobW);
-            l.setBounds (cell.removeFromTop (14));
-            s.setBounds (cell.reduced (2));
-        };
+
+        // Reserve the right-hand controls FIRST, then divide what is left among the
+        // knobs. Sizing the knobs against the full width and only afterwards taking the
+        // buttons out pushed the last two off the end when HELP was added.
         // meters pinned to the right edge so the bar never ends in dead space
         meter.setBounds (b.removeFromRight (72).reduced (4, 2));
         b.removeFromRight (12);
@@ -560,7 +546,20 @@ private:
         // the bottom bar is always full width, so this never gets squeezed out the way
         // it did in the right panel
         labButton.setBounds (b.removeFromRight (150).withSizeKeepingCentre (144, 30));
+        b.removeFromRight (8);
+        helpButton.setBounds (b.removeFromRight (74).withSizeKeepingCentre (68, 30));
         b.removeFromRight (10);
+
+        constexpr int kKnobs = 7;                       // 6 SPACE + OUTPUT
+        constexpr int kGapBeforeOutput = 16;
+        const int knobW = juce::jlimit (54, 110,
+                                        (b.getWidth() - kGapBeforeOutput) / kKnobs);
+        auto place = [&] (juce::Slider& s, juce::Label& l)
+        {
+            auto cell = b.removeFromLeft (knobW);
+            l.setBounds (cell.removeFromTop (14));
+            s.setBounds (cell.reduced (2));
+        };
 
         place (roomAmtKnob, roomAmtLabel);
         place (roomSizeKnob, roomSizeLabel);
@@ -568,13 +567,12 @@ private:
         place (elKnob, elKnobLabel);
         place (duckKnob, duckLabel);
         place (duckRelKnob, duckRelLabel);
-        b.removeFromLeft (16);
+        b.removeFromLeft (kGapBeforeOutput);
         place (gainKnob, gainLabel);
     }
 
     NekoSpaceProcessor& proc;
     nsbui::NekoLookAndFeel lnf;
-    juce::TooltipWindow tooltips { this, 700 };   // without this the setTooltip calls never show
     StereoMeter meter;
     nsbui::SpatialPad pad;
 
@@ -596,14 +594,13 @@ private:
     juce::TextButton bypassRoomBtn;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAtt;
 
-    juce::TextButton labButton;
-    std::unique_ptr<LabWindow> labWindow;
+    juce::TextButton labButton, helpButton;
+    std::unique_ptr<PlainWindow> labWindow, helpWindow;
 
     juce::OwnedArray<juce::TextButton> snapButtons;
     std::vector<Preset> presets;
 
     juce::Rectangle<int> spaceCaption, infoArea, titleArea;
-    juce::String helpLine;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceEditor)
 };
