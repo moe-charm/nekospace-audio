@@ -506,7 +506,29 @@ private:
     // ---- layout ----
     void layoutRight (juce::Rectangle<int> r)
     {
-        const int rowH = 40;
+        // Everything here must fit inside r. It used to be laid out at fixed heights, and
+        // when the window was short the JUMP TO grid simply carried on past the bottom of
+        // its area and drew over the SPACE captions and the OUTPUT knob. Nothing clipped
+        // it, because the buttons were positioned from a rectangle that had already run
+        // out. So the sizes give way instead, exactly like the bottom bar does.
+        // static so the capture-less lambda below can use them without capturing.
+        static constexpr int kRowPreferred = 40, kRowMinimum = 28;
+        static constexpr int kBtnPreferred = 30, kBtnMinimum = 20;
+        static constexpr int kGap = 8, kCaptionH = 13, kRowGap = 4;
+        static constexpr int kRows = 6;
+
+        auto needed = [] (int rowH, int bh)
+        {
+            return kRows * rowH + kGap + kCaptionH + 2 * bh + kRowGap;
+        };
+        const int wantMax = needed (kRowPreferred, kBtnPreferred);
+        const int wantMin = needed (kRowMinimum, kBtnMinimum);
+
+        const float squeeze = juce::jlimit (0.0f, 1.0f,
+            (float) (wantMax - r.getHeight()) / (float) juce::jmax (1, wantMax - wantMin));
+        int rowH = juce::roundToInt (kRowPreferred + (kRowMinimum - kRowPreferred) * squeeze);
+        int bh   = juce::roundToInt (kBtnPreferred + (kBtnMinimum - kBtnPreferred) * squeeze);
+
         auto row = [&] (juce::Label& l, juce::Slider& s)
         {
             auto rr = r.removeFromTop (rowH);
@@ -520,15 +542,19 @@ private:
         row (nearLabel, nearSlider);
         row (headLabel, headSlider);
 
-        r.removeFromTop (8);
-        snapCaption = r.removeFromTop (13);
-        auto grid = r.removeFromTop (66);
-        const int bw = grid.getWidth() / 3, bh = 30;
+        r.removeFromTop (juce::jmin (kGap, juce::jmax (0, r.getHeight())));
+        snapCaption = r.removeFromTop (kCaptionH);
+
+        // Below the minimum the buttons take whatever is genuinely left rather than
+        // borrowing from the row underneath.
+        bh = juce::jlimit (12, bh, (r.getHeight() - kRowGap) / 2);
+        auto grid = r.removeFromTop (2 * bh + kRowGap);
+        const int bw = grid.getWidth() / 3;
         for (int i = 0; i < snapButtons.size(); ++i)
         {
             const int cx = i % 3, cy = i / 3;
             snapButtons[i]->setBounds (grid.getX() + cx * bw + 2,
-                                       grid.getY() + cy * (bh + 4), bw - 4, bh);
+                                       grid.getY() + cy * (bh + kRowGap), bw - 4, bh);
         }
     }
 
