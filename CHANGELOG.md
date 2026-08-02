@@ -3,7 +3,7 @@
 Notable changes per release. Dates are ISO. This project follows the compatibility rules
 in [docs/state-format.md](docs/state-format.md) and [docs/identity.md](docs/identity.md).
 
-## [0.1.0-alpha] — 2026-08-02
+## [0.1.0-alpha] — 2026-08-03
 
 First public build of **NekoSpace Binaural**. Windows VST3 (x64) and Standalone.
 
@@ -29,6 +29,26 @@ First public build of **NekoSpace Binaural**. Windows VST3 (x64) and Standalone.
   stays correct. Host bypass is delay-compensated.
 - Safety limiter after the output trim, with a gain-reduction meter.
 
+### Using it
+
+- **Four macros, not twenty-four numbers.** The elevation model is driven by Up, Down,
+  Body and Focus; every raw anchor value stays reachable in the Elevation Lab. At 1.00 the
+  macros reproduce the default profile bit-exactly, so the simple control is not a
+  lossy wrapper around the detailed one.
+- **Presets are complete scenes.** Each one sets all twelve sound-shaping parameters, so
+  the same name always gives the same sound rather than inheriting whatever was set
+  before. Grouped as Close, Rooms, Beds and Reference; the Reference pair are diagnostics.
+  Output gain, HRTF profile and quality are deliberately left alone — those belong to the
+  person, not the scene.
+- **JUMP TO moves the source and nothing else**, so a room you have built survives an A/B
+  of position. This is the one thing a preset cannot do.
+- **Built-in manual** in English and Japanese, switched from inside the help window. The
+  language follows the OS on first run and is stored per user, not per project — opening
+  an old session never brings back the wrong language.
+- **Double-click any knob to reset it** to its default.
+- **ROOM BYPASS dims exactly what it silences**, so what the switch covers is visible
+  rather than something to remember.
+
 ### Known limitations
 
 - **Elevation is weak.** It produces a real, audible change and a mild sense of vertical
@@ -39,6 +59,8 @@ First public build of **NekoSpace Binaural**. Windows VST3 (x64) and Standalone.
   `-DNSB_WITH_KU100=ON` plus a locally generated pack.
 - Windows only. macOS (VST3 + AU, Universal 2, notarisation) is deferred.
 - No user SOFA import yet.
+- **Headphones only.** Binaural rendering assumes each ear hears only its own channel;
+  over speakers the crosstalk removes the effect. No crossfeed or speaker mode.
 
 ### Frozen at this release
 

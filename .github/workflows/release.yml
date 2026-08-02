@@ -42,10 +42,25 @@ jobs:
           Copy-Item docs/third-party-licenses.md $out
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip"
 
+      # The release notes are this version's section of the changelog, not the whole file.
+      # Pasting the whole file works exactly once — on the second release it buries the
+      # new entry under the old ones.
+      - name: Release notes
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $lines = Get-Content CHANGELOG.md
+          $start = ($lines | Select-String -SimpleMatch "## [$version]").LineNumber
+          if (-not $start) { throw "CHANGELOG.md has no section for $version" }
+          $rest = $lines[$start..($lines.Count - 1)]
+          $next = ($rest | Select-String -Pattern '^## \[').LineNumber | Select-Object -First 1
+          $body = if ($next) { $rest[0..($next - 2)] } else { $rest }
+          $body | Set-Content release-notes.md -Encoding utf8
+
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-          body_path: CHANGELOG.md
+          body_path: release-notes.md
           draft: true          # review before it goes live
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}

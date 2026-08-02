@@ -6,14 +6,15 @@ English: [README.md](README.md)
 
 | 製品 | 状態 | |
 | --- | --- | --- |
-| **NekoSpace Binaural** | 開発中 | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
+| **NekoSpace Binaural** | v0.1.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
 | NekoSpace Reverb | 予定 | |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |
 
 ## 現状 — 正直版
 
-未リリースにゃ。パラメーターIDとプラグインコードは確定してるけど、音はまだ固まってないにゃ。
+最初のalphaにゃ。パラメーターID・プラグインコード・選択肢リストは `v0.1.0-alpha` の時点で
+凍結にゃ（[CHANGELOG.md](CHANGELOG.md) 参照）。音のほうはまだ固まってないにゃ。
 
 **NekoSpace Binaural は動くにゃ。** 左右・前後・距離、そして耳元の「耳のすぐそば」表現は
 どれも宣伝どおりに機能するにゃ。JUCE非依存の受け入れテスト30本と
@@ -28,6 +29,23 @@ English: [README.md](README.md)
 胴体反射＋初期反射のHRTFレンダリング、そして聴く人ごとの手動調整にゃ。
 **どれも数値は改善したけど、どれも決定的な知覚は生まなかった**にゃ。
 上下は「演出の色付け」として使い、物語の要には据えないのが正解にゃ。
+
+## インストール
+
+[Releases](https://github.com/moe-charm/nekospace-audio/releases) からWindows用zipを
+落として展開するにゃ。`.vst3` フォルダ、スタンドアロンの `.exe`、ライセンスと表示物が
+入ってるにゃ。
+
+1. **`NekoSpace Binaural.vst3` フォルダごと**（1個のファイルじゃなくてバンドルにゃ）
+   `C:\Program Files\Common Files\VST3\` にコピーするにゃ。
+2. DAWでプラグインを再スキャンするにゃ。FL Studioなら
+   *Options → Manage plugins → Find more plugins* にゃ。
+3. DAWなしで音を聴くだけなら `NekoSpace Binaural.exe` がそのまま動くにゃ。
+
+**ヘッドフォン必須**にゃ。バイノーラルなので、スピーカーだと効果は成立しないにゃ。
+
+昔の名前で入れたことがあってDAWがロードを拒む場合は、DAWが古いプラグインIDを
+キャッシュしてるにゃ。プラグインデータベースを消して再スキャンするにゃ。
 
 ## ビルド
 

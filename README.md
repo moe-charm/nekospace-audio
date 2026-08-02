@@ -6,16 +6,15 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 
 | Product | Status | |
 | --- | --- | --- |
-| **NekoSpace Binaural** | in development | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
-
+| **NekoSpace Binaural** | v0.1.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
 | NekoSpace Reverb | planned | |
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
 
 ## Status — honest version
 
-Pre-release. Nothing here has shipped, so parameter IDs and plugin codes are settled but
-the sound is not.
+First alpha. Parameter IDs, plugin codes and the choice lists are frozen as of
+`v0.1.0-alpha` — see [CHANGELOG.md](CHANGELOG.md). The sound is not frozen.
 
 **NekoSpace Binaural** works: left/right, front/back, distance and near-field "at the ear"
 placement all do what they claim, validated by 30 JUCE-free acceptance tests and
@@ -30,6 +29,22 @@ measured — an analytic redesign, a measured KU100 dataset, torso reflections p
 reflections rendered through the HRTF, and per-listener tuning. Each improved the numbers;
 none produced a decisive percept. Treat elevation as a colour, not as a load-bearing
 narrative cue.
+
+## Install
+
+Download the Windows zip from [Releases](https://github.com/moe-charm/nekospace-audio/releases)
+and unpack it. It contains a `.vst3` folder, a standalone `.exe`, and the licence and
+notices.
+
+1. Copy the whole **`NekoSpace Binaural.vst3` folder** — it is a bundle, not a single file —
+   into `C:\Program Files\Common Files\VST3\`.
+2. Rescan plugins in your DAW. In FL Studio: *Options → Manage plugins → Find more plugins*.
+3. `NekoSpace Binaural.exe` runs without a DAW if you just want to hear it.
+
+Needs headphones. This is a binaural renderer; over speakers the effect does not survive.
+
+If the plugin was installed under an earlier name and your DAW still refuses to load it,
+the DAW is caching the old plugin ID — clear its plugin database and rescan.
 
 ## Releases
 
