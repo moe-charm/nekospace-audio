@@ -55,6 +55,7 @@ Drop a `.wav` on the window, or pass one on the command line, to skip the file d
 | **+ / −**, up/down | zoom about the playhead |
 | **← / →** | scroll |
 | **Home** | playhead to the selection, or to the start |
+| **G** | show / hide the spectrogram |
 | **N** | show / hide the noise floor |
 | **double-click** | clear the selection |
 | **Ctrl+O / Ctrl+S** | open / export |
@@ -68,6 +69,16 @@ keyboard focus, so Space never presses whichever button you last clicked.
 convenience: a studio noise floor sits near −100 dBFS per bin, and what gets removed from
 it is quieter still, so at unity the Removed bus is inaudible and the tool looks broken
 when it is working perfectly. Push it to +30 dB or so to audition Removed.
+
+**Spectrogram** (`G`) draws whatever you are monitoring, over the waveform's view range,
+and it is the display that makes this tool judgeable. Hiss is a flat haze; a fan is a
+horizontal line; a fricative is a vertical brush stroke near the top; vowels are stacked
+horizontal bands. Switch the monitor to **Removed Noise** and the question "am I taking the
+performance out?" becomes a picture — broadband haze with nothing in it is right, and
+vertical strokes or horizontal formant bands mean consonants and voice are being eaten.
+
+It computes one FFT per pixel column rather than one per hop, so a 22-minute take costs the
+same to draw as a two-second one.
 
 **Noise Floor** (`N`) draws the learned profile as level against log frequency. It answers
 what listening at unity cannot: whether there is a hiss at all and what shape it is,

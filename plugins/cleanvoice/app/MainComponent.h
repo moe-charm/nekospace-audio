@@ -16,6 +16,7 @@
 #include <memory>
 #include "WaveformView.h"
 #include "NoiseFloorView.h"
+#include "SpectrogramView.h"
 #include "../src/io/WavFile.h"
 #include "../src/dsp/Stft.h"
 #include "../src/dsp/NoiseProfile.h"
@@ -40,6 +41,7 @@ public:
         // Clicking the waveform moves the playhead, so you can audition around a marked
         // region without losing it.
         wave.onPlayheadMoved = [this] (int s) { playPos.store ((double) s); };
+        wave.onViewChanged = [this] { syncSpectrogramView(); };
 
         // Nothing here takes keyboard focus. If a button had it, Space would press that
         // button instead of starting playback, and which button depends on what you last
@@ -69,6 +71,19 @@ public:
         floorBtn.onClick = [this] { showFloor = floorBtn.getToggleState(); resized(); };
         addAndMakeVisible (floorBtn);
         addChildComponent (floorView);
+
+        specBtn.setButtonText ("Spectrogram");
+        specBtn.setClickingTogglesState (true);
+        specBtn.setWantsKeyboardFocus (false);
+        specBtn.setTooltip ("Show the spectrogram of what you are monitoring   [G]");
+        specBtn.onClick = [this]
+        {
+            showSpec = specBtn.getToggleState();
+            resized();
+            syncSpectrogramView();
+        };
+        addAndMakeVisible (specBtn);
+        addChildComponent (spectro);
         cancelBtn.setVisible (false);
 
         for (auto* b : { &origBtn, &cleanBtn, &removedBtn })
@@ -154,9 +169,10 @@ public:
         keysLabel.setColour (juce::Label::textColourId, col::textDim.withAlpha (0.85f));
         keysLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
         keysLabel.setText ("Space play (selection if there is one)   Shift+Space play all   "
-                           "1/2/3 Original/Clean/Removed   Enter process   double-click "
-                           "clears selection   F fit   Z zoom to selection   +/- zoom   "
-                           "arrows scroll   wheel zoom, shift-wheel scroll, right-drag pan",
+                           "1/2/3 Original/Clean/Removed   Enter process   G spectrogram   "
+                           "N noise floor   double-click clears selection   F fit   "
+                           "Z zoom to selection   +/- zoom   arrows scroll   wheel zoom, "
+                           "shift-wheel scroll, right-drag pan",
                            juce::dontSendNotification);
         addAndMakeVisible (keysLabel);
 
@@ -245,6 +261,8 @@ public:
         if (code == '2') { selectMonitor (Monitor::clean);    return true; }
         if (code == '3') { selectMonitor (Monitor::removed);  return true; }
 
+        if (code == 'G' || code == 'g')
+        { specBtn.setToggleState (! specBtn.getToggleState(), juce::sendNotification); return true; }
         if (code == 'N' || code == 'n')
         { floorBtn.setToggleState (! floorBtn.getToggleState(), juce::sendNotification); return true; }
         if (code == 'F' || code == 'f') { wave.zoomToFit(); updateViewLabel(); return true; }
@@ -299,7 +317,9 @@ public:
         zoomRow.removeFromLeft (6);
         zoomSelBtn.setBounds (zoomRow.removeFromLeft (150));
         zoomRow.removeFromLeft (12);
-        floorBtn.setBounds (zoomRow.removeFromRight (120));
+        floorBtn.setBounds (zoomRow.removeFromRight (110));
+        zoomRow.removeFromRight (6);
+        specBtn.setBounds (zoomRow.removeFromRight (120));
         zoomRow.removeFromRight (12);
         viewLabel.setBounds (zoomRow);
         bottom.removeFromTop (6);
@@ -307,7 +327,13 @@ public:
         floorView.setVisible (showFloor);
         if (showFloor)
         {
-            floorView.setBounds (b.removeFromBottom (juce::jmax (120, b.getHeight() / 2)));
+            floorView.setBounds (b.removeFromBottom (juce::jmax (110, b.getHeight() / 3)));
+            b.removeFromBottom (8);
+        }
+        spectro.setVisible (showSpec);
+        if (showSpec)
+        {
+            spectro.setBounds (b.removeFromBottom (juce::jmax (150, b.getHeight() / 2)));
             b.removeFromBottom (8);
         }
         wave.setBounds (b);
@@ -496,6 +522,8 @@ public:
             fileName = f.getFileName();
             fileRate = file.sampleRate;
             wave.setAudio (&file.channels, file.sampleRate);
+            spectro.setSource (&file.channels, file.sampleRate);
+            syncSpectrogramView();
             origBtn.setToggleState (true, juce::sendNotification);
             monitor = Monitor::original;
 
@@ -571,6 +599,14 @@ private:
     {
         monitor = m;
         wave.setAudioKeepSelection (bufferFor (m));
+        spectro.setSource (bufferFor (m), file.sampleRate);
+        syncSpectrogramView();
+    }
+
+    void syncSpectrogramView()
+    {
+        if (showSpec)
+            spectro.setView (wave.viewStartSample(), wave.viewLengthSamples());
     }
 
     // Used by the 1/2/3 keys: moves the radio button too, so the window always shows what
@@ -672,7 +708,9 @@ private:
     juce::Slider reductionS, smoothingS, preserveS, oversubS, monitorS;
     juce::Label monitorL;
     NoiseFloorView floorView;
-    juce::TextButton floorBtn;
+    SpectrogramView spectro;
+    juce::TextButton floorBtn, specBtn;
+    bool showSpec = false;
     std::atomic<float> monitorGain { 1.0f };
     bool showFloor = false;
     juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint, viewLabel,

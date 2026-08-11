@@ -41,6 +41,11 @@ public:
 
     std::function<void()> onSelectionChanged;
     std::function<void (int)> onPlayheadMoved;
+    // Fired whenever the visible range moves, so a spectrogram underneath can follow it.
+    std::function<void()> onViewChanged;
+
+    int viewStartSample() const noexcept { return viewStart; }
+    int viewLengthSamples() const noexcept { return viewLen; }
 
     void setAudio (const std::vector<std::vector<float>>* channels, double sampleRate)
     {
@@ -74,6 +79,7 @@ public:
         viewLen = juce::jmax (1, total);
         rebuildPeaks();
         repaint();
+        if (onViewChanged) onViewChanged();
     }
 
     void zoomToSelection()
@@ -259,6 +265,7 @@ private:
         viewStart = juce::jlimit (0, juce::jmax (0, total - viewLen), start);
         rebuildPeaks();
         repaint();
+        if (onViewChanged) onViewChanged();
     }
 
     int sampleToX (int s) const
