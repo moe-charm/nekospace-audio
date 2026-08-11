@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <string>
+#include <vector>
 #include <cmath>
 #include "../src/io/WavFile.h"
 #include "../src/dsp/Stft.h"
@@ -50,24 +51,52 @@ float dbOf (const std::vector<std::vector<float>>& ch, int from, int to)
 }
 } // namespace
 
+// Windows hands main() its arguments in the process code page, so a path containing
+// Japanese characters arrives mangled before any of our code sees it. wmain gets UTF-16
+// and we convert to the UTF-8 the rest of the program uses.
+#ifdef _WIN32
+static int run (const std::vector<std::string>& args);
+int wmain (int argc, wchar_t** argv)
+{
+    std::vector<std::string> args;
+    for (int i = 0; i < argc; ++i) args.push_back (cv::wideToUtf8 (argv[i]));
+    return run (args);
+}
+#else
+static int run (const std::vector<std::string>& args);
 int main (int argc, char** argv)
 {
+    std::vector<std::string> args;
+    for (int i = 0; i < argc; ++i) args.push_back (argv[i]);
+    return run (args);
+}
+#endif
+
+static int run (const std::vector<std::string>& args)
+{
+    const int argc = (int) args.size();
     if (argc < 2) { usage(); return 1; }
 
-    std::string inPath = argv[1], outPrefix;
+    std::string inPath = args[1], outPrefix;
     double noiseStart = -1, noiseEnd = -1;
     cv::DenoiseParams p;
 
     for (int i = 2; i < argc; ++i)
     {
-        const std::string a = argv[i];
-        auto next = [&] (double def) { return i + 1 < argc ? std::atof (argv[++i]) : def; };
-        if (a == "--noise" && i + 2 < argc) { noiseStart = std::atof (argv[i + 1]); noiseEnd = std::atof (argv[i + 2]); i += 2; }
+        const std::string a = args[(size_t) i];
+        auto next = [&] (double def)
+        { return i + 1 < argc ? std::atof (args[(size_t) ++i].c_str()) : def; };
+        if (a == "--noise" && i + 2 < argc)
+        {
+            noiseStart = std::atof (args[(size_t) (i + 1)].c_str());
+            noiseEnd   = std::atof (args[(size_t) (i + 2)].c_str());
+            i += 2;
+        }
         else if (a == "--reduction") p.reductionDb = (float) next (10.0);
         else if (a == "--smoothing") p.smoothing   = (float) next (0.5);
         else if (a == "--preserve")  p.preserve    = (float) next (0.0);
         else if (a == "--oversub")   p.overSubtract= (float) next (1.0);
-        else if (a == "--out" && i + 1 < argc) outPrefix = argv[++i];
+        else if (a == "--out" && i + 1 < argc) outPrefix = args[(size_t) ++i];
         else if (a == "-h" || a == "--help") { usage(); return 0; }
         else { std::printf ("unknown option: %s\n", a.c_str()); return 1; }
     }

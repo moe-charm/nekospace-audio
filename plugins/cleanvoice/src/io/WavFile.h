@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include "Utf8Path.h"
 
 namespace cv
 {
@@ -38,7 +39,9 @@ inline uint16_t rd16 (const uint8_t* p) { return (uint16_t) ((uint32_t) p[0] | (
 
 inline bool read (const std::string& path, AudioFile& out, std::string& err)
 {
-    FILE* f = std::fopen (path.c_str(), "rb");
+    // openUtf8, not fopen: a path with Japanese characters in it must work, and on
+    // Windows a narrow fopen would read the UTF-8 bytes as CP932 and fail.
+    FILE* f = openUtf8 (path, "rb");
     if (f == nullptr) { err = "cannot open " + path; return false; }
     std::fseek (f, 0, SEEK_END);
     const long len = std::ftell (f);
@@ -131,7 +134,7 @@ inline bool write (const std::string& path, const AudioFile& in, std::string& er
     put16 ((uint16_t) (ch * 4)); put16 (32);
     tag ("data"); put32 (dataBytes);
 
-    FILE* f = std::fopen (path.c_str(), "wb");
+    FILE* f = openUtf8 (path, "wb");
     if (f == nullptr) { err = "cannot write " + path; return false; }
     std::fwrite (h.data(), 1, h.size(), f);
 

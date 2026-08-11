@@ -12,6 +12,12 @@
 #include <vector>
 #include <random>
 #include <algorithm>
+#ifdef _WIN32
+ #include <direct.h>
+#else
+ #include <sys/stat.h>
+ #include <unistd.h>
+#endif
 #include "../src/dsp/Denoiser.h"
 #include "../src/io/WavFile.h"
 
@@ -246,6 +252,41 @@ static void testOutputStaysFinite()
 
 // ---------------------------------------------------------------- wav io ----
 
+// Every recording in this project lives in a folder named after the character in the
+// script, so a path that is not ASCII is the normal case, not an edge case. This caught a
+// real failure: fopen on Windows reads a UTF-8 path as CP932 and simply cannot open it.
+static void testNonAsciiPath()
+{
+    AudioFile a;
+    a.sampleRate = 48000.0;
+    a.channels.assign (1, std::vector<float> (1000, 0.25f));
+
+    // "shirako-chan/te-suto.wav" in Japanese, written as UTF-8 bytes so the test file
+    // itself does not depend on the compiler's source encoding.
+    const std::string dir  = "ç½èã¡ãã_cvtest";
+    const std::string path = dir + "/ãã¹ã.wav";
+
+#ifdef _WIN32
+    _wmkdir (cv::utf8ToWide (dir).c_str());
+#else
+    mkdir (dir.c_str(), 0777);
+#endif
+
+    std::string err;
+    CHECK (wav::write (path, a, err), "utf-8 path: writes to a Japanese directory");
+    AudioFile b;
+    CHECK (wav::read (path, b, err), "utf-8 path: reads back from a Japanese directory");
+    CHECK (b.numSamples() == 1000, "utf-8 path: content survives");
+
+#ifdef _WIN32
+    _wremove (cv::utf8ToWide (path).c_str());
+    _wrmdir (cv::utf8ToWide (dir).c_str());
+#else
+    std::remove (path.c_str());
+    rmdir (dir.c_str());
+#endif
+}
+
 static void testWavRoundTrip()
 {
     AudioFile a;
@@ -284,6 +325,7 @@ int main()
     testRemovedIsTheExactComplement();
     testOutputStaysFinite();
     testWavRoundTrip();
+    testNonAsciiPath();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d FAILURES\n", failures);
     return 1;

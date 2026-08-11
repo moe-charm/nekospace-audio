@@ -81,6 +81,18 @@ the noise and dissolving the room.
   the tool that those are noise, and it will remove them everywhere.
 - Same take, same gain. A region from another file describes another noise floor.
 
+## Paths and file size
+
+Paths with Japanese (or any non-ASCII) characters work. This is not free on Windows —
+`fopen` reads a narrow path in the process code page, so a UTF-8 path with Japanese in it
+simply fails to open — so the file layer converts to UTF-16 and the CLI takes its arguments
+as UTF-16 too. There is a test for it, because every recording here lives in a folder named
+after the character in the script.
+
+Long takes work but are heavy: a 22-minute stereo 24-bit file is ~380 MB on disk and needs
+roughly 600 MB loaded, then about the same again for each of clean and removed. For judging
+settings, a one- or two-minute excerpt turns around far faster.
+
 ## Build
 
 Built by the top-level configure along with everything else:
