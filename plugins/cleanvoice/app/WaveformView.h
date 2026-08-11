@@ -270,8 +270,10 @@ private:
 
     int sampleToX (int s) const
     {
-        if (viewLen <= 0) return getX();
-        return getX() + juce::roundToInt ((double) (s - viewStart) / viewLen * getWidth());
+        if (viewLen <= 0) return 0;
+        // paint() and mouse events use component-local coordinates. getX() is the
+        // component's position in its parent and would shift every overlay to the right.
+        return juce::roundToInt ((double) (s - viewStart) / viewLen * getWidth());
     }
     int xToSample (int x) const
     {

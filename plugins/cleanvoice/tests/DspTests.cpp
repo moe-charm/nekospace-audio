@@ -118,7 +118,7 @@ static void testNoiseIsReducedAndProfileLearns()
     std::vector<std::vector<float>> in (1, noise (n, 21, 0.02f));
     const int voiceFrom = (int) (0.5 * sr);
     for (int i = voiceFrom; i < n; ++i)
-        in[0][(size_t) i] += 0.3f * std::sin (2.0 * kPi * 440.0 * i / sr);
+        in[0][(size_t) i] += 0.3f * (float) std::sin (2.0 * kPi * 440.0 * i / sr);
 
     NoiseProfile prof;
     CHECK (prof.learn (stft, in, n, 0, voiceFrom), "profile: learns from a noise-only region");
@@ -181,7 +181,7 @@ static void testBinauralLevelDifferenceIsPreserved()
     const int from = (int) (0.6 * sr);
     for (int i = from; i < n; ++i)
     {
-        const float s = std::sin (2.0 * kPi * 700.0 * i / sr);
+        const float s = (float) std::sin (2.0 * kPi * 700.0 * i / sr);
         in[0][(size_t) i] += 0.40f * s;
         in[1][(size_t) i] += 0.10f * s;      // 12 dB quieter
     }
@@ -248,6 +248,25 @@ static void testOutputStaysFinite()
             for (float v : c) if (! std::isfinite (v)) ok = false;
         CHECK (ok, "output stays finite at extreme settings, including a silent channel");
     }
+}
+
+static void testNoiseLearningCanBeCancelled()
+{
+    const double sr = 48000.0;
+    const int fftSize = fftSizeForRate (sr);
+    Stft stft (fftSize, fftSize / 4);
+    const int n = (int) (5.0 * sr);
+    std::vector<std::vector<float>> in (1, noise (n, 71, 0.02f));
+    NoiseProfile prof;
+    int callbacks = 0;
+    const bool learned = prof.learn (stft, in, n, 0, n,
+                                     [&callbacks] (float)
+                                     {
+                                         ++callbacks;
+                                         return false;
+                                     });
+    CHECK (! learned && callbacks == 1,
+           "profile: learning can be cancelled before publishing a partial profile");
 }
 
 // ---------------------------------------------------------------- wav io ----
@@ -324,6 +343,7 @@ int main()
     testBinauralLevelDifferenceIsPreserved();
     testRemovedIsTheExactComplement();
     testOutputStaysFinite();
+    testNoiseLearningCanBeCancelled();
     testWavRoundTrip();
     testNonAsciiPath();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }

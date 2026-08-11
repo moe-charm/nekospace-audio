@@ -14,6 +14,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include "Stft.h"
 
 namespace cv
@@ -26,7 +27,8 @@ public:
     // the selection shifts a plain mean upwards, and an inflated noise floor is exactly
     // what removes breath.
     bool learn (const Stft& stft, const std::vector<std::vector<float>>& channels,
-                int numSamples, int startSample, int endSample)
+                int numSamples, int startSample, int endSample,
+                const std::function<bool (float)>& onProgress = {})
     {
         const int nCh = (int) channels.size();
         const int bins = stft.numBins();
@@ -42,6 +44,10 @@ public:
         const int total = stft.frameCount (numSamples);
         for (int f = 0; f < total; ++f)
         {
+            if (onProgress && (f & 63) == 0
+                && ! onProgress ((float) f / (float) std::max (total, 1)))
+                return false;
+
             const int s0 = stft.frameStart (f);
             const int s1 = s0 + stft.fftSize();
             if (s0 < startSample || s1 > endSample) continue;

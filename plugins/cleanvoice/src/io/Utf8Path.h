@@ -104,7 +104,8 @@ inline std::FILE* openUtf8 (const std::string& path, const char* mode)
     const std::wstring wPath = utf8ToWide (path);
     std::wstring wMode;
     for (const char* m = mode; *m != 0; ++m) wMode.push_back ((wchar_t) *m);
-    return _wfopen (wPath.c_str(), wMode.c_str());
+    std::FILE* file = nullptr;
+    return _wfopen_s (&file, wPath.c_str(), wMode.c_str()) == 0 ? file : nullptr;
 #else
     return std::fopen (path.c_str(), mode);
 #endif

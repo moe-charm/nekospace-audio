@@ -25,5 +25,5 @@ endif()
 
 # --- Products ---
 add_subdirectory(plugins/binaural)
-# CleanVoice is a command-line prototype and links no JUCE; see its CMakeLists.
+# CleanVoice's DSP and CLI stay JUCE-free; its standalone GUI links JUCE only at the edge.
 add_subdirectory(plugins/cleanvoice)

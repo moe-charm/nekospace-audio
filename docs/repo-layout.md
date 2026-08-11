@@ -4,7 +4,8 @@
 nekospace-audio/
 ├─ CMakeLists.txt     fetches JUCE once, adds each product
 ├─ plugins/
-│  └─ binaural/       CMakeLists, src/, tests/, docs/, tools/, resources/
+│  ├─ binaural/       CMakeLists, src/, tests/, docs/, tools/, resources/
+│  └─ cleanvoice/     JUCE-free DSP/CLI plus a JUCE standalone GUI
 ├─ shared/            code proven to be needed by more than one plugin
 ├─ docs/              contracts that apply across products
 └─ cmake/             build helpers

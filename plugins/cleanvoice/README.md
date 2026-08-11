@@ -93,6 +93,12 @@ protection is for.
 Long processing runs on its own thread with a progress bar and a Cancel button; the window
 stays responsive.
 
+The app treats loaded and rendered audio as immutable snapshots. The audio callback keeps
+one snapshot alive for its whole block, so opening another file or publishing a completed
+render cannot invalidate memory being monitored. A worker also owns the exact input,
+settings and noise profile it started with; cancellation never leaves a half-learned
+profile behind. See [architecture.md](docs/architecture.md).
+
 ## The command line
 
 ```bash
@@ -158,6 +164,8 @@ the noise and dissolving the room.
 ## Choosing the noise region
 
 - **At least ~0.5 s**, ideally 1–3 s. Shorter and the tool refuses.
+- **30 s maximum.** A longer range does not improve a stationary-noise estimate enough to
+  justify its memory and sorting cost; select a representative 1–3 s instead.
 - It must be **only noise**. A half-swallowed word or a chair creak in the selection teaches
   the tool that those are noise, and it will remove them everywhere. **Loop it with Play
   Selection and listen** — that is the check, and it takes five seconds.
@@ -175,6 +183,10 @@ after the character in the script.
 Long takes work but are heavy: a 22-minute stereo 24-bit file is ~380 MB on disk and needs
 roughly 600 MB loaded, then about the same again for each of clean and removed. For judging
 settings, a one- or two-minute excerpt turns around far faster.
+
+Recordings are private production material by default. The repository-wide `.gitignore`
+excludes every `*.wav`; no recording should be force-added. A future generated test fixture
+needs a narrow, reviewed exception rather than removing that rule.
 
 ## Build
 

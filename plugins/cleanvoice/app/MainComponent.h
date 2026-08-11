@@ -13,6 +13,7 @@
 // one.
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include "WaveformView.h"
 #include "NoiseFloorView.h"
@@ -25,6 +26,16 @@
 namespace cvapp
 {
 enum class Monitor { original = 1, clean, removed };
+using ChannelBuffer = std::vector<std::vector<float>>;
+
+// The audio callback owns one immutable snapshot for the whole block. Replacing a file or
+// a completed render on the message thread can therefore never invalidate memory that the
+// device thread is still reading.
+struct PlaybackState
+{
+    std::shared_ptr<const ChannelBuffer> channels;
+    double sampleRate = 48000.0;
+};
 
 class MainComponent : public juce::AudioAppComponent,
                       public juce::FileDragAndDropTarget,
@@ -188,14 +199,20 @@ public:
 
     ~MainComponent() override
     {
-        cancelProcessing();
+        if (job != nullptr)
+        {
+            activeJobId = 0;
+            job->signalThreadShouldExit();
+            job->waitForThreadToExit (-1);
+            job.reset();
+        }
         shutdownAudio();
         setLookAndFeel (nullptr);
     }
 
     // ---------------------------------------------------------------- audio ----
 
-    void prepareToPlay (int, double sampleRate) override { deviceRate = sampleRate; }
+    void prepareToPlay (int, double sampleRate) override { deviceRate.store (sampleRate); }
     void releaseResources() override {}
 
     void getNextAudioBlock (const juce::AudioSourceChannelInfo& info) override
@@ -203,12 +220,14 @@ public:
         info.clearActiveBufferRegion();
         if (! playing.load()) return;
 
-        const auto* src = bufferFor (monitor);
-        if (src == nullptr || src->empty()) return;
+        const auto state = std::atomic_load_explicit (&playbackState,
+                                                       std::memory_order_acquire);
+        if (state == nullptr || state->channels == nullptr || state->channels->empty()) return;
+        const auto& src = *state->channels;
 
-        const int n = (int) (*src)[0].size();
+        const int n = (int) src[0].size();
         const int outCh = info.buffer->getNumChannels();
-        const int srcCh = (int) src->size();
+        const int srcCh = (int) src.size();
         // When looping a selection the playhead wraps inside it instead of running on,
         // which is what makes "is there voice in here?" answerable in a few seconds.
         const bool loop = loopSelection.load();
@@ -216,7 +235,9 @@ public:
         const int loopB = juce::jlimit (loopA + 1, n, loopEnd.load());
         // If the device could not open at the file's rate, step through at the ratio
         // rather than pretending. It is monitoring, and the mismatch is reported on screen.
-        const double step = fileRate > 0 && deviceRate > 0 ? fileRate / deviceRate : 1.0;
+        const double currentDeviceRate = deviceRate.load();
+        const double step = state->sampleRate > 0 && currentDeviceRate > 0
+                              ? state->sampleRate / currentDeviceRate : 1.0;
 
         double pos = playPos.load();
         for (int i = 0; i < info.numSamples; ++i)
@@ -224,11 +245,15 @@ public:
             int idx = (int) pos;
             if (loop && idx >= loopB) { pos = (double) loopA; idx = loopA; }
             if (idx >= n) { playing.store (false); pos = 0; break; }
+            const int next = juce::jmin (idx + 1, n - 1);
+            const float frac = (float) (pos - std::floor (pos));
             const float mg = monitorGain.load();
             for (int c = 0; c < outCh; ++c)
             {
-                const auto& chan = (*src)[(size_t) juce::jmin (c, srcCh - 1)];
-                info.buffer->setSample (c, info.startSample + i, chan[(size_t) idx] * mg);
+                const auto& chan = src[(size_t) juce::jmin (c, srcCh - 1)];
+                const float sample = chan[(size_t) idx]
+                                   + frac * (chan[(size_t) next] - chan[(size_t) idx]);
+                info.buffer->setSample (c, info.startSample + i, sample * mg);
             }
             pos += step;
         }
@@ -378,19 +403,37 @@ private:
     class Job : public juce::Thread
     {
     public:
-        Job (MainComponent& o) : juce::Thread ("cleanvoice"), owner (o) {}
+        Job (MainComponent& o, std::shared_ptr<const cv::AudioFile> source,
+             cv::NoiseProfile startingProfile, cv::DenoiseParams settings,
+             bool shouldRelearn, std::pair<int, int> selection, uint64_t serial)
+            : juce::Thread ("cleanvoice"), owner (o), safeOwner (&o), input (std::move (source)),
+              workingProfile (std::move (startingProfile)), parameters (settings),
+              relearn (shouldRelearn), selectedSamples (selection), id (serial) {}
         void run() override { owner.runJob (*this); }
         MainComponent& owner;
+        juce::Component::SafePointer<MainComponent> safeOwner;
+        std::shared_ptr<const cv::AudioFile> input;
+        cv::NoiseProfile workingProfile;
+        cv::DenoiseParams parameters;
+        bool relearn = false;
+        std::pair<int, int> selectedSamples { 0, 0 };
+        uint64_t id = 0;
     };
 
     void startProcessing()
     {
-        if (file.numSamples() == 0 || job != nullptr) return;
+        if (file == nullptr || file->numSamples() == 0 || job != nullptr) return;
         // Either learn from the current selection, or re-use the profile already learned.
         // Keeping the profile alive after the selection is cleared is what makes tuning
         // Reduction cheap: that is the loop this tool is actually used in, and forcing a
         // re-select for every attempt would tax the most common action.
         if (! wave.hasSelection() && ! haveProfile) return;
+        if (wave.hasSelection() && wave.selectionSeconds() > 30.0)
+        {
+            status.setText ("Noise learn range is too long - select 1-3 seconds (30 s max)",
+                            juce::dontSendNotification);
+            return;
+        }
 
         params.reductionDb  = (float) reductionS.getValue();
         params.smoothing    = (float) smoothingS.getValue();
@@ -401,79 +444,107 @@ private:
         selForJob = { wave.selectionStart(), wave.selectionEnd() };
 
         progressValue = 0.0;
+        progressAtomic.store (0.0);
         progress.setVisible (true);
         cancelBtn.setVisible (true);
         learnBtn.setVisible (false);
-        job = std::make_unique<Job> (*this);
+        activeJobId = ++nextJobId;
+        job = std::make_unique<Job> (*this, file, profile, params, learnFromSelection,
+                                     selForJob, activeJobId);
         job->startThread();
+        refreshEnablement();
     }
 
     void cancelProcessing()
     {
         if (job == nullptr) return;
+        activeJobId = 0;
         job->signalThreadShouldExit();
-        job->stopThread (4000);
+        job->waitForThreadToExit (-1);
         job.reset();
         progress.setVisible (false);
         cancelBtn.setVisible (false);
         learnBtn.setVisible (true);
+        refreshEnablement();
     }
 
-    void runJob (juce::Thread& thread)
+    void runJob (Job& thread)
     {
-        const int n = file.numSamples();
-        const int fftSize = cv::fftSizeForRate (file.sampleRate);
+        const auto input = thread.input;
+        if (input == nullptr) return;
+        const int n = input->numSamples();
+        const int fftSize = cv::fftSizeForRate (input->sampleRate);
         cv::Stft stft (fftSize, fftSize / 4);
 
-        const bool relearn = learnFromSelection;
-        const bool learned = ! relearn
-                             || profile.learn (stft, file.channels, n,
-                                               selForJob.first, selForJob.second);
+        const bool learned = ! thread.relearn
+                             || thread.workingProfile.learn (
+                                 stft, input->channels, n,
+                                 thread.selectedSamples.first, thread.selectedSamples.second,
+                                 [&thread] (float) { return ! thread.threadShouldExit(); });
         if (! learned)
         {
-            juce::MessageManager::callAsync ([this, fftSize]
+            if (thread.threadShouldExit()) return;
+            const auto safe = thread.safeOwner;
+            const auto id = thread.id;
+            const double rate = input->sampleRate;
+            juce::MessageManager::callAsync ([safe, fftSize, rate, id]
             {
-                status.setText ("Selection too short - needs about "
-                                  + juce::String (1000.0 * (fftSize * 2) / file.sampleRate, 0)
-                                  + " ms of noise", juce::dontSendNotification);
-                finishJob (false);
+                if (safe == nullptr || safe->activeJobId != id) return;
+                safe->status.setText ("Selection too short - needs about "
+                                      + juce::String (1000.0 * (fftSize * 2) / rate, 0)
+                                      + " ms of noise", juce::dontSendNotification);
+                safe->finishJob (false, id);
             });
             return;
         }
 
         auto result = cv::Denoiser::process (
-            stft, profile, file.channels, n, params,
+            stft, thread.workingProfile, input->channels, n, thread.parameters,
             [this, &thread] (float p)
             {
-                progressValue = (double) p;
+                progressAtomic.store ((double) p, std::memory_order_relaxed);
                 return ! thread.threadShouldExit();
             });
 
         if (result.empty() || thread.threadShouldExit()) return;   // cancelled
 
-        std::vector<std::vector<float>> rem ((size_t) file.numChannels(),
-                                             std::vector<float> ((size_t) n));
-        for (int c = 0; c < file.numChannels(); ++c)
+        ChannelBuffer rem ((size_t) input->numChannels(), std::vector<float> ((size_t) n));
+        for (int c = 0; c < input->numChannels(); ++c)
             for (int i = 0; i < n; ++i)
                 rem[(size_t) c][(size_t) i] =
-                    file.channels[(size_t) c][(size_t) i] - result[(size_t) c][(size_t) i];
+                    input->channels[(size_t) c][(size_t) i] - result[(size_t) c][(size_t) i];
 
+        const auto safe = thread.safeOwner;
+        const auto id = thread.id;
+        auto completedProfile = std::move (thread.workingProfile);
         juce::MessageManager::callAsync (
-            [this, r = std::move (result), rm = std::move (rem), frames = profile.frames()]() mutable
+            [safe, id, r = std::move (result), rm = std::move (rem),
+             p = std::move (completedProfile)]() mutable
             {
-                clean = std::move (r);
-                removed = std::move (rm);
-                haveProfile = true;
-                publishNoiseFloor();
-                status.setText (fileName + "  -  processed from " + juce::String (frames)
-                                  + " noise frames", juce::dontSendNotification);
-                finishJob (true);
+                if (safe == nullptr || safe->activeJobId != id) return;
+                const int frames = p.frames();
+                safe->profile = std::move (p);
+                safe->clean = std::make_shared<const ChannelBuffer> (std::move (r));
+                safe->removed = std::make_shared<const ChannelBuffer> (std::move (rm));
+                safe->haveProfile = true;
+                safe->publishNoiseFloor();
+                safe->status.setText (safe->fileName + "  -  processed from "
+                                      + juce::String (frames) + " noise frames"
+                                      + safe->monitoringRateNote(),
+                                      juce::dontSendNotification);
+                safe->finishJob (true, id);
             });
     }
 
-    void finishJob (bool ok)
+    void finishJob (bool ok, uint64_t id)
     {
-        if (job != nullptr) { job->stopThread (2000); job.reset(); }
+        if (activeJobId != id) return;
+        if (job != nullptr)
+        {
+            job->waitForThreadToExit (-1);
+            job.reset();
+        }
+        activeJobId = 0;
         progress.setVisible (false);
         cancelBtn.setVisible (false);
         learnBtn.setVisible (true);
@@ -489,6 +560,7 @@ private:
 
     void openFile()
     {
+        if (job != nullptr) return;
         chooser = std::make_unique<juce::FileChooser> ("Open a WAV file", juce::File{}, "*.wav");
         chooser->launchAsync (juce::FileBrowserComponent::openMode
                                 | juce::FileBrowserComponent::canSelectFiles,
@@ -503,7 +575,7 @@ public:
     void loadFile (const juce::File& f)
     {
         {
-            if (f == juce::File{}) return;
+            if (f == juce::File{} || job != nullptr) return;
 
             cv::AudioFile loaded;
             std::string err;
@@ -515,26 +587,24 @@ public:
             }
             playing.store (false);
             playPos.store (0.0);
-            file = std::move (loaded);
-            clean.clear(); removed.clear();
+            file = std::make_shared<const cv::AudioFile> (std::move (loaded));
+            clean.reset(); removed.reset();
             haveProfile = false;
             floorView.clear();
             fileName = f.getFileName();
-            fileRate = file.sampleRate;
-            wave.setAudio (&file.channels, file.sampleRate);
-            spectro.setSource (&file.channels, file.sampleRate);
+            wave.setAudio (&file->channels, file->sampleRate);
+            spectro.setSource (&file->channels, file->sampleRate);
+            publishPlayback (Monitor::original);
             syncSpectrogramView();
             origBtn.setToggleState (true, juce::sendNotification);
             monitor = Monitor::original;
 
-            juce::String s = fileName + "  -  " + juce::String (file.numChannels()) + " ch, "
-                             + juce::String (file.sampleRate, 0) + " Hz, "
-                             + juce::String (file.bitsPerSample) + "-bit"
-                             + (file.isFloat ? " float" : "") + ", "
-                             + juce::String (file.numSamples() / file.sampleRate, 2) + " s";
-            if (std::abs (deviceRate - fileRate) > 1.0)
-                s += "   [monitoring at " + juce::String (deviceRate, 0)
-                       + " Hz - resampled for playback only]";
+            juce::String s = fileName + "  -  " + juce::String (file->numChannels()) + " ch, "
+                             + juce::String (file->sampleRate, 0) + " Hz, "
+                             + juce::String (file->bitsPerSample) + "-bit"
+                             + (file->isFloat ? " float" : "") + ", "
+                             + juce::String (file->numSamples() / file->sampleRate, 2) + " s"
+                             + monitoringRateNote();
             status.setText (s, juce::dontSendNotification);
             refreshEnablement();
             updateViewLabel();
@@ -545,7 +615,8 @@ public:
     // Dropping a take onto the window is how this actually gets used.
     bool isInterestedInFileDrag (const juce::StringArray& files) override
     {
-        return files.size() == 1 && files[0].endsWithIgnoreCase (".wav");
+        return job == nullptr && files.size() == 1
+               && files[0].endsWithIgnoreCase (".wav");
     }
     void filesDropped (const juce::StringArray& files, int, int) override
     {
@@ -556,7 +627,7 @@ private:
 
     void exportClean()
     {
-        if (clean.empty()) return;
+        if (clean == nullptr || file == nullptr) return;
         chooser = std::make_unique<juce::FileChooser> ("Save cleaned WAV",
                                                        juce::File{}, "*.wav");
         chooser->launchAsync (juce::FileBrowserComponent::saveMode
@@ -567,8 +638,8 @@ private:
             const auto f = fc.getResult();
             if (f == juce::File{}) return;
             cv::AudioFile out;
-            out.sampleRate = file.sampleRate;
-            out.channels = clean;
+            out.sampleRate = file->sampleRate;
+            out.channels = *clean;
             std::string err;
             const bool ok = cv::wav::write (f.getFullPathName().toStdString(), out, err);
             status.setText (ok ? "Wrote " + f.getFileName()
@@ -583,8 +654,8 @@ private:
     // the only way to see that a fan tone or a stray transient got into the selection.
     void publishNoiseFloor()
     {
-        if (! haveProfile) { floorView.clear(); return; }
-        const int fftSize = cv::fftSizeForRate (file.sampleRate);
+        if (! haveProfile || file == nullptr) { floorView.clear(); return; }
+        const int fftSize = cv::fftSizeForRate (file->sampleRate);
         const cv::Stft stft (fftSize, fftSize / 4);
         const int bins = stft.numBins();
         std::vector<std::vector<float>> psd ((size_t) profile.channels(),
@@ -592,14 +663,16 @@ private:
         for (int c = 0; c < profile.channels(); ++c)
             for (int k = 0; k < bins; ++k)
                 psd[(size_t) c][(size_t) k] = profile.power (c, k);
-        floorView.setProfile (std::move (psd), file.sampleRate, stft.windowSum());
+        floorView.setProfile (std::move (psd), file->sampleRate, stft.windowSum());
     }
 
     void applyMonitor (Monitor m)
     {
         monitor = m;
-        wave.setAudioKeepSelection (bufferFor (m));
-        spectro.setSource (bufferFor (m), file.sampleRate);
+        const auto owner = bufferOwnerFor (m);
+        wave.setAudioKeepSelection (owner.get());
+        spectro.setSource (owner.get(), file != nullptr ? file->sampleRate : 48000.0);
+        publishPlayback (m);
         syncSpectrogramView();
     }
 
@@ -620,19 +693,40 @@ private:
         applyMonitor (m);
     }
 
-    const std::vector<std::vector<float>>* bufferFor (Monitor m) const
+    std::shared_ptr<const ChannelBuffer> bufferOwnerFor (Monitor m) const
     {
         switch (m)
         {
-            case Monitor::clean:   return clean.empty()   ? nullptr : &clean;
-            case Monitor::removed: return removed.empty() ? nullptr : &removed;
-            default:               return file.numSamples() == 0 ? nullptr : &file.channels;
+            case Monitor::clean:   return clean;
+            case Monitor::removed: return removed;
+            default:
+                return file == nullptr ? nullptr
+                                       : std::shared_ptr<const ChannelBuffer> (file, &file->channels);
         }
+    }
+
+    void publishPlayback (Monitor m)
+    {
+        auto next = std::make_shared<PlaybackState>();
+        next->channels = bufferOwnerFor (m);
+        next->sampleRate = file != nullptr ? file->sampleRate : 48000.0;
+        std::atomic_store_explicit (&playbackState,
+                                    std::shared_ptr<const PlaybackState> (std::move (next)),
+                                    std::memory_order_release);
+    }
+
+    juce::String monitoringRateNote() const
+    {
+        if (file == nullptr) return {};
+        const double outputRate = deviceRate.load();
+        if (std::abs (outputRate - file->sampleRate) <= 1.0) return {};
+        return "   [monitoring at " + juce::String (outputRate, 0)
+               + " Hz - resampled for playback only]";
     }
 
     void togglePlay (bool selectionOnly)
     {
-        if (file.numSamples() == 0) return;
+        if (file == nullptr || file->numSamples() == 0) return;
         if (selectionOnly && ! wave.hasSelection()) return;
 
         const bool wasPlaying = playing.load();
@@ -649,7 +743,7 @@ private:
                 loopEnd.store (wave.selectionEnd());
                 playPos.store ((double) wave.selectionStart());
             }
-            else if (playPos.load() >= file.numSamples() - 1)
+            else if (playPos.load() >= file->numSamples() - 1)
             {
                 playPos.store (0.0);
             }
@@ -672,12 +766,13 @@ private:
 
     void refreshEnablement()
     {
-        const bool haveFile = file.numSamples() > 0;
-        const bool haveClean = ! clean.empty();
+        const bool haveFile = file != nullptr && file->numSamples() > 0;
+        const bool haveClean = clean != nullptr && ! clean->empty();
         const bool canLearn = wave.hasSelection();
         learnBtn.setEnabled (haveFile && (canLearn || haveProfile) && job == nullptr);
         learnBtn.setButtonText (canLearn ? "Learn Noise + Process"
-                                         : "Process (keeps learned noise)");
+                               : haveProfile ? "Process (keeps learned noise)"
+                                             : "Select Noise Range");
         playBtn.setEnabled (haveFile);
         playSelBtn.setEnabled (haveFile && wave.hasSelection());
         zoomSelBtn.setEnabled (haveFile && wave.hasSelection());
@@ -686,11 +781,13 @@ private:
         exportBtn.setEnabled (haveClean);
         cleanBtn.setEnabled (haveClean);
         removedBtn.setEnabled (haveClean);
+        openBtn.setEnabled (job == nullptr);
     }
 
     void timerCallback() override
     {
         monitorGain.store (juce::Decibels::decibelsToGain ((float) monitorS.getValue()));
+        progressValue = progressAtomic.load (std::memory_order_relaxed);
         wave.setPlayhead ((int) playPos.load());
         if (! playing.load()
             && (playBtn.getButtonText() == "Stop" || playSelBtn.getButtonText() == "Stop"))
@@ -716,25 +813,28 @@ private:
     juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint, viewLabel,
                 keysLabel;
     double progressValue = 0.0;
+    std::atomic<double> progressAtomic { 0.0 };
     juce::ProgressBar progress { progressValue };
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<Job> job;
 
-    cv::AudioFile file;
-    std::vector<std::vector<float>> clean, removed;
+    std::shared_ptr<const cv::AudioFile> file;
+    std::shared_ptr<const ChannelBuffer> clean, removed;
+    std::shared_ptr<const PlaybackState> playbackState;
     cv::DenoiseParams params;
     juce::String fileName;
     // The learned profile outlives the selection on purpose; see startProcessing.
     cv::NoiseProfile profile;
     bool haveProfile = false, learnFromSelection = true;
     std::pair<int, int> selForJob { 0, 0 };
+    uint64_t nextJobId = 0, activeJobId = 0;
 
     std::atomic<bool> playing { false };
     std::atomic<bool> loopSelection { false };
     std::atomic<int> loopStart { 0 }, loopEnd { 1 };
     std::atomic<double> playPos { 0.0 };
     Monitor monitor = Monitor::original;
-    double deviceRate = 48000.0, fileRate = 48000.0;
+    std::atomic<double> deviceRate { 48000.0 };
     bool showAdvanced = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)

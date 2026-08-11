@@ -123,7 +123,7 @@ private:
         const int n = fft.size();
         const int bins = n / 2 + 1;
         std::vector<cv::Complex> spec ((size_t) n);
-        std::vector<float> db ((size_t) bins);
+        std::vector<float> power ((size_t) bins);
         std::vector<float> colMax ((size_t) h);
 
         // window once
@@ -151,21 +151,33 @@ private:
             const int centre = viewStart + (int) ((double) x / w * viewLen);
             const int start = centre - n / 2;
 
-            for (int i = 0; i < n; ++i)
+            std::fill (power.begin(), power.end(), 0.0f);
+            for (const auto& ch : *src)
             {
-                const int s = start + i;
-                float v = 0.0f;
-                if (s >= 0 && s < total)
-                    for (const auto& ch : *src) v += ch[(size_t) s];   // sum channels
-                spec[(size_t) i] = cv::Complex (v * win[(size_t) i], 0.0f);
+                for (int i = 0; i < n; ++i)
+                {
+                    const int s = start + i;
+                    const float v = s >= 0 && s < total ? ch[(size_t) s] : 0.0f;
+                    spec[(size_t) i] = cv::Complex (v * win[(size_t) i], 0.0f);
+                }
+                fft.forward (spec);
+                for (int k = 1; k < bins; ++k)
+                {
+                    const float re = spec[(size_t) k].real();
+                    const float im = spec[(size_t) k].imag();
+                    power[(size_t) k] += re * re + im * im;
+                }
             }
-            fft.forward (spec);
 
             std::fill (colMax.begin(), colMax.end(), kBotDb);
             for (int k = 1; k < bins; ++k)
             {
-                const float re = spec[(size_t) k].real(), im = spec[(size_t) k].imag();
-                const float d = 10.0f * std::log10 (juce::jmax (re * re + im * im, 1.0e-20f))
+                // Average power, not the time-domain L+R sum. A binaural recording may
+                // have interaural phase differences, and summing first can hide exactly
+                // the one-ear residue this view exists to reveal.
+                const float meanPower = power[(size_t) k]
+                                        / (float) juce::jmax ((int) src->size(), 1);
+                const float d = 10.0f * std::log10 (juce::jmax (meanPower, 1.0e-20f))
                                   - refDb;
                 float& m = colMax[(size_t) binY[(size_t) k]];
                 if (d > m) m = d;

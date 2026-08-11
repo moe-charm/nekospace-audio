@@ -24,6 +24,13 @@ Change either after release and every existing project stops finding the plugin.
 | NekoSpace Room (planned) | `NkSp` | `Nksm` |
 | NekoSpace Delay (planned) | `NkSp` | `Nksd` |
 
+Bundle identifiers are likewise fixed before the first release:
+
+| Product | Bundle ID |
+| --- | --- |
+| NekoSpace Binaural | `audio.nekospace.binaural` |
+| NekoSpace CleanVoice | `audio.nekospace.cleanvoice` |
+
 Rules:
 
 - The manufacturer code is shared by every product and is **four characters with at least
