@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #pragma once
-// Waveform with a drag-selected range and a playhead.
+// Waveform with zoom, a drag-selected range and a playhead.
 //
-// The label over the selection is not decoration. The single most likely misunderstanding
-// of this tool is that the selection is the part being cleaned; it is the part being
-// LEARNED FROM, and the whole file is processed. Saying so on the selection itself is
-// cheaper than explaining it afterwards.
+// Two things here are not conveniences.
+//
+// ZOOM. A 22-minute take drawn across 1500 pixels puts nearly a second in every pixel, so
+// marking a one-second noise region is not a matter of care - it is below the resolution of
+// the control. Without zoom the tool works on test files and not on real ones.
+//
+// THE SELECTION LABEL. The one thing a user can get wrong about this tool is thinking the
+// selection is the part being cleaned. It is the part being LEARNED FROM, and the whole
+// file is processed. Saying so on the selection itself is cheaper than explaining it later.
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <vector>
 #include <algorithm>
@@ -35,6 +40,7 @@ public:
     WaveformView() = default;
 
     std::function<void()> onSelectionChanged;
+    std::function<void (int)> onPlayheadMoved;
 
     void setAudio (const std::vector<std::vector<float>>* channels, double sampleRate)
     {
@@ -42,12 +48,11 @@ public:
         sr = sampleRate;
         total = (src != nullptr && ! src->empty()) ? (int) (*src)[0].size() : 0;
         selStart = selEnd = 0;
-        rebuildPeaks();
-        repaint();
+        zoomToFit();
     }
 
-    // Swaps which buffer is drawn without disturbing the selection: switching between
-    // Original / Clean / Removed must not throw away the range you just marked.
+    // Swaps which buffer is drawn without disturbing the selection or the zoom: switching
+    // between Original / Clean / Removed must not throw away what you were looking at.
     void setAudioKeepSelection (const std::vector<std::vector<float>>* channels)
     {
         src = channels;
@@ -62,6 +67,29 @@ public:
     int selectionEnd() const noexcept { return selEnd; }
     double selectionSeconds() const noexcept
     { return sr > 0 ? (selEnd - selStart) / sr : 0.0; }
+
+    void zoomToFit()
+    {
+        viewStart = 0;
+        viewLen = juce::jmax (1, total);
+        rebuildPeaks();
+        repaint();
+    }
+
+    void zoomToSelection()
+    {
+        if (! hasSelection()) return;
+        const int pad = juce::jmax (1, (selEnd - selStart) / 8);
+        setView (selStart - pad, (selEnd - selStart) + 2 * pad);
+    }
+
+    juce::String viewDescription() const
+    {
+        if (total <= 0 || sr <= 0) return {};
+        auto t = [this] (int s) { return juce::String (s / sr, 2) + " s"; };
+        return t (viewStart) + " - " + t (viewStart + viewLen)
+                 + "   (" + juce::String (100.0 * viewLen / juce::jmax (1, total), 1) + "% shown)";
+    }
 
     void resized() override { rebuildPeaks(); }
 
@@ -82,15 +110,17 @@ public:
         const float midY = (float) b.getCentreY();
         const float halfH = (float) b.getHeight() * 0.45f;
 
-        // selection first, so the waveform draws over it
         if (hasSelection())
         {
             const int x0 = sampleToX (selStart), x1 = sampleToX (selEnd);
             g.setColour (col::select.withAlpha (0.22f));
-            g.fillRect (x0, b.getY(), juce::jmax (1, x1 - x0), b.getHeight());
+            g.fillRect (juce::jmax (b.getX(), x0), b.getY(),
+                        juce::jlimit (1, b.getWidth(), x1 - x0), b.getHeight());
             g.setColour (col::select);
-            g.drawVerticalLine (x0, (float) b.getY(), (float) b.getBottom());
-            g.drawVerticalLine (x1, (float) b.getY(), (float) b.getBottom());
+            if (x0 >= b.getX() && x0 <= b.getRight())
+                g.drawVerticalLine (x0, (float) b.getY(), (float) b.getBottom());
+            if (x1 >= b.getX() && x1 <= b.getRight())
+                g.drawVerticalLine (x1, (float) b.getY(), (float) b.getBottom());
         }
 
         g.setColour (col::wave);
@@ -104,17 +134,20 @@ public:
         g.setColour (col::line);
         g.drawHorizontalLine ((int) midY, (float) b.getX(), (float) b.getRight());
 
-        if (playhead > 0 && playhead < total)
+        if (playhead >= 0 && playhead < total)
         {
-            g.setColour (col::accent);
-            g.drawVerticalLine (sampleToX (playhead), (float) b.getY(), (float) b.getBottom());
+            const int x = sampleToX (playhead);
+            if (x >= b.getX() && x <= b.getRight())
+            {
+                g.setColour (col::accent);
+                g.drawVerticalLine (x, (float) b.getY(), (float) b.getBottom());
+            }
         }
 
-        // the label that stops the selection being misread
         if (hasSelection())
         {
-            const int x0 = sampleToX (selStart), x1 = sampleToX (selEnd);
-            auto tag = juce::Rectangle<int> (x0, b.getY() + 4, juce::jmax (140, x1 - x0), 34);
+            const int x0 = juce::jmax (b.getX() + 2, sampleToX (selStart));
+            auto tag = juce::Rectangle<int> (x0, b.getY() + 4, 260, 34);
             g.setColour (col::select);
             g.setFont (juce::Font (juce::FontOptions (11.0f)).boldened());
             g.drawText ("NOISE LEARN RANGE", tag.removeFromTop (16),
@@ -127,15 +160,27 @@ public:
         }
     }
 
+    // ---------------------------------------------------------------- mouse ----
+
     void mouseDown (const juce::MouseEvent& e) override
     {
         dragAnchor = xToSample (e.x);
-        selStart = selEnd = dragAnchor;
-        repaint();
+        panning = e.mods.isRightButtonDown() || e.mods.isMiddleButtonDown();
+        panAnchorView = viewStart;
+        if (! panning) dragged = false;
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
+        if (panning)
+        {
+            const double perPixel = (double) viewLen / juce::jmax (1, getWidth());
+            setView (panAnchorView - juce::roundToInt (e.getDistanceFromDragStartX() * perPixel),
+                     viewLen);
+            return;
+        }
+        if (std::abs (e.getDistanceFromDragStartX()) > 2) dragged = true;
+        if (! dragged) return;
         const int s = xToSample (e.x);
         selStart = juce::jmin (dragAnchor, s);
         selEnd   = juce::jmax (dragAnchor, s);
@@ -144,40 +189,91 @@ public:
 
     void mouseUp (const juce::MouseEvent&) override
     {
+        if (panning) { panning = false; return; }
+        // A click without a drag places the playhead and leaves the selection alone, so
+        // you can audition around a marked region without losing it.
+        if (! dragged)
+        {
+            playhead = dragAnchor;
+            if (onPlayheadMoved) onPlayheadMoved (playhead);
+            repaint();
+            return;
+        }
         if (onSelectionChanged) onSelectionChanged();
     }
 
+    // Wheel zooms about the pointer, so the thing you are looking at stays under it.
+    // Shift-wheel scrolls instead.
+    void mouseWheelMove (const juce::MouseEvent& e,
+                         const juce::MouseWheelDetails& d) override
+    {
+        if (total <= 0) return;
+        if (e.mods.isShiftDown())
+        {
+            setView (viewStart - juce::roundToInt (d.deltaY * viewLen * 0.5), viewLen);
+            return;
+        }
+        const int anchor = xToSample (e.x);
+        const double factor = d.deltaY > 0 ? 1.0 / 1.25 : 1.25;
+        const int newLen = juce::jlimit (256, juce::jmax (256, total),
+                                         juce::roundToInt (viewLen * factor));
+        // keep the anchor sample under the same pixel
+        const double frac = juce::jlimit (0.0, 1.0,
+            (double) (anchor - viewStart) / juce::jmax (1, viewLen));
+        setView (anchor - juce::roundToInt (frac * newLen), newLen);
+    }
+
 private:
+    void setView (int start, int len)
+    {
+        viewLen = juce::jlimit (256, juce::jmax (256, total), len);
+        viewStart = juce::jlimit (0, juce::jmax (0, total - viewLen), start);
+        rebuildPeaks();
+        repaint();
+    }
+
     int sampleToX (int s) const
     {
-        if (total <= 0) return getX();
-        return getX() + juce::roundToInt ((double) s / total * getWidth());
+        if (viewLen <= 0) return getX();
+        return getX() + juce::roundToInt ((double) (s - viewStart) / viewLen * getWidth());
     }
     int xToSample (int x) const
     {
         if (getWidth() <= 0) return 0;
         return juce::jlimit (0, total,
-                             juce::roundToInt ((double) (x) / getWidth() * total));
+                             viewStart + juce::roundToInt ((double) x / getWidth() * viewLen));
     }
 
-    // One min/max pair per pixel column, over every channel, so a transient on one ear
-    // is never averaged out of view.
+    // One min/max pair per pixel column, over every channel, so a transient on one ear is
+    // never averaged out of view.
     void rebuildPeaks()
     {
         peakMin.clear(); peakMax.clear();
         const int w = getWidth();
-        if (src == nullptr || total <= 0 || w <= 0) return;
+        if (src == nullptr || total <= 0 || w <= 0 || viewLen <= 0) return;
         peakMin.assign ((size_t) w, 0.0f);
         peakMax.assign ((size_t) w, 0.0f);
 
+        // Fully zoomed out on a 22-minute file there are ~44 000 samples per pixel, and
+        // scanning all of them on every redraw makes zooming feel broken. Above the
+        // threshold the column is sampled instead: peaks can read very slightly low, which
+        // costs nothing at a zoom level where one pixel is a second of audio - and the
+        // reason to trust a region is auditioning it, not squinting at it.
+        const int perPixel = juce::jmax (1, viewLen / w);
+        const int stride = perPixel > 4096 ? perPixel / 4096 : 1;
+
         for (int x = 0; x < w; ++x)
         {
-            const int a = (int) ((double) x / w * total);
-            const int b = juce::jmax (a + 1, (int) ((double) (x + 1) / w * total));
+            const int a = viewStart + (int) ((double) x / w * viewLen);
+            const int b = juce::jmin (total,
+                            juce::jmax (a + 1, viewStart + (int) ((double) (x + 1) / w * viewLen)));
             float lo = 0.0f, hi = 0.0f;
             for (const auto& ch : *src)
-                for (int i = a; i < b && i < (int) ch.size(); ++i)
-                { lo = juce::jmin (lo, ch[(size_t) i]); hi = juce::jmax (hi, ch[(size_t) i]); }
+                for (int i = a; i < b; i += stride)
+                {
+                    const float v = ch[(size_t) i];
+                    lo = juce::jmin (lo, v); hi = juce::jmax (hi, v);
+                }
             peakMin[(size_t) x] = lo;
             peakMax[(size_t) x] = hi;
         }
@@ -186,6 +282,8 @@ private:
     const std::vector<std::vector<float>>* src = nullptr;
     double sr = 48000.0;
     int total = 0, selStart = 0, selEnd = 0, dragAnchor = 0, playhead = -1;
+    int viewStart = 0, viewLen = 1, panAnchorView = 0;
+    bool panning = false, dragged = false;
     std::vector<float> peakMin, peakMax;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WaveformView)

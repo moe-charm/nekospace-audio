@@ -36,6 +36,9 @@ public:
 
         addAndMakeVisible (wave);
         wave.onSelectionChanged = [this] { refreshEnablement(); };
+        // Clicking the waveform moves the playhead, so you can audition around a marked
+        // region without losing it.
+        wave.onPlayheadMoved = [this] (int s) { playPos.store ((double) s); };
 
         auto button = [this] (juce::TextButton& b, const juce::String& text,
                               std::function<void()> fn)
@@ -47,7 +50,11 @@ public:
         button (openBtn,  "Open WAV...", [this] { openFile(); });
         button (learnBtn, "Learn Noise + Process", [this] { startProcessing(); });
         button (cancelBtn,"Cancel", [this] { cancelProcessing(); });
-        button (playBtn,  "Play", [this] { togglePlay(); });
+        button (playBtn,  "Play", [this] { togglePlay (false); });
+        button (playSelBtn, "Play Selection", [this] { togglePlay (true); });
+        button (fitBtn,   "Fit", [this] { wave.zoomToFit(); updateViewLabel(); });
+        button (zoomSelBtn,"Zoom to Selection",
+                [this] { wave.zoomToSelection(); updateViewLabel(); });
         button (exportBtn,"Export Clean WAV...", [this] { exportClean(); });
         cancelBtn.setVisible (false);
 
@@ -106,11 +113,18 @@ public:
         status.setFont (juce::Font (juce::FontOptions (12.0f)));
         addAndMakeVisible (status);
 
+        viewLabel.setJustificationType (juce::Justification::centredLeft);
+        viewLabel.setColour (juce::Label::textColourId, col::textDim);
+        viewLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
+        addAndMakeVisible (viewLabel);
+
         hint.setJustificationType (juce::Justification::centredLeft);
         hint.setColour (juce::Label::textColourId, col::textDim);
         hint.setFont (juce::Font (juce::FontOptions (11.5f)));
-        hint.setText ("Drag over a stretch of room tone with no voice in it. That range is "
-                      "what the noise is learned FROM - the whole file gets processed.",
+        hint.setText ("Drag over a stretch of room tone with no voice in it - that range is "
+                      "what the noise is learned FROM, and the whole file gets processed. "
+                      "Play Selection loops it: if you can hear ANY voice or breath in "
+                      "there, move it. Wheel zooms, shift-wheel scrolls, right-drag pans.",
                       juce::dontSendNotification);
         addAndMakeVisible (hint);
 
@@ -146,6 +160,11 @@ public:
         const int n = (int) (*src)[0].size();
         const int outCh = info.buffer->getNumChannels();
         const int srcCh = (int) src->size();
+        // When looping a selection the playhead wraps inside it instead of running on,
+        // which is what makes "is there voice in here?" answerable in a few seconds.
+        const bool loop = loopSelection.load();
+        const int loopA = juce::jlimit (0, n, loopStart.load());
+        const int loopB = juce::jlimit (loopA + 1, n, loopEnd.load());
         // If the device could not open at the file's rate, step through at the ratio
         // rather than pretending. It is monitoring, and the mismatch is reported on screen.
         const double step = fileRate > 0 && deviceRate > 0 ? fileRate / deviceRate : 1.0;
@@ -153,7 +172,8 @@ public:
         double pos = playPos.load();
         for (int i = 0; i < info.numSamples; ++i)
         {
-            const int idx = (int) pos;
+            int idx = (int) pos;
+            if (loop && idx >= loopB) { pos = (double) loopA; idx = loopA; }
             if (idx >= n) { playing.store (false); pos = 0; break; }
             for (int c = 0; c < outCh; ++c)
             {
@@ -181,23 +201,34 @@ public:
         status.setBounds (top);
 
         b.removeFromTop (10);
-        hint.setBounds (b.removeFromTop (34));
-        b.removeFromTop (6);
+        hint.setBounds (b.removeFromTop (46));
+        b.removeFromTop (4);
 
-        auto bottom = b.removeFromBottom (showAdvanced ? 176 : 116);
+        auto bottom = b.removeFromBottom (showAdvanced ? 210 : 150);
+
+        // zoom row sits directly under the waveform, where the thing it controls is
+        auto zoomRow = bottom.removeFromTop (26);
+        fitBtn.setBounds (zoomRow.removeFromLeft (60));
+        zoomRow.removeFromLeft (6);
+        zoomSelBtn.setBounds (zoomRow.removeFromLeft (150));
+        zoomRow.removeFromLeft (12);
+        viewLabel.setBounds (zoomRow);
+        bottom.removeFromTop (6);
+
         wave.setBounds (b);
 
         auto row = bottom.removeFromTop (30);
-        playBtn.setBounds (row.removeFromLeft (90));
+        playBtn.setBounds (row.removeFromLeft (80));
+        row.removeFromLeft (6);
+        playSelBtn.setBounds (row.removeFromLeft (130));
         row.removeFromLeft (16);
-        origBtn.setBounds (row.removeFromLeft (110));
-        cleanBtn.setBounds (row.removeFromLeft (110));
-        removedBtn.setBounds (row.removeFromLeft (140));
-        row.removeFromLeft (16);
-        advancedBtn.setBounds (row.removeFromRight (110));
-        row.removeFromRight (10);
-        learnBtn.setBounds (row.removeFromRight (200));
-        cancelBtn.setBounds (row.removeFromRight (0).withWidth (0));   // placed below
+        origBtn.setBounds (row.removeFromLeft (100));
+        cleanBtn.setBounds (row.removeFromLeft (100));
+        removedBtn.setBounds (row.removeFromLeft (130));
+        row.removeFromLeft (12);
+        advancedBtn.setBounds (row.removeFromRight (100));
+        row.removeFromRight (8);
+        learnBtn.setBounds (row.removeFromRight (190));
 
         bottom.removeFromTop (8);
         auto lay = [&bottom] (juce::Label& l, juce::Slider& s)
@@ -370,6 +401,7 @@ public:
                        + " Hz - resampled for playback only]";
             status.setText (s, juce::dontSendNotification);
             refreshEnablement();
+            updateViewLabel();
         }
     }
 
@@ -420,13 +452,44 @@ private:
         }
     }
 
-    void togglePlay()
+    void togglePlay (bool selectionOnly)
     {
         if (file.numSamples() == 0) return;
-        const bool now = ! playing.load();
-        if (now && playPos.load() >= file.numSamples() - 1) playPos.store (0.0);
+        if (selectionOnly && ! wave.hasSelection()) return;
+
+        const bool wasPlaying = playing.load();
+        const bool wasLooping = loopSelection.load();
+        // Pressing the other transport button switches mode rather than stopping.
+        const bool now = ! wasPlaying || wasLooping != selectionOnly;
+
+        if (now)
+        {
+            loopSelection.store (selectionOnly);
+            if (selectionOnly)
+            {
+                loopStart.store (wave.selectionStart());
+                loopEnd.store (wave.selectionEnd());
+                playPos.store ((double) wave.selectionStart());
+            }
+            else if (playPos.load() >= file.numSamples() - 1)
+            {
+                playPos.store (0.0);
+            }
+        }
         playing.store (now);
-        playBtn.setButtonText (now ? "Stop" : "Play");
+        refreshTransportText();
+    }
+
+    void refreshTransportText()
+    {
+        const bool p = playing.load(), sel = loopSelection.load();
+        playBtn.setButtonText (p && ! sel ? "Stop" : "Play");
+        playSelBtn.setButtonText (p && sel ? "Stop" : "Play Selection");
+    }
+
+    void updateViewLabel()
+    {
+        viewLabel.setText (wave.viewDescription(), juce::dontSendNotification);
     }
 
     void refreshEnablement()
@@ -435,6 +498,10 @@ private:
         const bool haveClean = ! clean.empty();
         learnBtn.setEnabled (haveFile && wave.hasSelection() && job == nullptr);
         playBtn.setEnabled (haveFile);
+        playSelBtn.setEnabled (haveFile && wave.hasSelection());
+        zoomSelBtn.setEnabled (haveFile && wave.hasSelection());
+        fitBtn.setEnabled (haveFile);
+        updateViewLabel();
         exportBtn.setEnabled (haveClean);
         cleanBtn.setEnabled (haveClean);
         removedBtn.setEnabled (haveClean);
@@ -442,18 +509,21 @@ private:
 
     void timerCallback() override
     {
-        wave.setPlayhead (playing.load() ? (int) playPos.load() : -1);
-        if (! playing.load() && playBtn.getButtonText() == "Stop")
-            playBtn.setButtonText ("Play");
+        wave.setPlayhead ((int) playPos.load());
+        if (! playing.load()
+            && (playBtn.getButtonText() == "Stop" || playSelBtn.getButtonText() == "Stop"))
+            refreshTransportText();
         if (progress.isVisible()) progress.repaint();
+        updateViewLabel();          // wheel zoom has no callback of its own
     }
 
     juce::LookAndFeel_V4 lnf;
     WaveformView wave;
-    juce::TextButton openBtn, learnBtn, cancelBtn, playBtn, exportBtn, advancedBtn;
+    juce::TextButton openBtn, learnBtn, cancelBtn, playBtn, playSelBtn, exportBtn,
+                     advancedBtn, fitBtn, zoomSelBtn;
     juce::TextButton origBtn, cleanBtn, removedBtn;
     juce::Slider reductionS, smoothingS, preserveS, oversubS;
-    juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint;
+    juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint, viewLabel;
     double progressValue = 0.0;
     juce::ProgressBar progress { progressValue };
     std::unique_ptr<juce::FileChooser> chooser;
@@ -465,6 +535,8 @@ private:
     juce::String fileName;
 
     std::atomic<bool> playing { false };
+    std::atomic<bool> loopSelection { false };
+    std::atomic<int> loopStart { 0 }, loopEnd { 1 };
     std::atomic<double> playPos { 0.0 };
     Monitor monitor = Monitor::original;
     double deviceRate = 48000.0, fileRate = 48000.0;

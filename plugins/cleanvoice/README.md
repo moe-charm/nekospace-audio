@@ -23,6 +23,16 @@ The three buttons share one playhead, because the difference between two renders
 audible if you hear the same moment in each. The waveform follows whichever one you are
 monitoring, so speech left in the removed signal is visible as well as audible.
 
+**Zoom** — wheel zooms about the pointer, shift-wheel scrolls, right-drag pans, and *Fit*
+and *Zoom to Selection* jump. This is not a convenience: a 22-minute take drawn across
+1500 pixels puts nearly a second in every pixel, so marking a one-second region is below
+the resolution of the control without it.
+
+**Play Selection** loops the marked range. This is how you check the range before learning
+from it — if you can hear any voice or breath in the loop, move it, because whatever is in
+there is about to be treated as noise and removed from the entire file. Clicking the
+waveform moves the playhead without disturbing the selection.
+
 Drop a `.wav` on the window, or pass one on the command line, to skip the file dialog.
 
 **Reduction** and **Smoothing** are on the front. **Preserve Breath** and
@@ -78,7 +88,9 @@ the noise and dissolving the room.
 
 - **At least ~0.5 s**, ideally 1–3 s. Shorter and the tool refuses.
 - It must be **only noise**. A half-swallowed word or a chair creak in the selection teaches
-  the tool that those are noise, and it will remove them everywhere.
+  the tool that those are noise, and it will remove them everywhere. **Loop it with Play
+  Selection and listen** — that is the check, and it takes five seconds.
+- Zoom in before marking. At full zoom on a long take you cannot see what you are selecting.
 - Same take, same gain. A region from another file describes another noise floor.
 
 ## Paths and file size
