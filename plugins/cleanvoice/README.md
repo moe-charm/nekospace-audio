@@ -35,6 +35,27 @@ waveform moves the playhead without disturbing the selection.
 
 Drop a `.wav` on the window, or pass one on the command line, to skip the file dialog.
 
+### Keys
+
+| | |
+| --- | --- |
+| **Space** | play / stop |
+| **Shift+Space** | loop the selection |
+| **1 / 2 / 3** | Original / Clean / Removed Noise |
+| **Enter** | Learn Noise + Process |
+| **Esc** | cancel processing |
+| **F** | fit the whole file |
+| **Z** | zoom to selection |
+| **+ / −**, up/down | zoom about the playhead |
+| **← / →** | scroll |
+| **Home** | playhead to the selection, or to the start |
+| **Ctrl+O / Ctrl+S** | open / export |
+
+`1` `2` `3` are the ones that matter. Judging a denoiser means hearing the same moment as
+Original, then Clean, then Removed, one after another — and hunting for a button with the
+mouse between each is long enough to lose what you were comparing. No control takes
+keyboard focus, so Space never presses whichever button you last clicked.
+
 **Reduction** and **Smoothing** are on the front. **Preserve Breath** and
 **Oversubtraction** are behind *Advanced*, and Preserve Breath starts at 0 on purpose: the
 first listen has to be the unprotected behaviour, or there is no way to know what the

@@ -40,46 +40,50 @@ public:
         // region without losing it.
         wave.onPlayheadMoved = [this] (int s) { playPos.store ((double) s); };
 
+        // Nothing here takes keyboard focus. If a button had it, Space would press that
+        // button instead of starting playback, and which button depends on what you last
+        // clicked - the least predictable behaviour available.
         auto button = [this] (juce::TextButton& b, const juce::String& text,
-                              std::function<void()> fn)
+                              const juce::String& shortcut, std::function<void()> fn)
         {
             b.setButtonText (text);
+            b.setTooltip (shortcut.isEmpty() ? text : text + "   [" + shortcut + "]");
+            b.setWantsKeyboardFocus (false);
             b.onClick = std::move (fn);
             addAndMakeVisible (b);
         };
-        button (openBtn,  "Open WAV...", [this] { openFile(); });
-        button (learnBtn, "Learn Noise + Process", [this] { startProcessing(); });
-        button (cancelBtn,"Cancel", [this] { cancelProcessing(); });
-        button (playBtn,  "Play", [this] { togglePlay (false); });
-        button (playSelBtn, "Play Selection", [this] { togglePlay (true); });
-        button (fitBtn,   "Fit", [this] { wave.zoomToFit(); updateViewLabel(); });
-        button (zoomSelBtn,"Zoom to Selection",
+        button (openBtn,  "Open WAV...", "Ctrl+O", [this] { openFile(); });
+        button (learnBtn, "Learn Noise + Process", "Enter", [this] { startProcessing(); });
+        button (cancelBtn,"Cancel", "Esc", [this] { cancelProcessing(); });
+        button (playBtn,  "Play", "Space", [this] { togglePlay (false); });
+        button (playSelBtn, "Play Selection", "Shift+Space", [this] { togglePlay (true); });
+        button (fitBtn,   "Fit", "F", [this] { wave.zoomToFit(); updateViewLabel(); });
+        button (zoomSelBtn,"Zoom to Selection", "Z",
                 [this] { wave.zoomToSelection(); updateViewLabel(); });
-        button (exportBtn,"Export Clean WAV...", [this] { exportClean(); });
+        button (exportBtn,"Export Clean WAV...", "Ctrl+S", [this] { exportClean(); });
         cancelBtn.setVisible (false);
 
         for (auto* b : { &origBtn, &cleanBtn, &removedBtn })
         {
             b->setRadioGroupId (7);
             b->setClickingTogglesState (true);
+            b->setWantsKeyboardFocus (false);
             addAndMakeVisible (b);
         }
         origBtn.setButtonText ("Original");
         cleanBtn.setButtonText ("Clean");
         removedBtn.setButtonText ("Removed Noise");
+        origBtn.setTooltip ("Original   [1]");
+        cleanBtn.setTooltip ("Clean   [2]");
+        removedBtn.setTooltip ("Removed Noise   [3]");
         origBtn.setToggleState (true, juce::dontSendNotification);
         // Switching source keeps the playhead, which is the entire point: the difference
         // between two renders is only audible if you hear the same moment in each.
         // The waveform follows what you are listening to. Seeing speech in the removed
         // signal is faster than hearing it, and both beat guessing.
-        auto pick = [this] (Monitor m)
-        {
-            monitor = m;
-            wave.setAudioKeepSelection (bufferFor (m));
-        };
-        origBtn.onClick    = [pick] { pick (Monitor::original); };
-        cleanBtn.onClick   = [pick] { pick (Monitor::clean); };
-        removedBtn.onClick = [pick] { pick (Monitor::removed); };
+        origBtn.onClick    = [this] { applyMonitor (Monitor::original); };
+        cleanBtn.onClick   = [this] { applyMonitor (Monitor::clean); };
+        removedBtn.onClick = [this] { applyMonitor (Monitor::removed); };
 
         auto slider = [this] (juce::Slider& s, juce::Label& l, const juce::String& name,
                               double lo, double hi, double step, double val,
@@ -90,6 +94,7 @@ public:
             s.setRange (lo, hi, step);
             s.setValue (val, juce::dontSendNotification);
             s.setTextValueSuffix (suffix);
+            s.setWantsKeyboardFocus (false);
             addAndMakeVisible (s);
             l.setText (name, juce::dontSendNotification);
             l.setFont (juce::Font (juce::FontOptions (11.0f)).boldened());
@@ -105,6 +110,7 @@ public:
         // unprotected behaviour, or there is no way to know what the protection is for.
         advancedBtn.setButtonText ("Advanced");
         advancedBtn.setClickingTogglesState (true);
+        advancedBtn.setWantsKeyboardFocus (false);
         advancedBtn.onClick = [this] { showAdvanced = advancedBtn.getToggleState(); resized(); };
         addAndMakeVisible (advancedBtn);
 
@@ -124,14 +130,27 @@ public:
         hint.setText ("Drag over a stretch of room tone with no voice in it - that range is "
                       "what the noise is learned FROM, and the whole file gets processed. "
                       "Play Selection loops it: if you can hear ANY voice or breath in "
-                      "there, move it. Wheel zooms, shift-wheel scrolls, right-drag pans.",
+                      "there, move it.",
                       juce::dontSendNotification);
         addAndMakeVisible (hint);
+
+        // A shortcut nobody knows about may as well not exist, and this is a window you
+        // work in with headphones on rather than one you read a manual for.
+        keysLabel.setJustificationType (juce::Justification::centredLeft);
+        keysLabel.setColour (juce::Label::textColourId, col::textDim.withAlpha (0.85f));
+        keysLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
+        keysLabel.setText ("Space play   Shift+Space loop selection   1/2/3 Original/Clean/"
+                           "Removed   Enter process   F fit   Z zoom to selection   "
+                           "+/- zoom   arrows scroll   wheel zoom, shift-wheel scroll, "
+                           "right-drag pan",
+                           juce::dontSendNotification);
+        addAndMakeVisible (keysLabel);
 
         progress.setColour (juce::ProgressBar::backgroundColourId, col::panel);
         addChildComponent (progress);
 
         refreshEnablement();
+        setWantsKeyboardFocus (true);
         setSize (1040, 620);
         setAudioChannels (0, 2);
         startTimerHz (30);
@@ -185,6 +204,52 @@ public:
         playPos.store (pos);
     }
 
+    // ---------------------------------------------------------------- keys ----
+
+    // The point of these is the 1/2/3 row. Judging a denoiser means hearing the same
+    // moment as Original, Clean and Removed one after another, and hunting for a button
+    // with the mouse between each one is long enough to lose what you were comparing.
+    bool keyPressed (const juce::KeyPress& k) override
+    {
+        const auto code = k.getKeyCode();
+        const bool ctrl = k.getModifiers().isCommandDown();
+        const bool shift = k.getModifiers().isShiftDown();
+
+        if (code == juce::KeyPress::spaceKey)   { togglePlay (shift); return true; }
+        if (code == juce::KeyPress::returnKey)  { if (learnBtn.isEnabled()) startProcessing(); return true; }
+        if (code == juce::KeyPress::escapeKey)  { cancelProcessing(); return true; }
+
+        if (ctrl && (code == 'O' || code == 'o')) { openFile(); return true; }
+        if (ctrl && (code == 'S' || code == 's')) { exportClean(); return true; }
+
+        // monitor switching - the shortcuts that actually matter
+        if (code == '1') { selectMonitor (Monitor::original); return true; }
+        if (code == '2') { selectMonitor (Monitor::clean);    return true; }
+        if (code == '3') { selectMonitor (Monitor::removed);  return true; }
+
+        if (code == 'F' || code == 'f') { wave.zoomToFit(); updateViewLabel(); return true; }
+        if (code == 'Z' || code == 'z') { wave.zoomToSelection(); updateViewLabel(); return true; }
+
+        if (code == juce::KeyPress::upKey || code == '+' || code == '=')
+        { wave.zoomBy (1.0 / 1.4); updateViewLabel(); return true; }
+        if (code == juce::KeyPress::downKey || code == '-')
+        { wave.zoomBy (1.4); updateViewLabel(); return true; }
+
+        if (code == juce::KeyPress::leftKey)  { wave.scrollBy (-0.25); updateViewLabel(); return true; }
+        if (code == juce::KeyPress::rightKey) { wave.scrollBy ( 0.25); updateViewLabel(); return true; }
+        if (code == juce::KeyPress::homeKey)
+        {
+            playPos.store (wave.hasSelection() ? (double) wave.selectionStart() : 0.0);
+            return true;
+        }
+        return false;
+    }
+
+    // Focus has to come back to this component after any dialog or click, or the keys stop
+    // working and it looks like they were never there.
+    void mouseDown (const juce::MouseEvent&) override { grabKeyboardFocus(); }
+    void parentHierarchyChanged() override { grabKeyboardFocus(); }
+
     // ---------------------------------------------------------------- ui ----
 
     void paint (juce::Graphics& g) override { g.fillAll (col::bg); }
@@ -201,10 +266,12 @@ public:
         status.setBounds (top);
 
         b.removeFromTop (10);
-        hint.setBounds (b.removeFromTop (46));
+        hint.setBounds (b.removeFromTop (34));
         b.removeFromTop (4);
 
-        auto bottom = b.removeFromBottom (showAdvanced ? 210 : 150);
+        auto bottom = b.removeFromBottom (showAdvanced ? 232 : 172);
+        keysLabel.setBounds (bottom.removeFromBottom (18));
+        bottom.removeFromBottom (4);
 
         // zoom row sits directly under the waveform, where the thing it controls is
         auto zoomRow = bottom.removeFromTop (26);
@@ -402,6 +469,7 @@ public:
             status.setText (s, juce::dontSendNotification);
             refreshEnablement();
             updateViewLabel();
+            grabKeyboardFocus();
         }
     }
 
@@ -441,6 +509,23 @@ private:
     }
 
     // ---------------------------------------------------------------- misc ----
+
+    void applyMonitor (Monitor m)
+    {
+        monitor = m;
+        wave.setAudioKeepSelection (bufferFor (m));
+    }
+
+    // Used by the 1/2/3 keys: moves the radio button too, so the window always shows what
+    // you are hearing.
+    void selectMonitor (Monitor m)
+    {
+        auto* b = m == Monitor::clean ? &cleanBtn
+                : m == Monitor::removed ? &removedBtn : &origBtn;
+        if (! b->isEnabled()) return;
+        b->setToggleState (true, juce::dontSendNotification);
+        applyMonitor (m);
+    }
 
     const std::vector<std::vector<float>>* bufferFor (Monitor m) const
     {
@@ -518,12 +603,14 @@ private:
     }
 
     juce::LookAndFeel_V4 lnf;
+    juce::TooltipWindow tooltips { this, 700 };
     WaveformView wave;
     juce::TextButton openBtn, learnBtn, cancelBtn, playBtn, playSelBtn, exportBtn,
                      advancedBtn, fitBtn, zoomSelBtn;
     juce::TextButton origBtn, cleanBtn, removedBtn;
     juce::Slider reductionS, smoothingS, preserveS, oversubS;
-    juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint, viewLabel;
+    juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint, viewLabel,
+                keysLabel;
     double progressValue = 0.0;
     juce::ProgressBar progress { progressValue };
     std::unique_ptr<juce::FileChooser> chooser;

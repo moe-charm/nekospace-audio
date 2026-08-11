@@ -83,6 +83,25 @@ public:
         setView (selStart - pad, (selEnd - selStart) + 2 * pad);
     }
 
+    // Keyboard zoom works about the playhead when there is one, so the thing you are
+    // listening to stays put - the same rule the wheel follows about the pointer.
+    void zoomBy (double factor)
+    {
+        if (total <= 0) return;
+        const int anchor = (playhead >= 0 && playhead < total)
+                             ? playhead : viewStart + viewLen / 2;
+        const int newLen = juce::jlimit (256, juce::jmax (256, total),
+                                         juce::roundToInt (viewLen * factor));
+        const double frac = juce::jlimit (0.0, 1.0,
+            (double) (anchor - viewStart) / juce::jmax (1, viewLen));
+        setView (anchor - juce::roundToInt (frac * newLen), newLen);
+    }
+
+    void scrollBy (double screensFraction)
+    {
+        setView (viewStart + juce::roundToInt (screensFraction * viewLen), viewLen);
+    }
+
     juce::String viewDescription() const
     {
         if (total <= 0 || sr <= 0) return {};
