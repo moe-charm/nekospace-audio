@@ -121,14 +121,26 @@ or consonants in it, the setting is wrong.
 This is the test, and it is more reliable than A/B-ing the cleaned file: denoising almost
 always sounds *cleaner* in isolation, and the damage only shows up in context.
 
+## Is it worth running at all?
+
+Denoising is never free — it buys quiet with artefact risk, so it is only worth doing when
+the noise is, or will become, audible. If the floor is already inaudible at the gain the
+material will actually be played at, the right answer is to leave it alone.
+
+The test: raise **Monitor Gain** by roughly what the mix will add — compression and
+normalisation on a whisper can easily be +20 to +30 dB — and compare `1` against `2` at
+that level. If the hiss bothers you there, the tool is worth running. If it does not, it is
+not, and no setting changes that.
+
 ## Reading the level numbers
 
 Broadband RMS is a poor measure of what this does, and the CLI's summary line will
-understate it. On a real take the gain sits on the reduction floor for the great majority
-of bins — 87 % measured on one — while the region's *energy* is dominated by the handful of
-loud transient bins the algorithm decides are signal and passes through. The result is a
-1 dB change in RMS from a process that is attenuating most of the spectrum by 10 dB. Judge
-by the noise floor curve and by ear with Monitor Gain up, not by the RMS figure.
+understate it. The gain can sit on the reduction ceiling across the great majority of bins
+while total RMS barely moves, because the energy of a quiet passage is dominated by the
+handful of loud transient bins the algorithm classifies as signal and passes through — so a
+process attenuating most of the spectrum by 10 dB can show up as a change of about 1 dB.
+Judge by the spectrogram and the noise floor curve, and by ear with Monitor Gain up, not by
+the RMS figure.
 
 ## What to check, in order
 

@@ -1,8 +1,9 @@
 # Reference: noise reduction for whisper and breath
 
-Research note for a future product (working name **CleanVoice**). Nothing here is built
-yet. It exists so the first implementation starts from decisions rather than from a blank
-file, and so the reasoning survives if the work is picked up months later.
+Design notes and sources for **NekoSpace CleanVoice**. Written before the first line of it
+existed, so that the implementation started from decisions rather than a blank file, and
+kept up to date since — v0 and v1 of the roadmap below are built; see
+[the product readme](../plugins/cleanvoice/README.md) for how to run them.
 
 Compiled 2026-08-03 from a literature and product survey. Where the survey's sources are
 primary (papers, official product docs, licence files) the claim is treated as established;
@@ -267,16 +268,54 @@ licences **separately** from the code licence.
 
 | | Contents |
 | --- | --- |
-| **v0** | STFT/iSTFT, fixed profile, plain Wiener, common gain, the component-wise evaluation, ILD/IPD/coherence measurement, unity-gain reconstruction test. Wiener is the test instrument, not the product. |
-| **v1** | OM-LSA, decision-directed prior SNR, 6–12 dB ceiling, asymmetric log-gain smoothing, `G = max(G_L, G_R)`, fixed profile only |
+| **v0** — built | STFT/iSTFT, fixed profile, common gain, ILD preservation and unity-gain reconstruction tests |
+| **v1** — built | Decision-directed prior SNR with a Wiener gain, 6–12 dB ceiling, asymmetric log-gain smoothing, `G = max(G_L, G_R)`, fixed profile only, plus the app: waveform, zoom, selection audition, Original/Clean/Removed, spectrogram, noise floor, monitoring gain. **OM-LSA is not in yet** — the gain rule is still Wiener over the decision-directed estimate, which is the step below it |
 | **v2** | Protection: LTLEV, modulation depth, positive spectral flux, long-term spectral divergence, onset-triggered DD reset, protection-linked gain floor |
 | **v3** | Restricted adaptation, gated as described above, blind-compared against v2 |
 | **v4** | Compare RNNoise / DeepFilterNet / a common-gain model on the same corpus at the same reduction ceiling |
 
-No GUI in v0–v2. A command-line tool emitting `clean.wav` and `removed.wav` answers the only
-question that matters. **Listening to the removed signal is the test** — if voice, breath or
-consonants are audible in it, the setting is wrong, and no amount of A/B on the cleaned file
-will reveal that as reliably.
+**Examining the removed signal is the test** — if voice, breath or consonants are in it, the
+setting is wrong, and no amount of A/B on the cleaned file reveals that as reliably. The GUI
+was built earlier than this plan plans for it, because judging real material by ear needed
+the transport and the displays rather than two files on disk.
+
+## Judging the result
+
+Three things about this class of processor make it hard to evaluate, and all three cost
+time to rediscover.
+
+**The removed signal is inherently far below the programme.** It is a noise floor minus a
+few dB of it, so it sits tens of dB under anything else in the file. Monitoring it at unity
+is not a test — nothing is audible either way, and the tool looks broken while working
+correctly. **Monitoring gain is a requirement of the design, not a convenience.** It must
+be playback-only so it can be pushed hard without touching what gets exported.
+
+**Broadband RMS is close to useless as a measure of a spectral suppressor.** The gain can
+sit on the reduction ceiling across the great majority of bins while total RMS barely
+moves, because the energy of a quiet passage is dominated by the handful of loud transient
+bins the estimator classifies as signal and passes through. A summary level figure will
+therefore understate the process, sometimes by an order of magnitude. Report and judge
+per-bin behaviour, not total energy.
+
+**A spectrogram of the removed signal settles in one glance what listening struggles with.**
+Vertical strokes are consonants being eaten; horizontal bands are voice; flat, structureless
+haze is the correct result. On a clean recording the ear cannot reliably tell those apart at
+any monitoring level, and the picture can.
+
+## When the tool earns its place
+
+Removing noise is never free — it buys quiet with artefact risk. That trade is only worth
+making when the noise is, or will become, audible:
+
+- **After gain.** A whisper lifted by compression or normalisation lifts the floor with it.
+  The honest test is to raise the monitoring gain by the amount the mix will apply and
+  compare the original against the cleaned version at that level.
+- **High-gain close-mic material.** A quiet room is not a treated room, and a whisper at the
+  ear runs the preamp hard.
+
+On a recording whose floor is already inaudible under the intended playback gain, the right
+answer is to leave it alone. The tool should make that conclusion easy to reach — which is
+what the spectrogram and the noise-floor curve are for.
 
 ## Open questions
 
