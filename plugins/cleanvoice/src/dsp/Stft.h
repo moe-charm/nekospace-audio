@@ -42,6 +42,15 @@ public:
     }
 
     int fftSize() const noexcept { return n; }
+
+    // Sum of the analysis window. A full-scale sine lands at (A/2)*windowSum in the bin
+    // it falls in, which is what turns a raw bin power into a dBFS reading on screen.
+    float windowSum() const noexcept
+    {
+        float acc = 0.0f;
+        for (float v : win) acc += v;
+        return acc;
+    }
     int hopSize() const noexcept { return hop; }
     int numBins() const noexcept { return n / 2 + 1; }
 

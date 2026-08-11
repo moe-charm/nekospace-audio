@@ -55,6 +55,7 @@ Drop a `.wav` on the window, or pass one on the command line, to skip the file d
 | **+ / −**, up/down | zoom about the playhead |
 | **← / →** | scroll |
 | **Home** | playhead to the selection, or to the start |
+| **N** | show / hide the noise floor |
 | **double-click** | clear the selection |
 | **Ctrl+O / Ctrl+S** | open / export |
 
@@ -62,6 +63,16 @@ Drop a `.wav` on the window, or pass one on the command line, to skip the file d
 Original, then Clean, then Removed, one after another — and hunting for a button with the
 mouse between each is long enough to lose what you were comparing. No control takes
 keyboard focus, so Space never presses whichever button you last clicked.
+
+**Monitor Gain** boosts playback only — it never touches the exported file. It is not a
+convenience: a studio noise floor sits near −100 dBFS per bin, and what gets removed from
+it is quieter still, so at unity the Removed bus is inaudible and the tool looks broken
+when it is working perfectly. Push it to +30 dB or so to audition Removed.
+
+**Noise Floor** (`N`) draws the learned profile as level against log frequency. It answers
+what listening at unity cannot: whether there is a hiss at all and what shape it is,
+whether there is a tonal spike — a fan, a whine, mains hum — rather than broadband noise,
+and whether something that is obviously not noise got into the selection.
 
 **Reduction** and **Smoothing** are on the front. **Preserve Breath** and
 **Oversubtraction** are behind *Advanced*, and Preserve Breath starts at 0 on purpose: the
@@ -98,6 +109,15 @@ or consonants in it, the setting is wrong.
 
 This is the test, and it is more reliable than A/B-ing the cleaned file: denoising almost
 always sounds *cleaner* in isolation, and the damage only shows up in context.
+
+## Reading the level numbers
+
+Broadband RMS is a poor measure of what this does, and the CLI's summary line will
+understate it. On a real take the gain sits on the reduction floor for the great majority
+of bins — 87 % measured on one — while the region's *energy* is dominated by the handful of
+loud transient bins the algorithm decides are signal and passes through. The result is a
+1 dB change in RMS from a process that is attenuating most of the spectrum by 10 dB. Judge
+by the noise floor curve and by ear with Monitor Gain up, not by the RMS figure.
 
 ## What to check, in order
 

@@ -15,6 +15,7 @@
 #include <atomic>
 #include <memory>
 #include "WaveformView.h"
+#include "NoiseFloorView.h"
 #include "../src/io/WavFile.h"
 #include "../src/dsp/Stft.h"
 #include "../src/dsp/NoiseProfile.h"
@@ -61,6 +62,13 @@ public:
         button (zoomSelBtn,"Zoom to Selection", "Z",
                 [this] { wave.zoomToSelection(); updateViewLabel(); });
         button (exportBtn,"Export Clean WAV...", "Ctrl+S", [this] { exportClean(); });
+        floorBtn.setButtonText ("Noise Floor");
+        floorBtn.setClickingTogglesState (true);
+        floorBtn.setWantsKeyboardFocus (false);
+        floorBtn.setTooltip ("Show the learned noise floor   [N]");
+        floorBtn.onClick = [this] { showFloor = floorBtn.getToggleState(); resized(); };
+        addAndMakeVisible (floorBtn);
+        addChildComponent (floorView);
         cancelBtn.setVisible (false);
 
         for (auto* b : { &origBtn, &cleanBtn, &removedBtn })
@@ -105,6 +113,11 @@ public:
         slider (smoothingS, smoothingL, "SMOOTHING", 0.0, 1.0, 0.01, 0.5, "");
         slider (preserveS,  preserveL,  "PRESERVE BREATH", 0.0, 1.0, 0.01, 0.0, "");
         slider (oversubS,   oversubL,   "OVERSUBTRACTION", 0.5, 3.0, 0.05, 1.0, "x");
+        // Monitoring only, never written to the exported file. A studio noise floor sits
+        // near -77 dBFS and what gets removed from it is quieter still, so at unity the
+        // Removed bus is inaudible and the tool looks broken when it is working.
+        slider (monitorS, monitorL, "MONITOR GAIN", 0.0, 48.0, 1.0, 0.0, " dB");
+        monitorS.setTooltip ("Playback only - does not affect the exported file");
 
         // Preserve Breath and Oversubtraction start hidden: the first listen has to be the
         // unprotected behaviour, or there is no way to know what the protection is for.
@@ -195,10 +208,11 @@ public:
             int idx = (int) pos;
             if (loop && idx >= loopB) { pos = (double) loopA; idx = loopA; }
             if (idx >= n) { playing.store (false); pos = 0; break; }
+            const float mg = monitorGain.load();
             for (int c = 0; c < outCh; ++c)
             {
                 const auto& chan = (*src)[(size_t) juce::jmin (c, srcCh - 1)];
-                info.buffer->setSample (c, info.startSample + i, chan[(size_t) idx]);
+                info.buffer->setSample (c, info.startSample + i, chan[(size_t) idx] * mg);
             }
             pos += step;
         }
@@ -231,6 +245,8 @@ public:
         if (code == '2') { selectMonitor (Monitor::clean);    return true; }
         if (code == '3') { selectMonitor (Monitor::removed);  return true; }
 
+        if (code == 'N' || code == 'n')
+        { floorBtn.setToggleState (! floorBtn.getToggleState(), juce::sendNotification); return true; }
         if (code == 'F' || code == 'f') { wave.zoomToFit(); updateViewLabel(); return true; }
         if (code == 'Z' || code == 'z') { wave.zoomToSelection(); updateViewLabel(); return true; }
 
@@ -273,7 +289,7 @@ public:
         hint.setBounds (b.removeFromTop (34));
         b.removeFromTop (4);
 
-        auto bottom = b.removeFromBottom (showAdvanced ? 232 : 172);
+        auto bottom = b.removeFromBottom (showAdvanced ? 258 : 198);
         keysLabel.setBounds (bottom.removeFromBottom (18));
         bottom.removeFromBottom (4);
 
@@ -283,9 +299,17 @@ public:
         zoomRow.removeFromLeft (6);
         zoomSelBtn.setBounds (zoomRow.removeFromLeft (150));
         zoomRow.removeFromLeft (12);
+        floorBtn.setBounds (zoomRow.removeFromRight (120));
+        zoomRow.removeFromRight (12);
         viewLabel.setBounds (zoomRow);
         bottom.removeFromTop (6);
 
+        floorView.setVisible (showFloor);
+        if (showFloor)
+        {
+            floorView.setBounds (b.removeFromBottom (juce::jmax (120, b.getHeight() / 2)));
+            b.removeFromBottom (8);
+        }
         wave.setBounds (b);
 
         auto row = bottom.removeFromTop (30);
@@ -310,6 +334,7 @@ public:
         };
         lay (reductionL, reductionS);
         lay (smoothingL, smoothingS);
+        lay (monitorL, monitorS);
         if (showAdvanced) { lay (preserveL, preserveS); lay (oversubL, oversubS); }
         preserveL.setVisible (showAdvanced); preserveS.setVisible (showAdvanced);
         oversubL.setVisible (showAdvanced);  oversubS.setVisible (showAdvanced);
@@ -413,6 +438,7 @@ private:
                 clean = std::move (r);
                 removed = std::move (rm);
                 haveProfile = true;
+                publishNoiseFloor();
                 status.setText (fileName + "  -  processed from " + juce::String (frames)
                                   + " noise frames", juce::dontSendNotification);
                 finishJob (true);
@@ -466,6 +492,7 @@ public:
             file = std::move (loaded);
             clean.clear(); removed.clear();
             haveProfile = false;
+            floorView.clear();
             fileName = f.getFileName();
             fileRate = file.sampleRate;
             wave.setAudio (&file.channels, file.sampleRate);
@@ -523,6 +550,22 @@ private:
     }
 
     // ---------------------------------------------------------------- misc ----
+
+    // Copies the learned per-bin power out of the profile for display. Cheap, and it is
+    // the only way to see that a fan tone or a stray transient got into the selection.
+    void publishNoiseFloor()
+    {
+        if (! haveProfile) { floorView.clear(); return; }
+        const int fftSize = cv::fftSizeForRate (file.sampleRate);
+        const cv::Stft stft (fftSize, fftSize / 4);
+        const int bins = stft.numBins();
+        std::vector<std::vector<float>> psd ((size_t) profile.channels(),
+                                             std::vector<float> ((size_t) bins, 0.0f));
+        for (int c = 0; c < profile.channels(); ++c)
+            for (int k = 0; k < bins; ++k)
+                psd[(size_t) c][(size_t) k] = profile.power (c, k);
+        floorView.setProfile (std::move (psd), file.sampleRate, stft.windowSum());
+    }
 
     void applyMonitor (Monitor m)
     {
@@ -611,6 +654,7 @@ private:
 
     void timerCallback() override
     {
+        monitorGain.store (juce::Decibels::decibelsToGain ((float) monitorS.getValue()));
         wave.setPlayhead ((int) playPos.load());
         if (! playing.load()
             && (playBtn.getButtonText() == "Stop" || playSelBtn.getButtonText() == "Stop"))
@@ -625,7 +669,12 @@ private:
     juce::TextButton openBtn, learnBtn, cancelBtn, playBtn, playSelBtn, exportBtn,
                      advancedBtn, fitBtn, zoomSelBtn;
     juce::TextButton origBtn, cleanBtn, removedBtn;
-    juce::Slider reductionS, smoothingS, preserveS, oversubS;
+    juce::Slider reductionS, smoothingS, preserveS, oversubS, monitorS;
+    juce::Label monitorL;
+    NoiseFloorView floorView;
+    juce::TextButton floorBtn;
+    std::atomic<float> monitorGain { 1.0f };
+    bool showFloor = false;
     juce::Label reductionL, smoothingL, preserveL, oversubL, status, hint, viewLabel,
                 keysLabel;
     double progressValue = 0.0;
