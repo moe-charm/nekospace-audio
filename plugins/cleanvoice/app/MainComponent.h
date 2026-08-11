@@ -55,8 +55,8 @@ public:
         button (openBtn,  "Open WAV...", "Ctrl+O", [this] { openFile(); });
         button (learnBtn, "Learn Noise + Process", "Enter", [this] { startProcessing(); });
         button (cancelBtn,"Cancel", "Esc", [this] { cancelProcessing(); });
-        button (playBtn,  "Play", "Space", [this] { togglePlay (false); });
-        button (playSelBtn, "Play Selection", "Shift+Space", [this] { togglePlay (true); });
+        button (playBtn,  "Play All", "Shift+Space", [this] { togglePlay (false); });
+        button (playSelBtn, "Play Selection", "Space", [this] { togglePlay (true); });
         button (fitBtn,   "Fit", "F", [this] { wave.zoomToFit(); updateViewLabel(); });
         button (zoomSelBtn,"Zoom to Selection", "Z",
                 [this] { wave.zoomToSelection(); updateViewLabel(); });
@@ -129,8 +129,9 @@ public:
         hint.setFont (juce::Font (juce::FontOptions (11.5f)));
         hint.setText ("Drag over a stretch of room tone with no voice in it - that range is "
                       "what the noise is learned FROM, and the whole file gets processed. "
-                      "Play Selection loops it: if you can hear ANY voice or breath in "
-                      "there, move it.",
+                      "Space loops it: if you can hear ANY voice or breath in there, move "
+                      "it. Once learned, the profile is kept - clear the selection and "
+                      "keep re-processing at different Reduction settings.",
                       juce::dontSendNotification);
         addAndMakeVisible (hint);
 
@@ -139,10 +140,10 @@ public:
         keysLabel.setJustificationType (juce::Justification::centredLeft);
         keysLabel.setColour (juce::Label::textColourId, col::textDim.withAlpha (0.85f));
         keysLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
-        keysLabel.setText ("Space play   Shift+Space loop selection   1/2/3 Original/Clean/"
-                           "Removed   Enter process   F fit   Z zoom to selection   "
-                           "+/- zoom   arrows scroll   wheel zoom, shift-wheel scroll, "
-                           "right-drag pan",
+        keysLabel.setText ("Space play (selection if there is one)   Shift+Space play all   "
+                           "1/2/3 Original/Clean/Removed   Enter process   double-click "
+                           "clears selection   F fit   Z zoom to selection   +/- zoom   "
+                           "arrows scroll   wheel zoom, shift-wheel scroll, right-drag pan",
                            juce::dontSendNotification);
         addAndMakeVisible (keysLabel);
 
@@ -215,7 +216,10 @@ public:
         const bool ctrl = k.getModifiers().isCommandDown();
         const bool shift = k.getModifiers().isShiftDown();
 
-        if (code == juce::KeyPress::spaceKey)   { togglePlay (shift); return true; }
+        // Editor convention: Space plays the selection when there is one. Shift+Space is
+        // the way out of it, for comparing renders across the whole take.
+        if (code == juce::KeyPress::spaceKey)
+        { togglePlay (! shift && wave.hasSelection()); return true; }
         if (code == juce::KeyPress::returnKey)  { if (learnBtn.isEnabled()) startProcessing(); return true; }
         if (code == juce::KeyPress::escapeKey)  { cancelProcessing(); return true; }
 
@@ -330,13 +334,20 @@ private:
 
     void startProcessing()
     {
-        if (file.numSamples() == 0 || ! wave.hasSelection()) return;
-        if (job != nullptr) return;
+        if (file.numSamples() == 0 || job != nullptr) return;
+        // Either learn from the current selection, or re-use the profile already learned.
+        // Keeping the profile alive after the selection is cleared is what makes tuning
+        // Reduction cheap: that is the loop this tool is actually used in, and forcing a
+        // re-select for every attempt would tax the most common action.
+        if (! wave.hasSelection() && ! haveProfile) return;
 
         params.reductionDb  = (float) reductionS.getValue();
         params.smoothing    = (float) smoothingS.getValue();
         params.preserve     = (float) preserveS.getValue();
         params.overSubtract = (float) oversubS.getValue();
+
+        learnFromSelection = wave.hasSelection();
+        selForJob = { wave.selectionStart(), wave.selectionEnd() };
 
         progressValue = 0.0;
         progress.setVisible (true);
@@ -363,9 +374,10 @@ private:
         const int fftSize = cv::fftSizeForRate (file.sampleRate);
         cv::Stft stft (fftSize, fftSize / 4);
 
-        cv::NoiseProfile profile;
-        const bool learned = profile.learn (stft, file.channels, n,
-                                            wave.selectionStart(), wave.selectionEnd());
+        const bool relearn = learnFromSelection;
+        const bool learned = ! relearn
+                             || profile.learn (stft, file.channels, n,
+                                               selForJob.first, selForJob.second);
         if (! learned)
         {
             juce::MessageManager::callAsync ([this, fftSize]
@@ -400,6 +412,7 @@ private:
             {
                 clean = std::move (r);
                 removed = std::move (rm);
+                haveProfile = true;
                 status.setText (fileName + "  -  processed from " + juce::String (frames)
                                   + " noise frames", juce::dontSendNotification);
                 finishJob (true);
@@ -452,6 +465,7 @@ public:
             playPos.store (0.0);
             file = std::move (loaded);
             clean.clear(); removed.clear();
+            haveProfile = false;
             fileName = f.getFileName();
             fileRate = file.sampleRate;
             wave.setAudio (&file.channels, file.sampleRate);
@@ -581,7 +595,10 @@ private:
     {
         const bool haveFile = file.numSamples() > 0;
         const bool haveClean = ! clean.empty();
-        learnBtn.setEnabled (haveFile && wave.hasSelection() && job == nullptr);
+        const bool canLearn = wave.hasSelection();
+        learnBtn.setEnabled (haveFile && (canLearn || haveProfile) && job == nullptr);
+        learnBtn.setButtonText (canLearn ? "Learn Noise + Process"
+                                         : "Process (keeps learned noise)");
         playBtn.setEnabled (haveFile);
         playSelBtn.setEnabled (haveFile && wave.hasSelection());
         zoomSelBtn.setEnabled (haveFile && wave.hasSelection());
@@ -620,6 +637,10 @@ private:
     std::vector<std::vector<float>> clean, removed;
     cv::DenoiseParams params;
     juce::String fileName;
+    // The learned profile outlives the selection on purpose; see startProcessing.
+    cv::NoiseProfile profile;
+    bool haveProfile = false, learnFromSelection = true;
+    std::pair<int, int> selForJob { 0, 0 };
 
     std::atomic<bool> playing { false };
     std::atomic<bool> loopSelection { false };

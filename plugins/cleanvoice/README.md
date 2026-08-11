@@ -28,10 +28,16 @@ and *Zoom to Selection* jump. This is not a convenience: a 22-minute take drawn 
 1500 pixels puts nearly a second in every pixel, so marking a one-second region is below
 the resolution of the control without it.
 
-**Play Selection** loops the marked range. This is how you check the range before learning
-from it — if you can hear any voice or breath in the loop, move it, because whatever is in
-there is about to be treated as noise and removed from the entire file. Clicking the
-waveform moves the playhead without disturbing the selection.
+**Space loops the marked range** when there is one, the way an audio editor does. This is
+how you check the range before learning from it — if you can hear any voice or breath in
+the loop, move it, because whatever is in there is about to be treated as noise and removed
+from the entire file. Clicking the waveform moves the playhead without disturbing the
+selection; double-clicking clears it.
+
+**The learned noise profile outlives the selection.** Once you have processed once, clear
+the selection and keep pressing *Process* at different Reduction settings — that is the
+loop this tool is used in, and making it re-select every time would tax the most common
+action. The button says which it will do.
 
 Drop a `.wav` on the window, or pass one on the command line, to skip the file dialog.
 
@@ -39,8 +45,8 @@ Drop a `.wav` on the window, or pass one on the command line, to skip the file d
 
 | | |
 | --- | --- |
-| **Space** | play / stop |
-| **Shift+Space** | loop the selection |
+| **Space** | play / stop — **loops the selection when there is one** |
+| **Shift+Space** | play the whole take, ignoring the selection |
 | **1 / 2 / 3** | Original / Clean / Removed Noise |
 | **Enter** | Learn Noise + Process |
 | **Esc** | cancel processing |
@@ -49,6 +55,7 @@ Drop a `.wav` on the window, or pass one on the command line, to skip the file d
 | **+ / −**, up/down | zoom about the playhead |
 | **← / →** | scroll |
 | **Home** | playhead to the selection, or to the start |
+| **double-click** | clear the selection |
 | **Ctrl+O / Ctrl+S** | open / export |
 
 `1` `2` `3` are the ones that matter. Judging a denoiser means hearing the same moment as

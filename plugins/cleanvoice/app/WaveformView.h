@@ -206,6 +206,16 @@ public:
         repaint();
     }
 
+    // Double-click clears the selection, the way an audio editor does. The learned noise
+    // profile deliberately survives this - see MainComponent - so clearing the range to
+    // get out of the loop does not cost you the thing you selected it for.
+    void mouseDoubleClick (const juce::MouseEvent&) override
+    {
+        selStart = selEnd = 0;
+        if (onSelectionChanged) onSelectionChanged();
+        repaint();
+    }
+
     void mouseUp (const juce::MouseEvent&) override
     {
         if (panning) { panning = false; return; }
