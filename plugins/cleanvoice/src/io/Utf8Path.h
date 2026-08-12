@@ -14,6 +14,9 @@
 // self-contained, JUCE-free, dependency-free header like the rest of src/.
 #include <cstdio>
 #include <string>
+#ifndef _WIN32
+ #include <unistd.h>
+#endif
 
 namespace cv
 {
@@ -108,6 +111,43 @@ inline std::FILE* openUtf8 (const std::string& path, const char* mode)
     return _wfopen_s (&file, wPath.c_str(), wMode.c_str()) == 0 ? file : nullptr;
 #else
     return std::fopen (path.c_str(), mode);
+#endif
+}
+// --- the three operations a commit step needs, all UTF-8 in, all platform-correct ---
+
+inline bool existsUtf8 (const std::string& path)
+{
+    std::FILE* f = openUtf8 (path, "rb");
+    if (f == nullptr) return false;
+    std::fclose (f);
+    return true;
+}
+
+// Renames only when the destination does not exist.
+//
+// This is the whole safety property of the commit step, and it is deliberately expressed
+// as "the rename fails" rather than as a check followed by a rename: a check-then-act pair
+// can be overtaken between the two, and the point of committing this way is that a
+// finished output can never be replaced by a run that thought it was absent.
+inline bool renameNoReplace (const std::string& from, const std::string& to)
+{
+#ifdef _WIN32
+    // MoveFileExW without MOVEFILE_REPLACE_EXISTING fails if the target exists, and the
+    // test is made by the filesystem rather than by us.
+    return _wrename (utf8ToWide (from).c_str(), utf8ToWide (to).c_str()) == 0;
+#else
+    if (::link (from.c_str(), to.c_str()) != 0) return false;   // fails if `to` exists
+    ::unlink (from.c_str());
+    return true;
+#endif
+}
+
+inline bool removeUtf8 (const std::string& path)
+{
+#ifdef _WIN32
+    return _wremove (utf8ToWide (path).c_str()) == 0;
+#else
+    return std::remove (path.c_str()) == 0;
 #endif
 }
 } // namespace cv

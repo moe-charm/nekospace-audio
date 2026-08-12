@@ -17,6 +17,11 @@ target_link_libraries(cv_tests PRIVATE cv_dsp)
 target_compile_features(cv_tests PRIVATE cxx_std_17)
 add_test(NAME cleanvoice_dsp COMMAND cv_tests)
 
+add_executable(cv_session_tests tests/SessionTests.cpp)
+target_link_libraries(cv_session_tests PRIVATE cv_dsp)
+target_compile_features(cv_session_tests PRIVATE cxx_std_17)
+add_test(NAME cleanvoice_session COMMAND cv_session_tests)
+
 if(MSVC)
     target_compile_options(cleanvoice PRIVATE /utf-8)
     target_compile_options(cv_tests PRIVATE /W4 /utf-8)

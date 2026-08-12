@@ -37,6 +37,70 @@ namespace wav
 inline uint32_t rd32 (const uint8_t* p) { return (uint32_t) p[0] | ((uint32_t) p[1] << 8) | ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24); }
 inline uint16_t rd16 (const uint8_t* p) { return (uint16_t) ((uint32_t) p[0] | ((uint32_t) p[1] << 8)); }
 
+// Format only, without loading the samples.
+//
+// Additive: read() below is untouched. A compatibility check across a session must not
+// have to pull hundreds of megabytes through memory per file just to compare sample rates.
+struct WavInfo
+{
+    double sampleRate = 0.0;
+    int channels = 0, bitsPerSample = 0;
+    bool isFloat = false;
+    long long frames = 0;
+};
+
+inline bool probe (const std::string& path, WavInfo& out, std::string& err)
+{
+    FILE* f = openUtf8 (path, "rb");
+    if (f == nullptr) { err = "cannot open " + path; return false; }
+    std::vector<uint8_t> head (64 * 1024);
+    const size_t got = std::fread (head.data(), 1, head.size(), f);
+    std::fclose (f);
+    head.resize (got);
+    if (got < 44) { err = "short or unreadable file"; return false; }
+
+    if (std::memcmp (head.data(), "RIFF", 4) != 0
+        || std::memcmp (head.data() + 8, "WAVE", 4) != 0)
+    { err = "not a RIFF/WAVE file"; return false; }
+
+    size_t pos = 12;
+    uint16_t fmt = 0, ch = 0, bits = 0;
+    uint32_t rate = 0, dataLen = 0;
+    bool haveFmt = false, haveData = false;
+    while (pos + 8 <= head.size())
+    {
+        const char* id = (const char*) head.data() + pos;
+        const uint32_t sz = rd32 (head.data() + pos + 4);
+        const size_t body = pos + 8;
+        if (std::memcmp (id, "fmt ", 4) == 0 && sz >= 16 && body + 16 <= head.size())
+        {
+            fmt  = rd16 (head.data() + body);
+            ch   = rd16 (head.data() + body + 2);
+            rate = rd32 (head.data() + body + 4);
+            bits = rd16 (head.data() + body + 14);
+            if (fmt == 0xFFFE && sz >= 40 && body + 26 <= head.size())
+                fmt = rd16 (head.data() + body + 24);
+            haveFmt = true;
+        }
+        else if (std::memcmp (id, "data", 4) == 0)
+        {
+            dataLen = sz; haveData = true; break;      // the header ends here
+        }
+        pos = body + sz + (sz & 1);
+    }
+    if (! haveFmt || ! haveData || ch == 0)
+    { err = "no data or fmt chunk in the first 64 kB"; return false; }
+    if (fmt != 1 && fmt != 3) { err = "unsupported WAV encoding (not PCM or float)"; return false; }
+    if (! (bits == 16 || bits == 24 || bits == 32)) { err = "unsupported bit depth"; return false; }
+
+    out.sampleRate = (double) rate;
+    out.channels = ch;
+    out.bitsPerSample = bits;
+    out.isFloat = (fmt == 3);
+    out.frames = (long long) dataLen / (long long) (bits / 8 * ch);
+    return true;
+}
+
 inline bool read (const std::string& path, AudioFile& out, std::string& err)
 {
     // openUtf8, not fopen: a path with Japanese characters in it must work, and on
