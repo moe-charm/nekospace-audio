@@ -275,6 +275,58 @@ static void testExistingOutputIsNeverReplaced()
     CHECK (readBytes (out) == first, "the existing output is byte-for-byte untouched");
 }
 
+// Outputs land beside their sources, so a second pass over the same folder would find the
+// first pass's results. Left alone that compounds: take-clean-clean-clean.wav.
+static void testPreviousOutputsAreNotResources()
+{
+    const double sr = 48000.0;
+    const std::string dir = scratchDir + "/again";
+    makeDir (dir);
+    const std::string take = dir + "/take.wav";
+    writeTake (take, makeTake (sr, 2, 2.0, 81));
+
+    auto first = RunPlan::build (baseRequest ({ take }, take));
+    CHECK (SessionRunner::run (first).countOf (ItemResult::written) == 1, "first pass ran");
+    const std::string out = dir + "/take-clean.wav";
+    CHECK (existsUtf8 (out), "first pass produced its output");
+
+    // second pass over everything that is now in the folder, exactly as a folder scan
+    // would hand it over
+    auto second = RunPlan::build (baseRequest ({ take, out }, take));
+    int alreadyOutput = 0;
+    for (const auto& i : second.allItems())
+        if (i.state == ItemState::alreadyOutput) ++alreadyOutput;
+    CHECK (alreadyOutput == 1, "the previous output is not treated as a source");
+    SessionRunner::run (second);
+    CHECK (! existsUtf8 (dir + "/take-clean-clean.wav"),
+           "and no doubly-cleaned file is produced");
+
+    // a different suffix is the deliberate way to redo a session at other settings
+    auto redo = baseRequest ({ take }, take);
+    redo.suffix = "-clean2";
+    redo.params.reductionDb = 20.0f;
+    auto rp = RunPlan::build (redo);
+    CHECK (rp.readyCount() == 1, "changing the suffix allows a second pass");
+    CHECK (SessionRunner::run (rp).countOf (ItemResult::written) == 1, "which runs");
+    CHECK (existsUtf8 (dir + "/take-clean2.wav"), "and lands under the new name");
+    CHECK (existsUtf8 (out), "leaving the first pass's output alone");
+}
+
+static void testDuplicateSourcesAreOneJob()
+{
+    const double sr = 48000.0;
+    const std::string a = scratchDir + "/dup.wav";
+    writeTake (a, makeTake (sr, 2, 2.0, 91));
+
+    auto plan = RunPlan::build (baseRequest ({ a, a }, a));
+    CHECK (plan.readyCount() == 1, "the same file twice is one job, not a collision");
+    int dup = 0;
+    for (const auto& i : plan.allItems())
+        if (i.state == ItemState::duplicateSource) ++dup;
+    CHECK (dup == 1, "and the repeat is reported rather than silently dropped");
+    CHECK (SessionRunner::run (plan).countOf (ItemResult::written) == 1, "it runs once");
+}
+
 // The plan-level check refuses an existing output, so the commit path is never reached in
 // a normal run - which means the guarantee that actually protects against a race is the
 // one least likely to be exercised. Tested directly: the filesystem must refuse, not us.
@@ -414,6 +466,8 @@ int main()
     testNoStateLeakBetweenFiles();
     testSourcesAreNeverModified();
     testIncompatibleAndCollisionsAreCaught();
+    testPreviousOutputsAreNotResources();
+    testDuplicateSourcesAreOneJob();
     testExistingOutputIsNeverReplaced();
     testCommitRefusesToReplace();
     testFailureLeavesNoPartialOutput();

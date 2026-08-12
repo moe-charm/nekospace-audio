@@ -65,7 +65,9 @@ enum class ItemState
     unreadable,         // source could not be probed
     incompatible,       // structurally different from the reference
     outputExists,       // a finished output is already there; never overwritten
-    outputCollision     // two sources want the same output path
+    outputCollision,    // two sources want the same output path
+    alreadyOutput,      // the source is itself a previous run's output
+    duplicateSource     // the same file appears more than once in the list
 };
 
 inline const char* describe (ItemState s)
@@ -77,6 +79,8 @@ inline const char* describe (ItemState s)
         case ItemState::incompatible:    return "incompatible format";
         case ItemState::outputExists:    return "output already exists";
         case ItemState::outputCollision: return "two sources map to one output";
+        case ItemState::alreadyOutput:   return "already an output of a previous run";
+        case ItemState::duplicateSource: return "listed more than once";
     }
     return "?";
 }
@@ -120,6 +124,30 @@ public:
         {
             PlanItem item;
             item.source = src;
+
+            // Outputs land beside their source, so pointing the tool at a folder a second
+            // time would otherwise find the first run's results and clean those too, into
+            // take-clean-clean.wav. A name already carrying the suffix is not a source.
+            if (endsWithSuffix (fileNameOf (src), req.suffix))
+            {
+                item.state = ItemState::alreadyOutput;
+                item.detail = req.suffix;
+                plan.items.push_back (std::move (item));
+                continue;
+            }
+
+            // The same file listed twice is not a collision to report against both - it is
+            // one job mentioned twice, and the second mention is the mistake.
+            bool seen = false;
+            for (const auto& earlier : plan.items)
+                if (earlier.state != ItemState::duplicateSource
+                    && samePath (earlier.source, src)) { seen = true; break; }
+            if (seen)
+            {
+                item.state = ItemState::duplicateSource;
+                plan.items.push_back (std::move (item));
+                continue;
+            }
 
             std::string e;
             if (! wav::probe (src, item.info, e))
@@ -226,6 +254,14 @@ private:
 #else
         return a == b;
 #endif
+    }
+
+    static bool endsWithSuffix (const std::string& fileName, const std::string& suffix)
+    {
+        if (suffix.empty()) return false;
+        const std::string stem = stemOf (fileName);
+        if (stem.size() < suffix.size()) return false;
+        return samePath (stem.substr (stem.size() - suffix.size()), suffix);
     }
 
     static std::string juceless (const wav::WavInfo& i)
