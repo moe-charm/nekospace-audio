@@ -22,6 +22,7 @@
 #include "../src/dsp/Stft.h"
 #include "../src/dsp/NoiseProfile.h"
 #include "../src/dsp/Denoiser.h"
+#include "../src/dsp/PreviewRender.h"
 
 namespace cvapp
 {
@@ -53,6 +54,7 @@ public:
         // region without losing it.
         wave.onPlayheadMoved = [this] (int s) { playPos.store ((double) s); };
         wave.onViewChanged = [this] { syncSpectrogramView(); };
+        wave.onPreviewChanged = [this] { refreshEnablement(); };
 
         // Nothing here takes keyboard focus. If a button had it, Space would press that
         // button instead of starting playback, and which button depends on what you last
@@ -67,7 +69,9 @@ public:
             addAndMakeVisible (b);
         };
         button (openBtn,  "Open WAV...", "Ctrl+O", [this] { openFile(); });
-        button (learnBtn, "Learn Noise + Process", "Enter", [this] { startProcessing(); });
+        button (learnBtn, "Preview Range", "Enter", [this] { startProcessing (true); });
+        button (wholeBtn, "Process Whole File", "Shift+Enter",
+                [this] { startProcessing (false); });
         button (cancelBtn,"Cancel", "Esc", [this] { cancelProcessing(); });
         button (playBtn,  "Play All", "Shift+Space", [this] { togglePlay (false); });
         button (playSelBtn, "Play Selection", "Space", [this] { togglePlay (true); });
@@ -166,11 +170,12 @@ public:
         hint.setJustificationType (juce::Justification::centredLeft);
         hint.setColour (juce::Label::textColourId, col::textDim);
         hint.setFont (juce::Font (juce::FontOptions (11.5f)));
-        hint.setText ("Drag over a stretch of room tone with no voice in it - that range is "
-                      "what the noise is learned FROM, and the whole file gets processed. "
-                      "Space loops it: if you can hear ANY voice or breath in there, move "
-                      "it. Once learned, the profile is kept - clear the selection and "
-                      "keep re-processing at different Reduction settings.",
+        hint.setText ("DRAG marks the cyan NOISE range - learned FROM, never removed. Loop it "
+                      "with Space and move it if any voice is in there.    "
+                      "ALT+DRAG marks the orange PREVIEW range - pick 10-30 s with "
+                      "whispers, breaths and s/sh/f/h in it and only that part is "
+                      "processed, so a setting can be judged in seconds. Process Whole "
+                      "File once it is right.",
                       juce::dontSendNotification);
         addAndMakeVisible (hint);
 
@@ -180,10 +185,11 @@ public:
         keysLabel.setColour (juce::Label::textColourId, col::textDim.withAlpha (0.85f));
         keysLabel.setFont (juce::Font (juce::FontOptions (11.0f)));
         keysLabel.setText ("Space play (selection if there is one)   Shift+Space play all   "
-                           "1/2/3 Original/Clean/Removed   Enter process   G spectrogram   "
-                           "N noise floor   double-click clears selection   F fit   "
-                           "Z zoom to selection   +/- zoom   arrows scroll   wheel zoom, "
-                           "shift-wheel scroll, right-drag pan",
+                           "1/2/3 Original/Clean/Removed   Enter preview range   "
+                           "Shift+Enter whole file   alt+drag preview range   "
+                           "G spectrogram   N noise floor   double-click clears   "
+                           "F fit   Z zoom to selection   +/- zoom   arrows scroll   "
+                           "wheel zoom, shift-wheel scroll, right-drag pan",
                            juce::dontSendNotification);
         addAndMakeVisible (keysLabel);
 
@@ -275,7 +281,12 @@ public:
         // the way out of it, for comparing renders across the whole take.
         if (code == juce::KeyPress::spaceKey)
         { togglePlay (! shift && wave.hasSelection()); return true; }
-        if (code == juce::KeyPress::returnKey)  { if (learnBtn.isEnabled()) startProcessing(); return true; }
+        if (code == juce::KeyPress::returnKey)
+        {
+            auto& b = shift ? wholeBtn : learnBtn;
+            if (b.isEnabled()) startProcessing (! shift);
+            return true;
+        }
         if (code == juce::KeyPress::escapeKey)  { cancelProcessing(); return true; }
 
         if (ctrl && (code == 'O' || code == 'o')) { openFile(); return true; }
@@ -372,9 +383,11 @@ public:
         cleanBtn.setBounds (row.removeFromLeft (100));
         removedBtn.setBounds (row.removeFromLeft (130));
         row.removeFromLeft (12);
-        advancedBtn.setBounds (row.removeFromRight (100));
-        row.removeFromRight (8);
-        learnBtn.setBounds (row.removeFromRight (190));
+        advancedBtn.setBounds (row.removeFromRight (94));
+        row.removeFromRight (6);
+        wholeBtn.setBounds (row.removeFromRight (164));
+        row.removeFromRight (6);
+        learnBtn.setBounds (row.removeFromRight (176));
 
         bottom.removeFromTop (8);
         auto lay = [&bottom] (juce::Label& l, juce::Slider& s)
@@ -391,8 +404,11 @@ public:
         oversubL.setVisible (showAdvanced);  oversubS.setVisible (showAdvanced);
 
         // progress and cancel share the learn button's slot while a job runs
-        progress.setBounds (learnBtn.getBounds().withTrimmedRight (90));
-        cancelBtn.setBounds (learnBtn.getBounds().removeFromRight (84));
+        // While a job runs the two action buttons are replaced in place by the progress
+        // bar and Cancel, so the row does not reflow and nothing moves under the pointer.
+        auto busy = learnBtn.getBounds().getUnion (wholeBtn.getBounds());
+        progress.setBounds (busy.withTrimmedRight (90));
+        cancelBtn.setBounds (busy.removeFromRight (84));
     }
 
 private:
@@ -405,10 +421,12 @@ private:
     public:
         Job (MainComponent& o, std::shared_ptr<const cv::AudioFile> source,
              cv::NoiseProfile startingProfile, cv::DenoiseParams settings,
-             bool shouldRelearn, std::pair<int, int> selection, uint64_t serial)
+             bool shouldRelearn, std::pair<int, int> selection,
+             bool previewOnly, cv::PreviewSpan span, uint64_t serial)
             : juce::Thread ("cleanvoice"), owner (o), safeOwner (&o), input (std::move (source)),
               workingProfile (std::move (startingProfile)), parameters (settings),
-              relearn (shouldRelearn), selectedSamples (selection), id (serial) {}
+              relearn (shouldRelearn), selectedSamples (selection),
+              preview (previewOnly), previewSpan (span), id (serial) {}
         void run() override { owner.runJob (*this); }
         MainComponent& owner;
         juce::Component::SafePointer<MainComponent> safeOwner;
@@ -417,12 +435,15 @@ private:
         cv::DenoiseParams parameters;
         bool relearn = false;
         std::pair<int, int> selectedSamples { 0, 0 };
+        bool preview = false;
+        cv::PreviewSpan previewSpan;
         uint64_t id = 0;
     };
 
-    void startProcessing()
+    void startProcessing (bool previewOnly)
     {
         if (file == nullptr || file->numSamples() == 0 || job != nullptr) return;
+        if (previewOnly && ! wave.hasPreview()) return;
         // Either learn from the current selection, or re-use the profile already learned.
         // Keeping the profile alive after the selection is cleared is what makes tuning
         // Reduction cheap: that is the loop this tool is actually used in, and forcing a
@@ -448,9 +469,13 @@ private:
         progress.setVisible (true);
         cancelBtn.setVisible (true);
         learnBtn.setVisible (false);
+        wholeBtn.setVisible (false);
         activeJobId = ++nextJobId;
         job = std::make_unique<Job> (*this, file, profile, params, learnFromSelection,
-                                     selForJob, activeJobId);
+                                     selForJob, previewOnly,
+                                     cv::PreviewSpan { wave.previewStart(), wave.previewEnd() },
+                                     activeJobId);
+        lastRunWasPreview = previewOnly;
         job->startThread();
         refreshEnablement();
     }
@@ -465,6 +490,7 @@ private:
         progress.setVisible (false);
         cancelBtn.setVisible (false);
         learnBtn.setVisible (true);
+        wholeBtn.setVisible (true);
         refreshEnablement();
     }
 
@@ -498,13 +524,20 @@ private:
             return;
         }
 
-        auto result = cv::Denoiser::process (
-            stft, thread.workingProfile, input->channels, n, thread.parameters,
-            [this, &thread] (float p)
-            {
-                progressAtomic.store ((double) p, std::memory_order_relaxed);
-                return ! thread.threadShouldExit();
-            });
+        auto onProgress = [this, &thread] (float p)
+        {
+            progressAtomic.store ((double) p, std::memory_order_relaxed);
+            return ! thread.threadShouldExit();
+        };
+        // A preview renders only the marked span, but with enough audio ahead of it that
+        // the estimator has the history a full render would have given it. Inside the span
+        // the two agree sample for sample, which is the only reason a preview is worth
+        // judging a setting by.
+        auto result = thread.preview
+            ? cv::renderPreview (stft, thread.workingProfile, input->channels, n,
+                                 thread.previewSpan, thread.parameters, onProgress)
+            : cv::Denoiser::process (stft, thread.workingProfile, input->channels, n,
+                                     thread.parameters, onProgress);
 
         if (result.empty() || thread.threadShouldExit()) return;   // cancelled
 
@@ -548,6 +581,7 @@ private:
         progress.setVisible (false);
         cancelBtn.setVisible (false);
         learnBtn.setVisible (true);
+        wholeBtn.setVisible (true);
         if (ok)
         {
             cleanBtn.setToggleState (true, juce::sendNotification);
@@ -769,10 +803,15 @@ private:
         const bool haveFile = file != nullptr && file->numSamples() > 0;
         const bool haveClean = clean != nullptr && ! clean->empty();
         const bool canLearn = wave.hasSelection();
-        learnBtn.setEnabled (haveFile && (canLearn || haveProfile) && job == nullptr);
-        learnBtn.setButtonText (canLearn ? "Learn Noise + Process"
-                               : haveProfile ? "Process (keeps learned noise)"
-                                             : "Select Noise Range");
+        const bool haveNoise = canLearn || haveProfile;
+        // Two deliberately separate actions. The whole-file render is never something you
+        // arrive at by pressing the same button twice.
+        learnBtn.setEnabled (haveFile && haveNoise && wave.hasPreview() && job == nullptr);
+        learnBtn.setButtonText (! haveNoise      ? "Select Noise Range"
+                                : ! wave.hasPreview() ? "Alt+drag a Preview Range"
+                                : canLearn       ? "Learn + Preview Range"
+                                                 : "Preview Range");
+        wholeBtn.setEnabled (haveFile && haveNoise && job == nullptr);
         playBtn.setEnabled (haveFile);
         playSelBtn.setEnabled (haveFile && wave.hasSelection());
         zoomSelBtn.setEnabled (haveFile && wave.hasSelection());
@@ -799,8 +838,9 @@ private:
     juce::LookAndFeel_V4 lnf;
     juce::TooltipWindow tooltips { this, 700 };
     WaveformView wave;
-    juce::TextButton openBtn, learnBtn, cancelBtn, playBtn, playSelBtn, exportBtn,
-                     advancedBtn, fitBtn, zoomSelBtn;
+    juce::TextButton openBtn, learnBtn, wholeBtn, cancelBtn, playBtn, playSelBtn,
+                     exportBtn, advancedBtn, fitBtn, zoomSelBtn;
+    bool lastRunWasPreview = false;
     juce::TextButton origBtn, cleanBtn, removedBtn;
     juce::Slider reductionS, smoothingS, preserveS, oversubS, monitorS;
     juce::Label monitorL;

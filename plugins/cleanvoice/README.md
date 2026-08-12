@@ -16,8 +16,29 @@ this file is how to run it.
 
 ## The app
 
-Open a take, drag over a stretch with no voice in it, press **Learn Noise + Process**, then
-switch between **Original / Clean / Removed Noise** while it plays.
+Open a take, drag over a stretch with no voice in it, **alt-drag** 10–30 s to preview,
+press **Learn + Preview Range**, then switch between **Original / Clean / Removed Noise**
+while it plays.
+
+### Two ranges, and they are not interchangeable
+
+| | |
+| --- | --- |
+| **Cyan — drag** | the noise range. Learned FROM, never removed |
+| **Orange — alt+drag** | the preview range. The only part that gets processed |
+
+Deciding a setting by rendering twenty minutes is absurd when the decision is made on ten
+seconds of it. Mark a span with whispers, breaths and `s`/`sh`/`f`/`h` in it, judge there,
+and press **Process Whole File** only once it is right. Whole-file rendering is a separate
+button and a separate key — never something you reach by pressing the same one twice.
+
+**A preview is what you will actually get.** The span is rendered with the audio that
+precedes it fed in first and then discarded, because the decision-directed SNR estimate
+starts each run cold and takes a few frames to settle — a span rendered without that
+history is softer at the start than the finished file will be. With it, the preview and the
+full render agree **sample for sample** inside the range, which is a test, not a hope.
+Outside the range the output is the input exactly, so the removed signal is silent there
+and the spectrogram shows at a glance what was and was not touched.
 
 The three buttons share one playhead, because the difference between two renders is only
 audible if you hear the same moment in each. The waveform follows whichever one you are
@@ -48,7 +69,9 @@ Drop a `.wav` on the window, or pass one on the command line, to skip the file d
 | **Space** | play / stop — **loops the selection when there is one** |
 | **Shift+Space** | play the whole take, ignoring the selection |
 | **1 / 2 / 3** | Original / Clean / Removed Noise |
-| **Enter** | Learn Noise + Process |
+| **Enter** | process the preview range |
+| **Shift+Enter** | process the whole file |
+| **alt+drag** | mark the preview range |
 | **Esc** | cancel processing |
 | **F** | fit the whole file |
 | **Z** | zoom to selection |

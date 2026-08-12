@@ -27,7 +27,8 @@ const juce::Colour panel   { 0xff1b1f26 };
 const juce::Colour line    { 0xff2a3038 };
 const juce::Colour wave    { 0xff8fa3b8 };
 const juce::Colour accent  { 0xffe8963c };
-const juce::Colour select  { 0xff3ea8c8 };
+const juce::Colour select  { 0xff3ea8c8 };   // noise learn range
+const juce::Colour preview { 0xffe8963c };   // preview range
 const juce::Colour text    { 0xffd8dee6 };
 const juce::Colour textDim { 0xff8892a0 };
 }
@@ -40,6 +41,7 @@ public:
     WaveformView() = default;
 
     std::function<void()> onSelectionChanged;
+    std::function<void()> onPreviewChanged;
     std::function<void (int)> onPlayheadMoved;
     // Fired whenever the visible range moves, so a spectrogram underneath can follow it.
     std::function<void()> onViewChanged;
@@ -53,6 +55,7 @@ public:
         sr = sampleRate;
         total = (src != nullptr && ! src->empty()) ? (int) (*src)[0].size() : 0;
         selStart = selEnd = 0;
+        prevStart = prevEnd = 0;
         zoomToFit();
     }
 
@@ -70,6 +73,13 @@ public:
     bool hasSelection() const noexcept { return selEnd > selStart; }
     int selectionStart() const noexcept { return selStart; }
     int selectionEnd() const noexcept { return selEnd; }
+
+    bool hasPreview() const noexcept { return prevEnd > prevStart; }
+    int previewStart() const noexcept { return prevStart; }
+    int previewEnd() const noexcept { return prevEnd; }
+    double previewSeconds() const noexcept
+    { return sr > 0 ? (prevEnd - prevStart) / sr : 0.0; }
+    void clearPreview() { prevStart = prevEnd = 0; repaint(); }
     double selectionSeconds() const noexcept
     { return sr > 0 ? (selEnd - selStart) / sr : 0.0; }
 
@@ -135,18 +145,20 @@ public:
         const float midY = (float) b.getCentreY();
         const float halfH = (float) b.getHeight() * 0.45f;
 
-        if (hasSelection())
+        auto band = [&] (int a, int z, juce::Colour c)
         {
-            const int x0 = sampleToX (selStart), x1 = sampleToX (selEnd);
-            g.setColour (col::select.withAlpha (0.22f));
+            const int x0 = sampleToX (a), x1 = sampleToX (z);
+            g.setColour (c.withAlpha (0.20f));
             g.fillRect (juce::jmax (b.getX(), x0), b.getY(),
                         juce::jlimit (1, b.getWidth(), x1 - x0), b.getHeight());
-            g.setColour (col::select);
+            g.setColour (c);
             if (x0 >= b.getX() && x0 <= b.getRight())
                 g.drawVerticalLine (x0, (float) b.getY(), (float) b.getBottom());
             if (x1 >= b.getX() && x1 <= b.getRight())
                 g.drawVerticalLine (x1, (float) b.getY(), (float) b.getBottom());
-        }
+        };
+        if (hasSelection()) band (selStart, selEnd, col::select);
+        if (hasPreview())   band (prevStart, prevEnd, col::preview);
 
         g.setColour (col::wave);
         for (size_t i = 0; i < peakMin.size(); ++i)
@@ -169,20 +181,25 @@ public:
             }
         }
 
-        if (hasSelection())
+        // Two ranges on one waveform is exactly the sort of thing that gets confused, so
+        // each says what it is for rather than relying on the colour alone.
+        auto label = [&] (int a, juce::Colour c, const char* title, const juce::String& sub)
         {
-            const int x0 = juce::jmax (b.getX() + 2, sampleToX (selStart));
-            auto tag = juce::Rectangle<int> (x0, b.getY() + 4, 260, 34);
-            g.setColour (col::select);
+            const int x0 = juce::jmax (b.getX() + 2, sampleToX (a));
+            auto tag = juce::Rectangle<int> (x0, b.getY() + 4, 280, 34);
+            g.setColour (c);
             g.setFont (juce::Font (juce::FontOptions (11.0f)).boldened());
-            g.drawText ("NOISE LEARN RANGE", tag.removeFromTop (16),
-                        juce::Justification::centredLeft);
+            g.drawText (title, tag.removeFromTop (16), juce::Justification::centredLeft);
             g.setColour (col::textDim);
             g.setFont (juce::Font (juce::FontOptions (10.5f)));
-            g.drawText (juce::String (selectionSeconds(), 2)
-                          + " s  -  learned from, not removed",
-                        tag, juce::Justification::centredLeft);
-        }
+            g.drawText (sub, tag, juce::Justification::centredLeft);
+        };
+        if (hasSelection())
+            label (selStart, col::select, "NOISE LEARN RANGE",
+                   juce::String (selectionSeconds(), 2) + " s  -  learned from, not removed");
+        if (hasPreview())
+            label (prevStart, col::preview, "PREVIEW RANGE",
+                   juce::String (previewSeconds(), 2) + " s  -  the only part processed");
     }
 
     // ---------------------------------------------------------------- mouse ----
@@ -191,6 +208,7 @@ public:
     {
         dragAnchor = xToSample (e.x);
         panning = e.mods.isRightButtonDown() || e.mods.isMiddleButtonDown();
+        draggingPreview = e.mods.isAltDown();
         panAnchorView = viewStart;
         if (! panning) dragged = false;
     }
@@ -207,18 +225,28 @@ public:
         if (std::abs (e.getDistanceFromDragStartX()) > 2) dragged = true;
         if (! dragged) return;
         const int s = xToSample (e.x);
-        selStart = juce::jmin (dragAnchor, s);
-        selEnd   = juce::jmax (dragAnchor, s);
+        int& a = draggingPreview ? prevStart : selStart;
+        int& z = draggingPreview ? prevEnd : selEnd;
+        a = juce::jmin (dragAnchor, s);
+        z = juce::jmax (dragAnchor, s);
         repaint();
     }
 
     // Double-click clears the selection, the way an audio editor does. The learned noise
     // profile deliberately survives this - see MainComponent - so clearing the range to
     // get out of the loop does not cost you the thing you selected it for.
-    void mouseDoubleClick (const juce::MouseEvent&) override
+    void mouseDoubleClick (const juce::MouseEvent& e) override
     {
-        selStart = selEnd = 0;
-        if (onSelectionChanged) onSelectionChanged();
+        if (e.mods.isAltDown())
+        {
+            prevStart = prevEnd = 0;
+            if (onPreviewChanged) onPreviewChanged();
+        }
+        else
+        {
+            selStart = selEnd = 0;
+            if (onSelectionChanged) onSelectionChanged();
+        }
         repaint();
     }
 
@@ -234,7 +262,8 @@ public:
             repaint();
             return;
         }
-        if (onSelectionChanged) onSelectionChanged();
+        if (draggingPreview) { if (onPreviewChanged) onPreviewChanged(); }
+        else if (onSelectionChanged) onSelectionChanged();
     }
 
     // Wheel zooms about the pointer, so the thing you are looking at stays under it.
@@ -320,6 +349,8 @@ private:
     const std::vector<std::vector<float>>* src = nullptr;
     double sr = 48000.0;
     int total = 0, selStart = 0, selEnd = 0, dragAnchor = 0, playhead = -1;
+    int prevStart = 0, prevEnd = 0;
+    bool draggingPreview = false;
     int viewStart = 0, viewLen = 1, panAnchorView = 0;
     bool panning = false, dragged = false;
     std::vector<float> peakMin, peakMax;

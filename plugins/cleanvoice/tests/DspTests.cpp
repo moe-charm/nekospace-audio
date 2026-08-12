@@ -19,6 +19,7 @@
  #include <unistd.h>
 #endif
 #include "../src/dsp/Denoiser.h"
+#include "../src/dsp/PreviewRender.h"
 #include "../src/io/WavFile.h"
 
 static int failures = 0;
@@ -269,6 +270,122 @@ static void testNoiseLearningCanBeCancelled()
            "profile: learning can be cancelled before publishing a partial profile");
 }
 
+// ---------------------------------------------------------------- preview ----
+
+// A preview exists to predict the full render. If it does not, it is worse than nothing -
+// a setting gets chosen against a sound the finished file will not have.
+static void testPreviewPredictsTheWholeRender()
+{
+    const double sr = 48000.0;
+    const int fftSize = fftSizeForRate (sr);
+    Stft stft (fftSize, fftSize / 4);
+    const int n = (int) (12.0 * sr);
+
+    // hiss throughout, bursts after the first second
+    std::vector<std::vector<float>> in (2);
+    in[0] = noise (n, 71, 0.02f);
+    in[1] = noise (n, 72, 0.02f);
+    std::mt19937 rng (73);
+    std::normal_distribution<float> g (0.0f, 1.0f);
+    for (int i = (int) (1.0 * sr); i < n; ++i)
+    {
+        const double t = (double) i / sr;
+        const double phase = std::fmod (t, 0.5);
+        if (phase >= 0.2) continue;
+        const float env = (float) std::pow (std::sin (kPi * phase / 0.2), 2.0);
+        const float v = 0.25f * env * g (rng);
+        in[0][(size_t) i] += v;
+        in[1][(size_t) i] += v * 0.4f;
+    }
+
+    NoiseProfile prof;
+    CHECK (prof.learn (stft, in, n, 0, (int) (0.9 * sr)), "profile learned");
+
+    DenoiseParams p; p.reductionDb = 12.0f;
+    auto whole = Denoiser::process (stft, prof, in, n, p);
+
+    // deliberately not on a hop boundary, so the grid alignment is being tested rather
+    // than assumed
+    const PreviewSpan span { (int) (6.0 * sr) + 137, (int) (8.0 * sr) + 91 };
+    auto preview = renderPreview (stft, prof, in, n, span, p);
+    CHECK (! preview.empty(), "preview rendered");
+
+    // inside the range: must match the full render closely enough that a judgement made
+    // on one holds for the other
+    double diff = 0, ref = 0;
+    float worst = 0.0f;
+    for (int c = 0; c < 2; ++c)
+        for (int i = span.start; i < span.end; ++i)
+        {
+            const float d = preview[(size_t) c][(size_t) i] - whole[(size_t) c][(size_t) i];
+            diff += (double) d * d;
+            ref  += (double) whole[(size_t) c][(size_t) i] * whole[(size_t) c][(size_t) i];
+            worst = std::max (worst, std::fabs (d));
+        }
+    const double relDb = 10.0 * std::log10 (std::max (diff, 1e-30) / std::max (ref, 1e-30));
+    std::printf ("  [preview] inside the range: %.1f dB below the full render (worst sample %.2e)\n",
+                 relDb, (double) worst);
+    CHECK (relDb < -60.0, "preview matches the full render inside the range");
+
+    // outside the range: untouched, exactly
+    float outsideWorst = 0.0f;
+    for (int c = 0; c < 2; ++c)
+        for (int i = 0; i < n; ++i)
+        {
+            if (i >= span.start && i < span.end) continue;
+            outsideWorst = std::max (outsideWorst,
+                std::fabs (preview[(size_t) c][(size_t) i] - in[(size_t) c][(size_t) i]));
+        }
+    CHECK (outsideWorst == 0.0f, "outside the range the preview is the input, sample for sample");
+}
+
+// The pre-roll is the reason the previous test passes. Without it the estimator starts
+// cold and the beginning of the range is audibly wrong - this pins that down so the
+// pre-roll cannot be quietly removed as an optimisation.
+static void testPreviewNeedsItsPreRoll()
+{
+    const double sr = 48000.0;
+    const int fftSize = fftSizeForRate (sr);
+    Stft stft (fftSize, fftSize / 4);
+    const int n = (int) (8.0 * sr);
+    std::vector<std::vector<float>> in (1, noise (n, 81, 0.02f));
+    for (int i = (int) (1.0 * sr); i < n; ++i)
+        in[0][(size_t) i] += 0.2f * std::sin (2.0 * kPi * 500.0 * i / sr);
+
+    NoiseProfile prof;
+    prof.learn (stft, in, n, 0, (int) (0.9 * sr));
+    DenoiseParams p; p.reductionDb = 12.0f;
+
+    auto whole = Denoiser::process (stft, prof, in, n, p);
+    const PreviewSpan span { (int) (4.0 * sr), (int) (5.0 * sr) };
+    auto withPre = renderPreview (stft, prof, in, n, span, p);
+
+    // the same span rendered cold, which is what dropping the pre-roll would give
+    const int len = span.end - span.start;
+    std::vector<std::vector<float>> slice (1, std::vector<float> ((size_t) len));
+    std::copy (in[0].begin() + span.start, in[0].begin() + span.end, slice[0].begin());
+    auto cold = Denoiser::process (stft, prof, slice, len, p);
+
+    auto errAt = [&] (const std::vector<float>& v, int offset)
+    {
+        double d = 0;
+        const int firstMs = (int) (0.05 * sr);
+        for (int i = 0; i < firstMs; ++i)
+        {
+            const float e = v[(size_t) (i + offset)]
+                              - whole[0][(size_t) (span.start + i)];
+            d += (double) e * e;
+        }
+        return 10.0 * std::log10 (std::max (d, 1e-30));
+    };
+    const double withPreDb = errAt (withPre[0], span.start);
+    const double coldDb = errAt (cold[0], 0);
+    std::printf ("  [preview] first 50 ms error: with pre-roll %.1f dB, cold %.1f dB\n",
+                 withPreDb, coldDb);
+    CHECK (withPreDb < coldDb - 10.0,
+           "the pre-roll is what makes the start of a preview trustworthy");
+}
+
 // ---------------------------------------------------------------- wav io ----
 
 // Every recording in this project lives in a folder named after the character in the
@@ -346,6 +463,8 @@ int main()
     testNoiseLearningCanBeCancelled();
     testWavRoundTrip();
     testNonAsciiPath();
+    testPreviewPredictsTheWholeRender();
+    testPreviewNeedsItsPreRoll();
     if (failures == 0) { std::printf ("ALL PASS\n"); return 0; }
     std::printf ("%d FAILURES\n", failures);
     return 1;
