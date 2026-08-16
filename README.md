@@ -14,6 +14,9 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 
 ![NekoSpace Binaural](docs/images/gui-main.png)
 
+▶ **[Watch the 74-second NekoSpace Binaural demo on YouTube](https://youtu.be/nk54N0w6FOE)**
+— headphones or earphones recommended.
+
 ## Status — honest version
 
 Alpha. Parameter IDs, plugin codes and the choice lists were frozen at `v0.1.0-alpha`
@@ -32,6 +35,15 @@ measured — an analytic redesign, a measured KU100 dataset, torso reflections p
 reflections rendered through the HRTF, and per-listener tuning. Each improved the numbers;
 none produced a decisive percept. Treat elevation as a colour, not as a load-bearing
 narrative cue.
+
+## CleanVoice prototype
+
+**NekoSpace CleanVoice** is an offline desktop editor and CLI for whispered and breathy
+voice — not a realtime plugin yet. Select a noise-only region, learn its fixed profile,
+then audition the same preview range as **Original / Clean / Removed Noise** before
+processing the full take. One shared spectral gain is applied to every channel so noise
+removal does not dissolve the binaural image. See the
+[CleanVoice readme](plugins/cleanvoice/README.md) for the workflow and current limits.
 
 ## A closer look
 
@@ -97,9 +109,10 @@ Every plugin builds from the one top-level configure; JUCE is fetched once and s
 nekospace-audio/
 ├─ plugins/          one directory per product, self-contained
 │  ├─ binaural/      src, tests, docs, tools, resources
-│  └─ cleanvoice/    src, tests, tools — no JUCE, command line only
+│  └─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE standalone GUI
 ├─ shared/           code proven to be needed by more than one plugin
 ├─ docs/             contracts that apply across products
+├─ video/            Remotion source; private media and renders stay ignored
 └─ cmake/            build helpers
 ```
 

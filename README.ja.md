@@ -14,6 +14,9 @@ English: [README.md](README.md)
 
 ![NekoSpace Binaural](docs/images/gui-main.png)
 
+▶ **[74秒のNekoSpace BinauralデモをYouTubeで見る](https://youtu.be/nk54N0w6FOE)**
+— ヘッドフォン／イヤホン推奨にゃ。
+
 ## 現状 — 正直版
 
 alphaにゃ。パラメーターID・プラグインコード・選択肢リストは `v0.1.0-alpha` で凍結して、
@@ -32,6 +35,14 @@ alphaにゃ。パラメーターID・プラグインコード・選択肢リス�
 胴体反射＋初期反射のHRTFレンダリング、そして聴く人ごとの手動調整にゃ。
 **どれも数値は改善したけど、どれも決定的な知覚は生まなかった**にゃ。
 上下は「演出の色付け」として使い、物語の要には据えないのが正解にゃ。
+
+## CleanVoice 試作版
+
+**NekoSpace CleanVoice** は、囁きや息の多い声向けのオフライン編集アプリ＋CLIにゃ。
+リアルタイムプラグインではまだないにゃ。声のないノイズ区間を選んで固定プロファイルを学習し、
+同じプレビュー範囲を **Original / Clean / Removed Noise** で聴き比べてから全体を処理するにゃ。
+全チャンネルへ同じスペクトルゲインを掛けるので、ノイズ除去でバイノーラル定位を溶かさない設計にゃ。
+使い方と現時点の制限は [CleanVoice readme](plugins/cleanvoice/README.md) にまとまってるにゃ。
 
 ## もう少し詳しく
 
@@ -89,9 +100,10 @@ ctest --test-dir build -C Release
 nekospace-audio/
 ├─ plugins/          製品ごとに1ディレクトリ、自己完結
 │  ├─ binaural/      src, tests, docs, tools, resources
-│  └─ cleanvoice/    src, tests, tools — JUCE非依存、コマンドラインのみ
+│  └─ cleanvoice/    JUCE非依存DSP/CLI＋JUCEスタンドアロンGUI
 ├─ shared/           複数プラグインが実際に必要としたコードだけ
 ├─ docs/             製品横断の契約
+├─ video/            Remotionソース、非公開素材と完成動画は除外
 └─ cmake/            ビルド補助
 ```
 
