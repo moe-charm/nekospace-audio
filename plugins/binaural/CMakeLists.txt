@@ -45,6 +45,29 @@ if(NSB_WITH_KU100)
     target_compile_definitions(NekoSpaceBinaural PRIVATE NSB_WITH_KU100=1)
 endif()
 
+# --- Player ---
+# A file player that HOSTS the plugin rather than reimplementing it: it links the plugin's
+# shared code, instantiates NekoSpaceProcessor and shows the plugin's own editor. Filming a
+# demonstration against a rebuilt interface would be showing something nobody can download,
+# and maintaining a second copy of the pad, the presets and the Lab would guarantee drift.
+juce_add_gui_app(NekoSpaceBinauralPlayer
+    PRODUCT_NAME "NekoSpace Binaural Player"
+    COMPANY_NAME "NekoSpace Audio"
+    VERSION ${PROJECT_VERSION})
+
+target_sources(NekoSpaceBinauralPlayer PRIVATE player/Main.cpp)
+target_compile_definitions(NekoSpaceBinauralPlayer PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(NekoSpaceBinauralPlayer PRIVATE
+    NekoSpaceBinaural
+    nsb_dsp
+    juce::juce_audio_utils
+    juce::juce_gui_extra
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_lto_flags)
+
 target_compile_definitions(NekoSpaceBinaural PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0

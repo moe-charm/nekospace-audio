@@ -11,6 +11,31 @@ Voice-focused 3D binaural spatializer plugin. 音声作品向けの、耳元表�
 
 ![NekoSpace Binaural](../../docs/images/gui-main.png)
 
+## Player
+
+`NekoSpace Binaural Player` plays a file through the plugin. The plugin's own Standalone
+takes live input, which is the wrong shape for auditioning a take or filming a
+demonstration; this is the other shape.
+
+Open or drop a WAV/AIFF/FLAC, press Play (or Space), and drag the source around while it
+runs. Loop, a position bar and an audio-device chooser are the whole transport.
+
+**It hosts the real processor and the real editor.** Nothing below the transport strip is
+reimplemented — the pad, the presets, the Elevation Lab and the help are the plugin's own,
+so what is on screen is what ships, by construction. Rebuilding them would mean two of
+everything drifting apart, and a demonstration filmed against a rebuilt interface would be
+showing something nobody can download.
+
+Reading and decoding run on a background thread, so `processBlock` still sees nothing but
+audio, exactly as it does in a host.
+
+Built alongside everything else; binary at
+`build/plugins/binaural/NekoSpaceBinauralPlayer_artefacts/Release/`. A path on the command
+line opens straight away.
+
+Offline rendering is deliberately not here: screen capture with system audio covers the
+demonstration case, and an exporter belongs with a reason to distribute renders.
+
 ## What works, and what does not
 
 | Axis | State |
