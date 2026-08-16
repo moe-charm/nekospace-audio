@@ -11,6 +11,9 @@ Voice-focused 3D binaural spatializer plugin. 音声作品向けの、耳元表�
 
 ![NekoSpace Binaural](../../docs/images/gui-main.png)
 
+▶ **[Watch the 74-second operation demo](https://youtu.be/nk54N0w6FOE)** — headphones
+or earphones recommended.
+
 ## Player
 
 `NekoSpace Binaural Player` plays a file through the plugin. The plugin's own Standalone

@@ -8,6 +8,7 @@ nekospace-audio/
 │  └─ cleanvoice/     JUCE-free DSP/CLI plus a JUCE standalone GUI
 ├─ shared/            code proven to be needed by more than one plugin
 ├─ docs/              contracts that apply across products
+├─ video/             Remotion source; private media and renders stay ignored
 └─ cmake/             build helpers
 ```
 
