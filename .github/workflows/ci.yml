@@ -26,7 +26,10 @@ jobs:
         run: cmake -B build -G "Visual Studio 17 2022" -A x64
 
       - name: Build
-        run: cmake --build build --config Release
+        # JUCE modules are compiled by several deliverables. Visual Studio otherwise
+        # builds this graph serially on the runner, which made the audition-host change
+        # push a clean build past ten minutes.
+        run: cmake --build build --config Release --parallel 4
 
       # DSP tests remain headless; the Reverb wrapper test also exercises provisional
       # state, dry identity and 8/16 switching without opening a host window.
