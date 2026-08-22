@@ -10,8 +10,13 @@ and Side in separate deterministic 8-line networks. Each feedback line now follo
 smooth three-band decay curve driven by provisional Mid Decay, Bass Tail and Air Tail
 settings. The Phase 0 analyzer continues to render the exact Binaural baseline for
 comparison. A 16-line FWHT network with four input allpasses is now the measured default;
-the 8-line fallback remains available until owner listening confirms the decision. There
-is no plug-in or GUI yet.
+the 8-line fallback remains available until owner listening confirms the decision.
+
+Phase 3.5 now provides an explicitly provisional listening surface: the same Reverb
+processor/editor builds as VST3 and JUCE Standalone, while Reverb Player adds file and
+device transport around those exact objects. The screen is labelled `LATE TAIL
+PROTOTYPE`; directional early reflections, Binaural output and the permanent Phase 6
+parameter contract do not exist yet.
 
 ## What it is
 
@@ -59,6 +64,8 @@ multi-slope decay and a configurable feedback matrix.
   measurement and what it says about the current tail.
 - [Phase 3 network decision](docs/phase3-network-decision.md) — level-matched 8/16-line
   density, periodicity, decay, CPU and memory evidence.
+- [Audition shell](docs/audition-shell.md) — the shared VST3/Standalone/Player boundary,
+  provisional controls and unsaved 8/16 comparison.
 - [Roadmap](docs/roadmap.md) — vertical implementation slices and the exit condition for
   each one.
 - [Research basis](docs/research-basis.md) — what is evidence, what is a product decision
@@ -93,5 +100,19 @@ five supported sample rates. Rendered T20 tests cover opposite Bass/Air slopes a
 that Space preserves a neutral T60. The selected 16-line/4-stage candidate reaches 45 ms
 NED t90 and 0.140 autocorrelation at matched RMS; its 8-line/4-stage fallback measures
 65 ms and 0.180. Owner listening is the remaining Phase 3 gate.
+
+## Phase 3.5 audition applications
+
+A Release build produces:
+
+```text
+build/plugins/reverb/NekoSpaceReverb_artefacts/Release/VST3/NekoSpace Reverb.vst3
+build/plugins/reverb/NekoSpaceReverb_artefacts/Release/Standalone/NekoSpace Reverb.exe
+build/plugins/reverb/NekoSpaceReverbPlayer_artefacts/Release/NekoSpace Reverb Player.exe
+```
+
+Use the Player to open or drop a WAV, AIFF or FLAC take, then compare the 8-line fallback
+and 16-line candidate. That comparison is deliberately not automatable or saved. Audio
+files and rendered demonstrations are globally ignored and must not be committed.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

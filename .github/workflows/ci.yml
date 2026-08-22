@@ -28,8 +28,9 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      # The DSP core is JUCE-free, so the acceptance tests run without a host or a
-      # display. NSB_WITH_KU100 stays off: that data is CC BY-SA and untracked.
+      # DSP tests remain headless; the Reverb wrapper test also exercises provisional
+      # state, dry identity and 8/16 switching without opening a host window.
+      # NSB_WITH_KU100 stays off: that data is CC BY-SA and untracked.
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
@@ -38,3 +39,12 @@ jobs:
         with:
           name: NekoSpaceBinaural-VST3
           path: build/plugins/binaural/NekoSpaceBinaural_artefacts/Release/VST3/
+
+      - name: Upload Reverb audition builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: NekoSpaceReverb-Audition-Windows
+          path: |
+            build/plugins/reverb/NekoSpaceReverb_artefacts/Release/VST3/
+            build/plugins/reverb/NekoSpaceReverb_artefacts/Release/Standalone/
+            build/plugins/reverb/NekoSpaceReverbPlayer_artefacts/Release/

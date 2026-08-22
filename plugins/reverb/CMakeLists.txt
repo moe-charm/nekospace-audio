@@ -30,6 +30,45 @@ target_include_directories(nsr_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(nsr_dsp INTERFACE nekospace_dsp)
 target_compile_features(nsr_dsp INTERFACE cxx_std_17)
 
+# Phase 3.5 audition product: one processor/editor builds both VST3 and JUCE Standalone.
+juce_add_plugin(NekoSpaceReverb
+    VERSION ${PROJECT_VERSION}
+    COMPANY_NAME "NekoSpace Audio"
+    BUNDLE_ID "audio.nekospace.reverb"
+    PLUGIN_MANUFACTURER_CODE NkSp
+    PLUGIN_CODE Nksr
+    FORMATS VST3 Standalone
+    PRODUCT_NAME "NekoSpace Reverb"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    VST3_CATEGORIES "Fx" "Reverb")
+target_sources(NekoSpaceReverb PRIVATE
+    src/plugin/PluginProcessor.cpp
+    src/plugin/PluginEditor.cpp)
+target_compile_definitions(NekoSpaceReverb PUBLIC
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+target_link_libraries(NekoSpaceReverb PRIVATE nsr_dsp juce::juce_audio_utils
+    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_lto_flags
+           juce::juce_recommended_warning_flags)
+
+# A file/device transport around the exact processor/editor above. No product controls
+# or DSP are duplicated in this target.
+juce_add_gui_app(NekoSpaceReverbPlayer
+    PRODUCT_NAME "NekoSpace Reverb Player"
+    COMPANY_NAME "NekoSpace Audio"
+    BUNDLE_ID "audio.nekospace.reverb-player"
+    VERSION ${PROJECT_VERSION})
+target_sources(NekoSpaceReverbPlayer PRIVATE player/Main.cpp)
+target_compile_definitions(NekoSpaceReverbPlayer PRIVATE
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0)
+target_link_libraries(NekoSpaceReverbPlayer PRIVATE
+    NekoSpaceReverb nsr_dsp juce::juce_audio_utils juce::juce_gui_extra
+    juce::juce_recommended_config_flags juce::juce_recommended_lto_flags)
+
 add_library(nsr_analysis INTERFACE)
 target_include_directories(nsr_analysis INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(nsr_analysis INTERFACE nsb_dsp nsr_dsp)
@@ -60,12 +99,18 @@ add_executable(nsr_dsp_tests tests/DspTests.cpp)
 target_link_libraries(nsr_dsp_tests PRIVATE nsr_dsp)
 add_test(NAME reverb_dsp COMMAND nsr_dsp_tests)
 
+add_executable(nsr_plugin_tests tests/PluginTests.cpp)
+target_link_libraries(nsr_plugin_tests PRIVATE NekoSpaceReverb nsr_dsp juce::juce_audio_utils)
+add_test(NAME reverb_plugin COMMAND nsr_plugin_tests)
+
 add_executable(nsr_phase3_compare tools/phase3_compare.cpp)
 target_link_libraries(nsr_phase3_compare PRIVATE nsr_analysis)
 
 if(MSVC)
+    target_compile_options(NekoSpaceReverb PRIVATE /utf-8)
     target_compile_options(nekospace_reverb_analyze PRIVATE /W4 /utf-8)
     target_compile_options(nsr_analysis_tests PRIVATE /W4 /utf-8)
     target_compile_options(nsr_dsp_tests PRIVATE /W4 /utf-8)
+    target_compile_options(nsr_plugin_tests PRIVATE /W4 /utf-8)
     target_compile_options(nsr_phase3_compare PRIVATE /W4 /utf-8)
 endif()
