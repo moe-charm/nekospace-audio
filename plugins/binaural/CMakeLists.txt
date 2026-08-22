@@ -3,6 +3,7 @@
 # --- JUCE-free DSP core (Contract #4) ---
 add_library(nsb_dsp INTERFACE)
 target_include_directories(nsb_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(nsb_dsp INTERFACE nekospace_dsp)
 
 # --- Plugin ---
 juce_add_plugin(NekoSpaceBinaural
