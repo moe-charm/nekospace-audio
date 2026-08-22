@@ -8,7 +8,8 @@ voice files out of the public repository.
 
 Private or generated media is ignored globally:
 
-- `*.mp3`, `*.wav`, `*.mp4`
+- Common audio and video formats are ignored globally, including WAV, FLAC,
+  AIFF, M4A, MP3, MP4, MOV, MKV and WebM.
 - `video/public/` contains the local source video and generated narration.
 - `video/out/` contains rendered deliverables.
 - Only Remotion code, text, timing and build metadata are versioned.
