@@ -1,6 +1,6 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract, implementation not started**.
+Status: **design contract; Phase 0 baseline analyzer complete, production DSP not started**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.

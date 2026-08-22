@@ -1,12 +1,14 @@
 # NekoSpace Reverb
 
-Design-stage, voice-focused algorithmic reverb for music, audio drama and headphone
+Phase 0, voice-focused algorithmic reverb for music, audio drama and headphone
 listening. It is **headphone-first, not headphone-only**: binaural wet rendering is the
 hero mode, while a conventional stereo wet output keeps the plug-in useful on sends and
 speakers.
 
-No plug-in or DSP target exists yet. This directory freezes the product boundary and the
-order in which evidence must be gathered before implementation starts.
+No Reverb plug-in or independent Reverb DSP core exists yet. Phase 0 is complete: a
+JUCE-free analyzer now renders the exact 8-line FDN still owned by Binaural and records the
+baseline that later algorithms must beat. This directory freezes the product boundary and
+the order in which evidence is gathered before the production DSP starts.
 
 ## What it is
 
@@ -50,6 +52,8 @@ multi-slope decay and a configurable feedback matrix.
   invariants; parameter IDs are deliberately not frozen yet.
 - [Validation](docs/validation.md) — measurement harness, hard safety gates and provisional
   acoustic targets.
+- [8-line baseline findings](docs/baseline-8line.md) — the first reproducible 48 kHz
+  measurement and what it says about the current tail.
 - [Roadmap](docs/roadmap.md) — vertical implementation slices and the exit condition for
   each one.
 - [Research basis](docs/research-basis.md) — what is evidence, what is a product decision
@@ -61,11 +65,24 @@ Repository-wide state, thread and licensing rules remain authoritative:
 [repository layout](../../docs/repo-layout.md), and
 [third-party licences](../../docs/third-party-licenses.md).
 
-## First implementation
+## Phase 0 analyzer
 
-The first deliverable is **not a GUI**. It is an offline impulse-response and measurement
-harness around the existing 8-line Binaural FDN, frozen as a baseline. Frequency-dependent
-T60 comes next. A 16-line network is adopted only if the same harness shows a useful
-improvement over the 8-line baseline.
+Build the repository, then run:
+
+```powershell
+build\plugins\reverb\Release\nekospace_reverb_analyze.exe `
+  --output reverb-analysis-output `
+  --sample-rate 48000 --duration 6 --block-size 256 `
+  --size 0.35 --decay 1.4 --damping 0
+```
+
+It writes a stereo float WAV plus JSON/CSV reports for band T20/T30, normalized echo
+density, EDR, a 1/12-octave spectrum and 10–100 ms autocorrelation. The output directory
+and all audio formats remain ignored; reports are local evidence, not production media.
+The JSON embeds the git commit, dirty-state flag, compiler, build configuration, complete
+settings and deterministic seed.
+
+Frequency-dependent T60 is next. A 16-line network is adopted only if this same harness
+shows a useful improvement over the 8-line baseline.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

@@ -8,7 +8,7 @@ English: [README.md](README.md)
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
 | **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、アプリ + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | 設計中 | ヘッドフォンを主役にした空間リバーブ — [設計](plugins/reverb/README.md) |
+| **NekoSpace Reverb** | Phase 0 | ヘッドフォンを主役にした空間リバーブ、基準測定まで完了 — [設計](plugins/reverb/README.md) |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |
 
@@ -101,7 +101,7 @@ nekospace-audio/
 ├─ plugins/          製品ごとに1ディレクトリ、自己完結
 │  ├─ binaural/      src, tests, docs, tools, resources
 │  ├─ cleanvoice/    JUCE非依存DSP/CLI＋JUCEスタンドアロンGUI
-│  └─ reverb/        設計契約、実装はまだ開始していない
+│  └─ reverb/        設計契約＋JUCE非依存のPhase 0解析基盤
 ├─ shared/           複数プラグインが実際に必要としたコードだけ
 ├─ docs/             製品横断の契約
 ├─ video/            Remotionソース、非公開素材と完成動画は除外

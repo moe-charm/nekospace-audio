@@ -6,7 +6,7 @@ nekospace-audio/
 ├─ plugins/
 │  ├─ binaural/       CMakeLists, src/, tests/, docs/, tools/, resources/
 │  ├─ cleanvoice/     JUCE-free DSP/CLI plus a JUCE standalone GUI
-│  └─ reverb/         design contract now; src/ and CMake only when Phase 1 begins
+│  └─ reverb/         design contract + Phase 0 analysis; independent DSP begins in Phase 1
 ├─ shared/            code proven to be needed by more than one plugin
 ├─ docs/              contracts that apply across products
 ├─ video/             Remotion source; private media and renders stay ignored

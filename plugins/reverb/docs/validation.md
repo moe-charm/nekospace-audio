@@ -15,6 +15,24 @@ No single metric is treated as “reverb quality.” T60, density, decay surface
 periodicity, spatial statistics, automation safety and listening answer different
 questions.
 
+## Implementation status
+
+Phase 0 implements the offline parts needed to freeze the existing 8-line baseline:
+
+- deterministic impulse rendering directly through Binaural's current `FdnReverb`;
+- float WAV plus versioned JSON metadata;
+- octave-centre T20/T30 using cascaded analysis high/low biquads and Schroeder integration;
+- 20 ms-window, 5 ms-hop normalized echo density and project-defined `t90`;
+- Hann-2048/hop-512 octave-band EDR;
+- 1/12-octave spectrum and 1 ms-step autocorrelation from 10–100 ms;
+- tests against a known exponential decay, supported sample rates and odd block sizes.
+
+The Phase 0 band filters are a deterministic engineering approximation, not an
+IEC/ISO-certified acoustics instrument. Their job is stable A/B regression. If later
+release claims depend on standardized room-acoustic values, the analyzer must first be
+validated against a trusted implementation and upgraded without rewriting old report
+schema 1 results.
+
 ## Reproducible test render
 
 The JUCE-free test tool must render at least:

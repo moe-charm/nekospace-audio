@@ -3,7 +3,7 @@
 Each phase is a vertical slice with an explicit exit condition. A later phase does not
 begin merely because the previous code compiles.
 
-## Phase 0 — Freeze the baseline
+## Phase 0 — Freeze the baseline ✅
 
 Build a JUCE-free offline IR renderer and analysis harness around the current Binaural
 8-line FDN without changing its sound.
@@ -15,10 +15,13 @@ Deliver:
 - manifest containing commit, seed, parameters, sample rate and block sequence;
 - baseline results at every supported sample rate and representative block sizes.
 
-**Exit:** the unchanged network is reproducible, block-size invariant and characterized.
+**Completed at `4e29a9d`.** The unchanged network is reproducible and block-size invariant;
+the analyzer produces float WAV, JSON, NED, EDR, spectrum and autocorrelation artifacts.
+Tests cover block sizes 1/127/512, the 44.1/48/88.2/96/192 kHz standing matrix, a known
+synthetic decay and end-to-end report writing. See [baseline-8line.md](baseline-8line.md).
 No GUI exists yet.
 
-## Phase 1 — Establish the independent core
+## Phase 1 — Establish the independent core (next)
 
 Create `plugins/reverb/src/dsp` and the minimum command-line/test host. Decide and test the
 stereo-to-wet excitation mapping. Extract only the generic primitives now proven to have a
