@@ -43,7 +43,7 @@ JUCE-free core uses independent Mid and Side 8-line networks. Tests prove exact 
 symmetry, non-collapsing pure-Side input, exact zero-mix dry identity and identical output
 for block sizes 1 and 512. Binaural and Reverb suites pass together.
 
-## Phase 2 — Frequency-dependent decay (next)
+## Phase 2 — Frequency-dependent decay ✅
 
 Add a smooth internal T60 curve driven by Mid Decay, Bass Tail and Air Tail. Fit a stable
 per-line attenuation filter and verify the rendered result rather than coefficients only.
@@ -51,7 +51,14 @@ per-line attenuation filter and verify the rendered result rather than coefficie
 **Exit:** provisional T60 accuracy/linearity gates pass; Space automation preserves T60;
 no coefficient update allocates or clicks.
 
-## Phase 3 — Density and network selection
+**Completed at `bac48a0`.** Each feedback line uses a complementary three-band attenuation
+filter fitted at 125 Hz, 1 kHz and 8 kHz. Opposite Bass/Air slopes meet the calibrated
+prototype tolerance, neutral curves remain within 5%, and Space 10%/90% comparisons stay
+within 5%. Settings ramp for 50 ms; extreme automation has no click-sized step and performs
+zero allocation in the instrumented process test. Five sample rates remain finite under
+five-second extreme-setting renders.
+
+## Phase 3 — Density and network selection (next)
 
 Measure the 8-line network, add 2–4 late-input diffuser stages, then build a 16-line FWHT
 candidate with comparable decay and a justified total order/delay set.

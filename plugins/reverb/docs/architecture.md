@@ -1,6 +1,6 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; Phase 1 independent JUCE-free core complete**.
+Status: **design contract; Phase 2 frequency-dependent decay complete**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -202,8 +202,18 @@ avoid three disconnected shelf regions. Each delay line receives a stable causal
 approximating its own target loop magnitude. The rendered impulse response, not the
 coefficient calculation alone, is the acceptance evidence.
 
-Whenever `Space` changes a delay length, the attenuation target is recomputed so measured
-T60 remains constant. This separation is a product invariant.
+Phase 2 implements this as a complementary low/mid/high split in every feedback line.
+The three bands sum exactly to the unfiltered input when both tail ratios equal one, so a
+neutral decay curve has no hidden damping. A bounded six-iteration fit solves the common
+gain and low/high ratios against 125 Hz, 1 kHz and 8 kHz complex responses. It allocates
+nothing and runs only when settings change. Delay length and the fitted gains ramp over
+50 ms.
+
+Static target lengths are rounded to integer samples. Leaving them fractional introduced
+Space-dependent Hermite interpolation loss at high frequencies. Automation still crosses
+fractional positions through the length smoother, avoiding a stepped pitch/time change.
+Whenever `Space` changes a delay length, all three attenuation targets are recomputed so
+measured T60 remains constant. This separation is a product invariant.
 
 ### Modulation
 

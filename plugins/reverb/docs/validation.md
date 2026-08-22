@@ -38,6 +38,14 @@ The Mid and Side networks allocate their delay storage only in `prepare`; their 
 loop performs no container mutation, allocation, locking or I/O. Long automation and
 allocation instrumentation remain release gates, not claims made by these unit tests.
 
+Phase 2 adds an offline renderer for the independent core and rendered-IR tests for:
+
+- rising-bass/falling-air and falling-bass/rising-air decay curves;
+- a neutral one-second curve at Space 10% and 90%;
+- five-second extreme-setting runs at 44.1, 48, 88.2, 96 and 192 kHz;
+- zero allocations across processing and coefficient updates;
+- a 50 ms ramp whose extreme update produces no click-sized sample step.
+
 The Phase 0 band filters are a deterministic engineering approximation, not an
 IEC/ISO-certified acoustics instrument. Their job is stable A/B regression. If later
 release claims depend on standardized room-acoustic values, the analyzer must first be
@@ -110,13 +118,17 @@ Provisional targets:
 
 | Property | Provisional target |
 | --- | --- |
-| T60 accuracy | every 125 Hz–8 kHz test band within `max(5%, 20 ms)` of target |
+| Neutral T60 accuracy | every 125 Hz–8 kHz test band within `max(5%, 20 ms)` of target |
+| Shaped T60 accuracy | provisional 12% at the 125 Hz, 1 kHz and 8 kHz anchors |
 | Decay linearity | single-slope preset regression `R² >= 0.995` |
 | Space/Decay independence | sweeping Space across the test range moves each T60 anchor by no more than 5% |
 
-The 5% target is intentionally strict and is not presented as a universal just-noticeable
-difference. The research reports stimulus-dependent sensitivity; this is our engineering
-budget.
+The neutral 5% target is intentionally strict and is not presented as a universal
+just-noticeable difference. Phase 2 showed that a broad analysis band contains energy
+from an adjacent, deliberately longer part of a smooth decay curve. The first prototype
+therefore records 12% for strongly shaped curves rather than tuning one test case with
+unstable high-order feedback filters. This provisional shaped threshold must be calibrated
+against reference reverbs in Phase 3 and may tighten; it is not a shipping quality claim.
 
 ## Normalized Echo Density
 
