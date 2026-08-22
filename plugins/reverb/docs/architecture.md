@@ -1,6 +1,7 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; Phase 3 engineering candidate selected, listening pending**.
+Status: **design contract; Phase 3 engineering candidate selected, Phase 3.5 audition
+shell in progress**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -32,6 +33,19 @@ live in [control-design.md](control-design.md).
 12. No claim that this reverb is more realistic or sounds better than another product is
     made from topology or metrics alone. Such a claim needs level-matched listening
     evidence; see [validation.md](validation.md).
+
+## Host shells during Phase 3.5
+
+The first audible product slice deliberately has one implementation behind three hosts.
+VST3 and JUCE Standalone are formats of the same `NekoSpaceReverbProcessor` and editor.
+The separate Reverb Player embeds those exact objects and contributes file transport and
+audio-device selection only. It does not maintain a second set of controls or a second
+DSP graph.
+
+This shell is an owner-listening tool, not an early declaration that Phase 6 is complete.
+Its reduced controls and saved state are provisional, and its 8/16 comparison is neither
+automatable nor serialized. The detailed boundary and exit checks are defined in
+[audition-shell.md](audition-shell.md).
 
 ## Responsibility boundary
 

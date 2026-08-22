@@ -86,6 +86,21 @@ candidate. Static modulation was intentionally disabled for this topology compar
 sustained-vowel Motion tuning remains part of the listening/control prototype. The
 8-line type stays compiled as the fallback.
 
+## Phase 3.5 — Owner audition shell
+
+Before adding a directional early field, make the current late-field candidate easy to
+hear in its real product path. Build VST3 and generated Standalone from one provisional
+processor/editor, plus a small Player that adds file/device transport around that exact
+processor/editor.
+
+Expose only the late-tail controls needed for listening. Keep 8/16 selection as an
+unsaved, non-automatable developer comparison with a bounded preallocated crossfade.
+This checkpoint does **not** freeze the Phase 6 parameter contract and does not claim to
+be the finished reverb. See [audition-shell.md](audition-shell.md).
+
+**Exit:** all three hosts build, Player audio reaches the real processor, dry/bypass and
+state tests pass, 8/16 switching is real-time safe, and no private audio is tracked.
+
 ## Phase 4 — Directional early field
 
 Generalise the six-image baseline to compile-time-bounded order-3 candidates. Add
