@@ -1,7 +1,7 @@
 # NekoSpace Reverb — Phase 0 analysis harness.
 #
 # This is deliberately JUCE-free and deliberately depends on nsb_dsp: Phase 0 measures the
-# exact existing 8-line implementation where it lives. The Phase 2 core is a separate
+# exact existing 8-line implementation where it lives. The independent product core is a separate
 # target; this analyzer remains the immutable comparison path.
 
 execute_process(

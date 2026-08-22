@@ -58,7 +58,7 @@ within 5%. Settings ramp for 50 ms; extreme automation has no click-sized step a
 zero allocation in the instrumented process test. Five sample rates remain finite under
 five-second extreme-setting renders.
 
-## Phase 3 — Density and network selection (next)
+## Phase 3 — Density and network selection (engineering complete; listening pending)
 
 Measure the 8-line network, add 2–4 late-input diffuser stages, then build a 16-line FWHT
 candidate with comparable decay and a justified total order/delay set.
@@ -74,6 +74,17 @@ Compare:
 
 **Exit:** record a decision to ship 8 or 16 lines. Sixteen is selected only when its gain
 survives matched comparison; otherwise the simpler network remains.
+
+**Engineering candidate selected at `0ff4200`.** Four diffuser stages move the 8-line NED
+t90 from 355 ms to 65 ms. The level-matched 16-line/4-stage candidate reaches 45 ms and
+reduces autocorrelation from 0.180 to 0.140 while retaining the 1.4 s T20 target. Local
+Release throughput is 1.10% of realtime versus 0.64%; estimated stereo FDN storage rises
+by about 33 kB. See [phase3-network-decision.md](phase3-network-decision.md).
+
+The final exit remains open until level-matched owner listening on voice confirms the
+candidate. Static modulation was intentionally disabled for this topology comparison;
+sustained-vowel Motion tuning remains part of the listening/control prototype. The
+8-line type stays compiled as the fallback.
 
 ## Phase 4 — Directional early field
 

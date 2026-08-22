@@ -46,6 +46,12 @@ Phase 2 adds an offline renderer for the independent core and rendered-IR tests 
 - zero allocations across processing and coefficient updates;
 - a 50 ms ramp whose extreme update produces no click-sized sample step.
 
+Phase 3 adds a deterministic Release comparison executable and a binding selection
+regression. At matched RMS the selected candidate must keep NED t90 at or below 50 ms,
+maximum 10–100 ms autocorrelation below 0.15, mid T20 within 5% and R² above 0.995. It
+must also beat the retained 8-line/4-stage fallback on density and periodicity. CPU timing
+is reported by the tool but remains machine-specific rather than a unit-test threshold.
+
 The Phase 0 band filters are a deterministic engineering approximation, not an
 IEC/ISO-certified acoustics instrument. Their job is stable A/B regression. If later
 release claims depend on standardized room-acoustic values, the analyzer must first be

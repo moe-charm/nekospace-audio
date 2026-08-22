@@ -57,8 +57,8 @@ The largest measured weaknesses are elsewhere:
    mid and high T60 cannot be designed independently.
 
 These findings justify the roadmap order. Phase 1 adds an independent Reverb core and
-frequency-dependent T60 without changing line count. Phase 2 then measures input diffusion
-and the 8/16-line candidates. Increasing line count before preserving this baseline would
+Phase 2 adds frequency-dependent T60 without changing line count. Phase 3 then measures
+input diffusion and the 8/16-line candidates. Increasing line count before preserving this baseline would
 make it impossible to know which change helped.
 
 ## Regression coverage

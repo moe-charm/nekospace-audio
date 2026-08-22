@@ -1,6 +1,6 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; Phase 2 frequency-dependent decay complete**.
+Status: **design contract; Phase 3 engineering candidate selected, listening pending**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -171,6 +171,11 @@ The late-field development order is fixed:
 3. measure density, decay surface, periodicity and coloration;
 4. build a 16-line FWHT candidate with comparable total order and decay targets;
 5. adopt the candidate only if measurements, CPU and listening all justify it.
+
+Phase 3 selects 16 lines with four late-input allpasses as the engineering default. At
+matched wet RMS it reaches 45 ms NED t90 and 0.140 maximum autocorrelation, versus 65 ms
+and 0.180 for the best 8-line candidate. The production alias points to 16 lines, while
+the complete 8-line type remains available until owner listening closes the decision.
 
 The feedback matrix stays orthogonal and densely connected. FWHT/Hadamard is the v1
 default because it is deterministic, already understood in this codebase and scales as

@@ -1,6 +1,6 @@
 # NekoSpace Reverb
 
-Phase 2, voice-focused algorithmic reverb for music, audio drama and headphone
+Phase 3 engineering candidate, voice-focused algorithmic reverb for music, audio drama and headphone
 listening. It is **headphone-first, not headphone-only**: binaural wet rendering is the
 hero mode, while a conventional stereo wet output keeps the plug-in useful on sends and
 speakers.
@@ -9,7 +9,9 @@ The JUCE-free independent DSP core now exists. Its stereo wet excitation preserv
 and Side in separate deterministic 8-line networks. Each feedback line now follows a
 smooth three-band decay curve driven by provisional Mid Decay, Bass Tail and Air Tail
 settings. The Phase 0 analyzer continues to render the exact Binaural baseline for
-comparison. There is no plug-in or GUI yet.
+comparison. A 16-line FWHT network with four input allpasses is now the measured default;
+the 8-line fallback remains available until owner listening confirms the decision. There
+is no plug-in or GUI yet.
 
 ## What it is
 
@@ -55,6 +57,8 @@ multi-slope decay and a configurable feedback matrix.
   acoustic targets.
 - [8-line baseline findings](docs/baseline-8line.md) — the first reproducible 48 kHz
   measurement and what it says about the current tail.
+- [Phase 3 network decision](docs/phase3-network-decision.md) — level-matched 8/16-line
+  density, periodicity, decay, CPU and memory evidence.
 - [Roadmap](docs/roadmap.md) — vertical implementation slices and the exit condition for
   each one.
 - [Research basis](docs/research-basis.md) — what is evidence, what is a product decision
@@ -66,7 +70,7 @@ Repository-wide state, thread and licensing rules remain authoritative:
 [repository layout](../../docs/repo-layout.md), and
 [third-party licences](../../docs/third-party-licenses.md).
 
-## Phase 0 analyzer and Phase 2 core
+## Phase 0 analyzer and Phase 3 core
 
 Build the repository, then run:
 
@@ -86,8 +90,8 @@ settings and deterministic seed.
 The independent core is covered by `reverb_dsp`: exact dry identity, exact mono symmetry,
 pure-Side preservation, block-size invariance, allocation-free coefficient updates and
 five supported sample rates. Rendered T20 tests cover opposite Bass/Air slopes and prove
-that Space preserves a neutral T60. Density and network selection are next. A 16-line
-network is adopted only if this same harness
-shows a useful improvement over the 8-line baseline.
+that Space preserves a neutral T60. The selected 16-line/4-stage candidate reaches 45 ms
+NED t90 and 0.140 autocorrelation at matched RMS; its 8-line/4-stage fallback measures
+65 ms and 0.180. Owner listening is the remaining Phase 3 gate.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.
