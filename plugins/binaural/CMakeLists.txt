@@ -53,6 +53,7 @@ endif()
 juce_add_gui_app(NekoSpaceBinauralPlayer
     PRODUCT_NAME "NekoSpace Binaural Player"
     COMPANY_NAME "NekoSpace Audio"
+    BUNDLE_ID "audio.nekospace.binaural-player"
     VERSION ${PROJECT_VERSION})
 
 target_sources(NekoSpaceBinauralPlayer PRIVATE player/Main.cpp)

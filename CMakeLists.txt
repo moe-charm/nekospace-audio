@@ -27,3 +27,6 @@ endif()
 add_subdirectory(plugins/binaural)
 # CleanVoice's DSP and CLI stay JUCE-free; its standalone GUI links JUCE only at the edge.
 add_subdirectory(plugins/cleanvoice)
+# Reverb Phase 0 is analysis-only: it characterises Binaural's existing 8-line FDN
+# without yet extracting or changing the DSP implementation.
+add_subdirectory(plugins/reverb)

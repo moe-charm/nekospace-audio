@@ -29,6 +29,7 @@ Bundle identifiers are likewise fixed before the first release:
 | Product | Bundle ID |
 | --- | --- |
 | NekoSpace Binaural | `audio.nekospace.binaural` |
+| NekoSpace Binaural Player | `audio.nekospace.binaural-player` |
 | NekoSpace CleanVoice | `audio.nekospace.cleanvoice` |
 | NekoSpace Reverb (reserved) | `audio.nekospace.reverb` |
 
