@@ -33,7 +33,7 @@ Offline SOFA→`.bhrtf` converter, third `hrtf.profile` entry, development build
 (`NSB_WITH_KU100=ON`). See `elevation-findings.md`; promotion depends on a listening result,
 not on the numbers.
 
-## TASK 6 — SOFA Import (next)
+## TASK 6 — SOFA Import (next within NekoSpace Binaural)
 libmysofa, background conversion, `.bhrtf` pack + cache, license display.
 Priority dataset: TH Köln KU100 (matches production recording chain).
 **Accept:** playback never stalls during load, bad SOFA never crashes, failed load keeps

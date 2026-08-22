@@ -32,7 +32,7 @@ Reserved for future versions (do not reuse for anything else):
 - A future `Mid-Side` source mode must use a new parameter ID; do not append it to the
   released `source.mode` choice.
 
-State serialization: see [state-format.md](state-format.md). In short — IDs are permanent,
+State serialization: see [state-format.md](../../../docs/state-format.md). In short — IDs are permanent,
 new parameters use an incremented version hint, and choice state uses permanent machine
 keys. Choice lists themselves are frozen after release because host automation remains
 normalised and cannot be protected by the plugin state format.

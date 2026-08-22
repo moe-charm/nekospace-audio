@@ -30,6 +30,7 @@ Bundle identifiers are likewise fixed before the first release:
 | --- | --- |
 | NekoSpace Binaural | `audio.nekospace.binaural` |
 | NekoSpace CleanVoice | `audio.nekospace.cleanvoice` |
+| NekoSpace Reverb (reserved) | `audio.nekospace.reverb` |
 
 Rules:
 

@@ -8,7 +8,7 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
 | **NekoSpace CleanVoice** | prototype | noise removal for whispered voice, app + CLI — [readme](plugins/cleanvoice/README.md) |
-| NekoSpace Reverb | planned | |
+| **NekoSpace Reverb** | design | headphone-first spatial reverb — [design](plugins/reverb/README.md) |
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
 
@@ -109,7 +109,8 @@ Every plugin builds from the one top-level configure; JUCE is fetched once and s
 nekospace-audio/
 ├─ plugins/          one directory per product, self-contained
 │  ├─ binaural/      src, tests, docs, tools, resources
-│  └─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE standalone GUI
+│  ├─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE standalone GUI
+│  └─ reverb/        design contract; implementation has not started
 ├─ shared/           code proven to be needed by more than one plugin
 ├─ docs/             contracts that apply across products
 ├─ video/            Remotion source; private media and renders stay ignored

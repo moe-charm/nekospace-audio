@@ -64,11 +64,15 @@ We render **6 first-order images**, each through the HRTF at its own image direc
 choice is already paying for itself — it is what gives a raised source a floor bounce that
 arrives from below, which is one of the few elevation cues that survived our testing.
 
-RoomEncoder is useful as the **upper bound of the same idea**, not as a target. For a voice
-in an audio drama, the direct sound plus first-order walls, floor and ceiling plus an FDN
-tail is the useful part of the model; going from 6 images to 200 buys density that the FDN
-is already providing more cheaply. If we extend, the next step is a small number of
-second-order images, not two orders of magnitude more.
+RoomEncoder is useful as the **upper bound of the same idea**, not as a target. For the
+light externalisation assist inside **NekoSpace Binaural**, direct sound plus the six
+first-order walls/floor/ceiling and an FDN tail remain a deliberate CPU/product tradeoff.
+
+That decision does not define the dedicated **NekoSpace Reverb**. Its design may generate
+up to third-order candidates (62 in a shoebox lattice), then prune or cluster them by
+arrival time, level, cumulative energy and CPU budget. See
+[Reverb architecture](../plugins/reverb/docs/architecture.md). Candidate count and active
+render count are explicitly different.
 
 ### BinauralDecoder — different entry point, same dataset
 
@@ -103,25 +107,27 @@ IEM has many plugins and has earned its shared layer; we have one.
 - **Ambisonics as the internal representation.** It is the right answer for a suite that
   encodes, rotates and decodes soundfields. For placing one voice near one ear it adds a
   bus, an order parameter and a decoding stage between the source and the result.
-- **Large line counts.** 8 lines that are modulated and well spread sound smoother than 32
-  that are not. Line count is not a product value, and CPU spent there is CPU not spent on
-  the direct path.
+- **Line count as a quality claim or user control.** A well-optimised small network can
+  outperform a poorly configured large one, but that does not prove 8 universally beats
+  16 or 32. Reverb freezes the current 8-line network as a baseline and compares a 16-line
+  candidate at matched T60, energy and total-order intent. Density, coloration, CPU and
+  listening decide; the winning line count remains hidden.
 - **The research-instrument GUI.** IEM's controls are stated in the terms of the field —
   Ambisonic order, reflection coefficients, azimuth in degrees — because their users think
   in those terms. Ours say what a control is *for*. That difference is the product.
 
 ## Real-time safety is ours, not theirs
 
-The research summary that prompted this note reported that IEM's FDN detects a network-size
-change inside the audio callback and reconfigures there, which can reallocate.
+A source review at fixed IEM revision
+[`39de1dd`](https://git.iem.at/audioplugins/IEMPluginSuite/-/tree/39de1dd5883f1bd8d65fe1662487f2470a1d7b55)
+confirmed that size/delay changes can enter update work from the processing path. That is
+not an end-to-end realtime audit and we do not use it to label IEM unsafe.
 
-**That claim is unverified — we have not read the source.** It is recorded because the
-conclusion does not depend on it: whatever IEM does, our
-[realtime-contract.md](realtime-contract.md) already requires that structural changes are
-built off the audio thread and published to it, and the engine already works that way for
-the elevation model (built on the message thread into a double buffer, swapped with one
-atomic pointer store, then crossfaded). Anything adopted from IEM gets rebuilt to that
-rule rather than copied into it.
+The conclusion does not depend on IEM's implementation:
+[realtime-contract.md](realtime-contract.md) requires NekoSpace structural changes to be
+built off the audio thread and published as immutable snapshots. The audio thread swaps at
+a block boundary and crossfades using preallocated paths. Anything learned from IEM is
+rebuilt to that rule rather than copied into it.
 
 ## Status of the claims here
 
@@ -134,21 +140,26 @@ Verified against IEM's own site and plugin descriptions:
 - BinauralDecoder: KU 100 HRTFs, MagLS, direct Ambisonic-to-binaural, Bernschütz headphone
   EQ.
 
-Reported by the research summary but **not found in the official documentation**, so not
-relied on:
+Verified in the fixed source revision above, but not claimed from the product page:
 
-- 64 delay lines maximum.
-- A Fast Walsh–Hadamard Transform as the feedback mixing matrix.
+- `FeedbackDelayNetwork.h` uses a Fast Walsh–Hadamard transform for feedback mixing.
+- RoomEncoder's reflection table contains 237 image sources through order 7.
+
+Reported by an earlier research summary but still **not verified at the fixed source
+revision**, so not relied on:
+
 - A Freeze control.
 
-These may well be true of the source; they are simply not evidence yet. Anyone acting on
-them should read `FdnReverb/` in the IEM repository first — and note that reading GPL
-source to learn an algorithm is exactly the use this note endorses.
+Do not record one universal “maximum FDN size”: public documentation and source revisions
+have changed. Anyone acting on a source-level detail must cite the exact revision — and
+note that reading GPL source to learn an algorithm is exactly the use this note endorses.
 
-## The one concrete thing to do next
+## The next concrete uses
 
-**Split the FDN's decay into a low and a high band**, via shelving filters in the feedback
-path, the way IEM does. It is the only item here that names a capability our engine
-genuinely lacks rather than one we chose not to have, it fits the control we just added
-(`room.decay` becomes the mid-band reference), and a bathroom that rings longer at the
-bottom than the top is the difference between "reverb" and "tile".
+For Binaural's light room, the next contained experiment remains splitting the feedback
+decay by frequency while retaining `room.decay` as the mid-band reference.
+
+For the dedicated Reverb, the full design is broader: user-facing Mid Decay plus Bass/Air
+ratios become a smooth internal T60 curve, measured on the rendered IR; an 8/16-line
+comparison and explicit ER/late transition follow. The authoritative order is in the
+[Reverb roadmap](../plugins/reverb/docs/roadmap.md), not this reading note.

@@ -5,7 +5,8 @@ nekospace-audio/
 ├─ CMakeLists.txt     fetches JUCE once, adds each product
 ├─ plugins/
 │  ├─ binaural/       CMakeLists, src/, tests/, docs/, tools/, resources/
-│  └─ cleanvoice/     JUCE-free DSP/CLI plus a JUCE standalone GUI
+│  ├─ cleanvoice/     JUCE-free DSP/CLI plus a JUCE standalone GUI
+│  └─ reverb/         design contract now; src/ and CMake only when Phase 1 begins
 ├─ shared/            code proven to be needed by more than one plugin
 ├─ docs/              contracts that apply across products
 ├─ video/             Remotion source; private media and renders stay ignored
@@ -14,7 +15,7 @@ nekospace-audio/
 
 ## Why one repository
 
-Four products that share DSP and UI. A monorepo lets a change to shared code and the
+Suite products that may share DSP and UI. A monorepo lets a change to shared code and the
 plugins that use it land in a single commit, with one CI run. Separate repositories would
 need a submodule or a package for the shared layer — real overhead for a solo developer,
 bought with no benefit at this size.
@@ -29,8 +30,10 @@ shaped for an imagined second user rather than the real one. Waiting costs one m
 move later; not waiting costs design freedom now.
 
 Concretely, Binaural currently owns plenty that *looks* shareable — `FractionalDelay`,
-`CrossfadeFir`, `FdnReverb`, the smoothers and biquad helpers. It keeps them until
-Reverb is real and says what it needs.
+`CrossfadeFir`, `FdnReverb`, the smoothers and biquad helpers. A Reverb design document is
+not a second code consumer: those pieces stay put until Reverb Phase 1 actually uses them.
+Extraction then lands as a behaviour-preserving commit with both products' tests green,
+before any redesign of the primitive.
 
 The genuinely binaural-specific parts — `HrtfDatabase`, `ElevationModel`,
 `BinauralEngine`, the head-and-ear geometry — stay in the plugin permanently.

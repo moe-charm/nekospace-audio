@@ -6,7 +6,7 @@
 | ------------ | -------------- |
 | Audio Thread | FIR, delays, reflections, FDN, meter value production |
 | UI Thread    | GUI, preset selection, file dialogs |
-| HRTF Worker  | (TASK 6+) SOFA load, resample, filter build |
+| DSP Model Worker | HRTF/SOFA load and resampling; future Reverb reflection sets, filter banks and structural network builds |
 | CleanVoice Worker | Offline noise-profile learning and file rendering |
 | File Worker  | (later) preset / cache saving |
 
@@ -27,6 +27,15 @@ vector growth           UI object access
 - Meter values leave the audio thread via `std::atomic<float>` (relaxed).
 - New HRTF filter sets (TASK 6+) are published as ref-counted immutable objects; the audio
   thread swaps a pointer at block boundaries, never locks.
+- Reverb reflection sets, T60 filter banks, coherence configurations and any structural
+  FDN replacement follow the same publication rule: build an immutable snapshot away
+  from the callback, swap it at a block boundary, and use a bounded preallocated
+  crossfade. Reclaim the old snapshot away from the audio thread.
+- Ordinary coefficient/delay automation uses preallocated smoothers. It must not be
+  misclassified as permission to rebuild topology inside `processBlock`.
+- Random modulation has a deterministic definition. A project reload and an offline
+  regression render must not acquire a different room merely because a new seed was
+  generated.
 - Standalone monitoring follows the same rule: the callback acquires one ref-counted,
   immutable audio snapshot at the start of a block. File loading and completed offline
   renders publish a new snapshot; they never mutate a vector the callback may be reading.
