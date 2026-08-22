@@ -25,9 +25,14 @@ else()
     set(NSR_GIT_DIRTY 0)
 endif()
 
+add_library(nsr_dsp INTERFACE)
+target_include_directories(nsr_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(nsr_dsp INTERFACE nekospace_dsp)
+target_compile_features(nsr_dsp INTERFACE cxx_std_17)
+
 add_library(nsr_analysis INTERFACE)
 target_include_directories(nsr_analysis INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(nsr_analysis INTERFACE nsb_dsp)
+target_link_libraries(nsr_analysis INTERFACE nsb_dsp nsr_dsp)
 target_compile_features(nsr_analysis INTERFACE cxx_std_17)
 target_compile_definitions(nsr_analysis INTERFACE
     NSR_GIT_COMMIT="${NSR_GIT_COMMIT}"
@@ -35,11 +40,6 @@ target_compile_definitions(nsr_analysis INTERFACE
     NSR_COMPILER_ID="${CMAKE_CXX_COMPILER_ID}"
     NSR_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
     NSR_BUILD_CONFIG="$<CONFIG>")
-
-add_library(nsr_dsp INTERFACE)
-target_include_directories(nsr_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(nsr_dsp INTERFACE nekospace_dsp)
-target_compile_features(nsr_dsp INTERFACE cxx_std_17)
 
 add_executable(nekospace_reverb_analyze tools/analyze.cpp)
 target_link_libraries(nekospace_reverb_analyze PRIVATE nsr_analysis)

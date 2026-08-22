@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "analysis/Analyzer.h"
+#include "analysis/CoreRenderer.h"
 #include "analysis/FloatWavWriter.h"
 #include "analysis/ReportWriter.h"
 
@@ -143,6 +144,84 @@ void testKnownDecayAndDensity()
     CHECK (checked >= 4, "known decay is measurable in the mid bands");
 }
 
+const nsr::analysis::BandDecay* findBand (const nsr::analysis::AnalysisResult& result,
+                                           double center)
+{
+    for (const auto& band : result.decayBands)
+        if (band.centerHz == center) return &band;
+    return nullptr;
+}
+
+void testCoreFrequencyDependentDecay()
+{
+    struct Shape { float mid, bass, air; double duration; };
+    for (const auto shape : { Shape { 1.2f, 1.5f, 0.5f, 5.0 },
+                              Shape { 0.8f, 0.75f, 1.5f, 4.0 } })
+    {
+        nsr::analysis::CoreRenderSettings settings;
+        settings.durationSeconds = shape.duration;
+        settings.blockSize = 127;
+        settings.reverb.decaySeconds = shape.mid;
+        settings.reverb.bassTailRatio = shape.bass;
+        settings.reverb.airTailRatio = shape.air;
+        const auto result = nsr::analysis::analyze (
+            nsr::analysis::renderCoreImpulse (settings));
+
+        struct Expected { double hz, seconds; };
+        for (const auto expected : { Expected { 125.0, shape.mid * shape.bass },
+                                     Expected { 1000.0, shape.mid },
+                                     Expected { 8000.0, shape.mid * shape.air } })
+        {
+            const auto* band = findBand (result, expected.hz);
+            CHECK (band != nullptr && band->t20.valid, "core target band has a valid T20");
+            if (band != nullptr && band->t20.valid)
+            {
+                const double error = std::abs (band->t20.t60Seconds - expected.seconds)
+                                     / expected.seconds;
+                if (error >= 0.12)
+                    std::fprintf (stderr, "T60 %.0f Hz expected %.3f measured %.3f\n",
+                                  expected.hz, expected.seconds, band->t20.t60Seconds);
+                CHECK (error < 0.12, "shaped core T60 follows its provisional target");
+                CHECK (band->t20.rSquared > 0.98,
+                       "core band decay is sufficiently linear");
+            }
+        }
+    }
+}
+
+void testSpacePreservesDecay()
+{
+    nsr::analysis::CoreRenderSettings settings;
+    settings.durationSeconds = 4.0;
+    settings.reverb.decaySeconds = 1.0f;
+    settings.reverb.bassTailRatio = 1.0f;
+    settings.reverb.airTailRatio = 1.0f;
+    settings.reverb.space = 0.1f;
+    const auto small = nsr::analysis::analyze (nsr::analysis::renderCoreImpulse (settings));
+    settings.reverb.space = 0.9f;
+    const auto large = nsr::analysis::analyze (nsr::analysis::renderCoreImpulse (settings));
+    for (double hz : { 125.0, 1000.0, 8000.0 })
+    {
+        const auto* a = findBand (small, hz);
+        const auto* b = findBand (large, hz);
+        CHECK (a != nullptr && b != nullptr && a->t20.valid && b->t20.valid,
+               "Space comparison bands have valid T20");
+        if (a != nullptr && b != nullptr && a->t20.valid && b->t20.valid)
+        {
+            CHECK (std::abs (a->t20.t60Seconds - 1.0) < 0.05,
+                   "neutral small-Space T60 is within five percent");
+            CHECK (std::abs (b->t20.t60Seconds - 1.0) < 0.05,
+                   "neutral large-Space T60 is within five percent");
+            const double relative = std::abs (a->t20.t60Seconds - b->t20.t60Seconds)
+                                    / std::max (a->t20.t60Seconds, b->t20.t60Seconds);
+            if (relative >= 0.05)
+                std::fprintf (stderr, "Space T60 %.0f Hz small %.3f large %.3f\n", hz,
+                              a->t20.t60Seconds, b->t20.t60Seconds);
+            CHECK (relative < 0.05, "Space preserves measured T60");
+        }
+    }
+}
+
 void testReportArtifacts()
 {
     nsr::analysis::BaselineSettings settings;
@@ -195,24 +274,34 @@ int main (int argc, char** argv)
     const int only = argc > 1 ? std::atoi (argv[1]) : 0;
     if (only == 0 || only == 1)
     {
-        std::puts ("[1/4] FFT round trip"); std::fflush (stdout);
+        std::puts ("[1/6] FFT round trip"); std::fflush (stdout);
         testFftRoundTrip();
     }
     if (only == 0 || only == 2)
     {
-        std::puts ("[2/4] baseline determinism"); std::fflush (stdout);
+        std::puts ("[2/6] baseline determinism"); std::fflush (stdout);
         testBaselineIsDeterministicAndBlockInvariant();
         testSupportedSampleRatesStayFinite();
     }
     if (only == 0 || only == 3)
     {
-        std::puts ("[3/4] known decay and density"); std::fflush (stdout);
+        std::puts ("[3/6] known decay and density"); std::fflush (stdout);
         testKnownDecayAndDensity();
     }
     if (only == 0 || only == 4)
     {
-        std::puts ("[4/4] report artifacts"); std::fflush (stdout);
+        std::puts ("[4/6] report artifacts"); std::fflush (stdout);
         testReportArtifacts();
+    }
+    if (only == 0 || only == 5)
+    {
+        std::puts ("[5/6] frequency-dependent decay"); std::fflush (stdout);
+        testCoreFrequencyDependentDecay();
+    }
+    if (only == 0 || only == 6)
+    {
+        std::puts ("[6/6] Space/Decay independence"); std::fflush (stdout);
+        testSpacePreservesDecay();
     }
     if (failures == 0)
     {

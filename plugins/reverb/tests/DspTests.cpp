@@ -4,9 +4,28 @@
 #include "dsp/ReverbCore.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cstdlib>
 #include <cmath>
 #include <iostream>
 #include <vector>
+
+namespace
+{
+std::atomic<std::size_t> allocations { 0 };
+}
+
+void* operator new (std::size_t size)
+{
+    ++allocations;
+    if (void* memory = std::malloc (size)) return memory;
+    throw std::bad_alloc();
+}
+void* operator new[] (std::size_t size) { return ::operator new (size); }
+void operator delete (void* memory) noexcept { std::free (memory); }
+void operator delete[] (void* memory) noexcept { std::free (memory); }
+void operator delete (void* memory, std::size_t) noexcept { std::free (memory); }
+void operator delete[] (void* memory, std::size_t) noexcept { std::free (memory); }
 
 namespace
 {
@@ -87,6 +106,72 @@ int main()
     const auto block512 = render (monoLeft, monoRight, 1.0f, 512);
     expect (block1.left == block512.left && block1.right == block512.right,
             "render must be deterministic and block-size invariant");
+
+    for (double sampleRate : { 44100.0, 48000.0, 88200.0, 96000.0, 192000.0 })
+    {
+        nsr::ReverbSettings extreme;
+        extreme.space = 1.0f;
+        extreme.decaySeconds = 4.0f;
+        extreme.bassTailRatio = 2.0f;
+        extreme.airTailRatio = 0.25f;
+        nsr::ReverbCore core;
+        core.prepare (sampleRate, 127, extreme);
+        float inputLeft[127] = {}, inputRight[127] = {}, outputLeft[127] = {}, outputRight[127] = {};
+        inputLeft[0] = inputRight[0] = 1.0f;
+        const auto before = allocations.load();
+        bool finite = true;
+        const int blocks = static_cast<int> (std::ceil (sampleRate * 5.0 / 127.0));
+        for (int block = 0; block < blocks; ++block)
+        {
+            core.process (inputLeft, inputRight, outputLeft, outputRight, 127);
+            inputLeft[0] = inputRight[0] = 0.0f;
+            for (int i = 0; i < 127; ++i)
+                finite = finite && std::isfinite (outputLeft[i]) && std::isfinite (outputRight[i]);
+            if (block == 50)
+            {
+                extreme.space = 0.0f;
+                extreme.decaySeconds = 0.15f;
+                extreme.bassTailRatio = 0.25f;
+                extreme.airTailRatio = 2.0f;
+                core.setSettings (extreme);
+            }
+        }
+        expect (allocations.load() == before, "processing and coefficient updates must not allocate");
+        expect (finite, "extreme settings and automation remain finite at every sample rate");
+    }
+
+    {
+        nsr::ReverbCore core;
+        nsr::ReverbSettings initial;
+        initial.mix = 1.0f;
+        core.prepare (48000.0, 127, initial);
+        float inputLeft[127] = {}, inputRight[127] = {}, outputLeft[127] = {}, outputRight[127] = {};
+        float previousLeft = 0.0f, previousRight = 0.0f, maximumStep = 0.0f;
+        int sample = 0;
+        for (int block = 0; block < 48000 / 127 + 1; ++block)
+        {
+            for (int i = 0; i < 127; ++i, ++sample)
+                inputLeft[i] = inputRight[i] = 0.1f * std::sin (0.031f * static_cast<float> (sample));
+            if (block == 190)
+            {
+                auto changed = initial;
+                changed.space = 1.0f;
+                changed.decaySeconds = 4.0f;
+                changed.bassTailRatio = 2.0f;
+                changed.airTailRatio = 0.25f;
+                core.setSettings (changed);
+            }
+            core.process (inputLeft, inputRight, outputLeft, outputRight, 127);
+            for (int i = 0; i < 127; ++i)
+            {
+                maximumStep = std::max ({ maximumStep, std::abs (outputLeft[i] - previousLeft),
+                                          std::abs (outputRight[i] - previousRight) });
+                previousLeft = outputLeft[i];
+                previousRight = outputRight[i];
+            }
+        }
+        expect (maximumStep < 0.05f, "extreme decay update is smoothed without a click-sized step");
+    }
 
     if (failures == 0) std::cout << "Reverb DSP tests passed\n";
     return failures == 0 ? 0 : 1;
