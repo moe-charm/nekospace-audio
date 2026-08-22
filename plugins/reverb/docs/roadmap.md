@@ -21,7 +21,7 @@ Tests cover block sizes 1/127/512, the 44.1/48/88.2/96/192 kHz standing matrix, 
 synthetic decay and end-to-end report writing. See [baseline-8line.md](baseline-8line.md).
 No GUI exists yet.
 
-## Phase 1 — Establish the independent core (next)
+## Phase 1 — Establish the independent core ✅
 
 Create `plugins/reverb/src/dsp` and the minimum command-line/test host. Decide and test the
 stereo-to-wet excitation mapping. Extract only the generic primitives now proven to have a
@@ -38,7 +38,12 @@ Extraction happens in its own behaviour-preserving commit:
 **Exit:** mono symmetry, stereo side preservation, exact dry bypass and both product test
 suites pass.
 
-## Phase 2 — Frequency-dependent decay
+**Completed at `64b3f8a`, after the behaviour-preserving extraction at `e84844e`.** The
+JUCE-free core uses independent Mid and Side 8-line networks. Tests prove exact mono
+symmetry, non-collapsing pure-Side input, exact zero-mix dry identity and identical output
+for block sizes 1 and 512. Binaural and Reverb suites pass together.
+
+## Phase 2 — Frequency-dependent decay (next)
 
 Add a smooth internal T60 curve driven by Mid Decay, Bass Tail and Air Tail. Fit a stable
 per-line attenuation filter and verify the rendered result rather than coefficients only.

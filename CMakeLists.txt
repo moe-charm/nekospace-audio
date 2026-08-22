@@ -18,7 +18,7 @@ FetchContent_MakeAvailable(JUCE)
 enable_testing()
 
 # --- Shared code ---
-# Deliberately empty until a second plugin actually needs something; see shared/README.md.
+# Product-neutral code with at least two proven consumers; see shared/README.md.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shared/CMakeLists.txt")
     add_subdirectory(shared)
 endif()
@@ -27,6 +27,6 @@ endif()
 add_subdirectory(plugins/binaural)
 # CleanVoice's DSP and CLI stay JUCE-free; its standalone GUI links JUCE only at the edge.
 add_subdirectory(plugins/cleanvoice)
-# Reverb Phase 0 is analysis-only: it characterises Binaural's existing 8-line FDN
-# without yet extracting or changing the DSP implementation.
+# Reverb owns an independent JUCE-free Phase 1 core and retains the Phase 0 analyzer for
+# comparisons against Binaural's frozen 8-line baseline.
 add_subdirectory(plugins/reverb)

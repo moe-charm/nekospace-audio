@@ -27,6 +27,17 @@ Phase 0 implements the offline parts needed to freeze the existing 8-line baseli
 - 1/12-octave spectrum and 1 ms-step autocorrelation from 10–100 ms;
 - tests against a known exponential decay, supported sample rates and odd block sizes.
 
+Phase 1 adds the independent `nsr::ReverbCore` and executable channel-contract tests:
+
+- duplicated mono impulse produces bit-identical wet L/R;
+- polarity-opposed input produces a non-zero, exactly antisymmetric wet tail;
+- `Mix = 0` copies arbitrary stereo samples exactly;
+- static output is bit-identical for block sizes 1 and 512.
+
+The Mid and Side networks allocate their delay storage only in `prepare`; their sample
+loop performs no container mutation, allocation, locking or I/O. Long automation and
+allocation instrumentation remain release gates, not claims made by these unit tests.
+
 The Phase 0 band filters are a deterministic engineering approximation, not an
 IEC/ISO-certified acoustics instrument. Their job is stable A/B regression. If later
 release claims depend on standardized room-acoustic values, the analyzer must first be

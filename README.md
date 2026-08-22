@@ -8,7 +8,7 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
 | **NekoSpace CleanVoice** | prototype | noise removal for whispered voice, app + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | Phase 0 | headphone-first spatial reverb; baseline analyzer complete — [design](plugins/reverb/README.md) |
+| **NekoSpace Reverb** | Phase 1 | independent stereo DSP core + baseline analyzer; no plug-in yet — [design](plugins/reverb/README.md) |
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
 
@@ -110,15 +110,15 @@ nekospace-audio/
 ├─ plugins/          one directory per product, self-contained
 │  ├─ binaural/      src, tests, docs, tools, resources
 │  ├─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE standalone GUI
-│  └─ reverb/        design contract + JUCE-free Phase 0 analysis harness
-├─ shared/           code proven to be needed by more than one plugin
+│  └─ reverb/        independent JUCE-free core + analysis harness
+├─ shared/           product-neutral DSP proven by multiple consumers
 ├─ docs/             contracts that apply across products
 ├─ video/            Remotion source; private media and renders stay ignored
 └─ cmake/            build helpers
 ```
 
 See [docs/repo-layout.md](docs/repo-layout.md) for what belongs where, and in particular
-why `shared/` starts empty.
+how code earns promotion into `shared/`.
 
 ## Docs that apply to every product
 

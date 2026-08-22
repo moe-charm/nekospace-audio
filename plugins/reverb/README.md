@@ -1,14 +1,13 @@
 # NekoSpace Reverb
 
-Phase 0, voice-focused algorithmic reverb for music, audio drama and headphone
+Phase 1, voice-focused algorithmic reverb for music, audio drama and headphone
 listening. It is **headphone-first, not headphone-only**: binaural wet rendering is the
 hero mode, while a conventional stereo wet output keeps the plug-in useful on sends and
 speakers.
 
-No Reverb plug-in or independent Reverb DSP core exists yet. Phase 0 is complete: a
-JUCE-free analyzer now renders the exact 8-line FDN still owned by Binaural and records the
-baseline that later algorithms must beat. This directory freezes the product boundary and
-the order in which evidence is gathered before the production DSP starts.
+The JUCE-free independent DSP core now exists. Its stereo wet excitation preserves Mid
+and Side in separate deterministic 8-line networks, while the Phase 0 analyzer continues
+to render the exact Binaural baseline for comparison. There is no plug-in or GUI yet.
 
 ## What it is
 
@@ -65,7 +64,7 @@ Repository-wide state, thread and licensing rules remain authoritative:
 [repository layout](../../docs/repo-layout.md), and
 [third-party licences](../../docs/third-party-licenses.md).
 
-## Phase 0 analyzer
+## Phase 0 analyzer and Phase 1 core
 
 Build the repository, then run:
 
@@ -82,7 +81,9 @@ and all audio formats remain ignored; reports are local evidence, not production
 The JSON embeds the git commit, dirty-state flag, compiler, build configuration, complete
 settings and deterministic seed.
 
-Frequency-dependent T60 is next. A 16-line network is adopted only if this same harness
+The independent core is covered by `reverb_dsp`: exact dry identity, exact mono symmetry,
+pure-Side preservation and block-size invariance. Frequency-dependent T60 is next. A
+16-line network is adopted only if this same harness
 shows a useful improvement over the 8-line baseline.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

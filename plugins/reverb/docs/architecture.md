@@ -1,6 +1,6 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; Phase 0 baseline analyzer complete, production DSP not started**.
+Status: **design contract; Phase 1 independent JUCE-free core complete**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -95,8 +95,10 @@ The shipping bus is stereo-to-stereo so FL Studio and ordinary send workflows re
 predictable. Mono material may arrive duplicated by the host. The dry path is not summed,
 HRTF-filtered or widened.
 
-The exact stereo-to-wet excitation mapping is deliberately an **open Phase 1 decision**.
-It must satisfy all of the following before it becomes a parameter/state contract:
+Phase 1 uses an energy-bounded Mid/Side transform. Mid and Side excite two independent,
+identically configured 8-line late networks; their wet outputs are reconstructed as
+`L = Mid + Side`, `R = Mid - Side`. This deliberately spends more state than a mono feed
+to make these invariants exact:
 
 - mono input produces a centred, symmetric field;
 - stereo input does not collapse or reverse the existing image;
@@ -104,8 +106,9 @@ It must satisfy all of the following before it becomes a parameter/state contrac
 - input and output energy stay bounded and comparable across mono and stereo material;
 - `Mix = 0` and room bypass reduce to the aligned dry signal exactly.
 
-Candidates include energy-normalised mid/side injection or two decorrelated input
-projections. A simple `(L + R) / 2` downmix is not accepted without the side-signal test.
+A simple `(L + R) / 2` downmix is therefore not used. The dual-network cost and sound are
+provisional: Phase 3 compares it with symmetry-preserving single-network or 16-line
+candidates, but no candidate may regress the Phase 1 channel tests.
 
 ### Early field
 
@@ -272,11 +275,13 @@ processing therefore uses prepared chunks and is block-size invariant at static 
 Reverb is the second real consumer that can justify a shared DSP layer. Extraction is a
 behaviour-preserving step, not a redesign mixed into feature work.
 
-Likely generic primitives are fractional delay, smoothers, biquads, FIR crossfade helpers
-and FWHT utilities. Binaural's `HrtfDatabase`, elevation model, source geometry and full
-`RoomEngine` remain product-owned. The existing FDN first receives a characterization
-test where it lives; only then is reusable code moved with both products green in the same
-commit.
+The first promoted primitive is the product-neutral `nekospace::dsp::FractionalDelay`.
+Binaural retains its `nsb::FractionalDelay` alias, and the frozen six-second baseline WAV
+is bit-identical before and after extraction (SHA-256
+`D5F48288890CA8094D7B3AC5942EC85D633EFF39B08F2F7ECCFB481A1ED37254`). Smoothers,
+biquads, FIR helpers and matrix utilities remain product-local until a second concrete
+consumer justifies another behaviour-preserving extraction. Binaural's `HrtfDatabase`,
+elevation model, source geometry and full `RoomEngine` remain product-owned.
 
 Reverb development must not silently retune Binaural's released room, parameters, presets
 or saved-state meaning. A shared primitive may be improved only through an explicit
