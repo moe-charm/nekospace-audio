@@ -7,15 +7,30 @@ on:
 
 jobs:
   windows:
-    # Pinned, not windows-latest: that image no longer carries Visual Studio 2022, and
-    # this matches the toolchain the plugin is actually developed and listened to on, so
-    # a green CI run means the same thing as a green local build. Move it deliberately
-    # when the image is retired.
+    # Each product gets its own runner. Adding a JUCE GUI target to Reverb must not make
+    # Binaural and CleanVoice wait behind it in one fifteen-minute serial build.
+    name: windows-${{ matrix.product }}
     runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - product: binaural
+            targets: NekoSpaceBinaural_VST3 NekoSpaceBinaural_Standalone NekoSpaceBinauralPlayer nsb_tests
+            tests: ^binaural_dsp$
+          - product: cleanvoice
+            targets: CleanVoiceApp cleanvoice cv_tests cv_session_tests
+            tests: ^cleanvoice_
+          - product: reverb
+            targets: NekoSpaceReverb_VST3 NekoSpaceReverb_Standalone NekoSpaceReverbPlayer nsr_analysis_tests nekospace_reverb_analyze nsr_dsp_tests nsr_plugin_tests nsr_phase3_compare
+            tests: ^reverb_
+
     steps:
       - uses: actions/checkout@v4
 
-      # JUCE is fetched by CMake; cache it so CI is not re-cloning it every run
+      # All runners restore the same pinned JUCE source cache. Only the first cache miss
+      # uploads it; subsequent runs reuse the immutable key.
       - name: Cache JUCE
         uses: actions/cache@v4
         with:
@@ -25,25 +40,21 @@ jobs:
       - name: Configure
         run: cmake -B build -G "Visual Studio 17 2022" -A x64
 
-      - name: Build
-        # JUCE modules are compiled by several deliverables. Visual Studio otherwise
-        # builds this graph serially on the runner, which made the audition-host change
-        # push a clean build past ten minutes.
-        run: cmake --build build --config Release --parallel 4
+      - name: Build ${{ matrix.product }}
+        run: cmake --build build --config Release --parallel 4 --target ${{ matrix.targets }}
 
-      # DSP tests remain headless; the Reverb wrapper test also exercises provisional
-      # state, dry identity and 8/16 switching without opening a host window.
-      # NSB_WITH_KU100 stays off: that data is CC BY-SA and untracked.
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Test ${{ matrix.product }}
+        run: ctest --test-dir build -C Release --output-on-failure -R '${{ matrix.tests }}'
 
-      - name: Upload VST3
+      - name: Upload Binaural VST3
+        if: matrix.product == 'binaural'
         uses: actions/upload-artifact@v4
         with:
           name: NekoSpaceBinaural-VST3
           path: build/plugins/binaural/NekoSpaceBinaural_artefacts/Release/VST3/
 
       - name: Upload Reverb audition builds
+        if: matrix.product == 'reverb'
         uses: actions/upload-artifact@v4
         with:
           name: NekoSpaceReverb-Audition-Windows
