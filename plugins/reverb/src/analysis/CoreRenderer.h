@@ -19,9 +19,11 @@ struct CoreRenderSettings
     double durationSeconds = 6.0;
     int blockSize = 256;
     ReverbSettings reverb;
+    ReverbConfiguration configuration;
 };
 
-inline StereoIr renderCoreImpulse (const CoreRenderSettings& settings)
+template<typename Core>
+inline StereoIr renderCoreImpulseWith (const CoreRenderSettings& settings)
 {
     if (settings.sampleRate < 8000.0 || settings.sampleRate > 384000.0)
         throw std::invalid_argument ("sample rate outside analysis range");
@@ -39,8 +41,8 @@ inline StereoIr renderCoreImpulse (const CoreRenderSettings& settings)
 
     auto reverb = settings.reverb;
     reverb.mix = 1.0f;
-    ReverbCore core;
-    core.prepare (settings.sampleRate, settings.blockSize, reverb);
+    Core core;
+    core.prepare (settings.sampleRate, settings.blockSize, reverb, settings.configuration);
 
     std::vector<float> inputLeft (static_cast<std::size_t> (settings.blockSize), 0.0f);
     std::vector<float> inputRight (static_cast<std::size_t> (settings.blockSize), 0.0f);
@@ -59,5 +61,15 @@ inline StereoIr renderCoreImpulse (const CoreRenderSettings& settings)
                       result.right.data() + position, count);
     }
     return result;
+}
+
+inline StereoIr renderCoreImpulse (const CoreRenderSettings& settings)
+{
+    return renderCoreImpulseWith<ReverbCore> (settings);
+}
+
+inline StereoIr renderCore8Impulse (const CoreRenderSettings& settings)
+{
+    return renderCoreImpulseWith<ReverbCore8> (settings);
 }
 } // namespace nsr::analysis

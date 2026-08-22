@@ -60,8 +60,12 @@ add_executable(nsr_dsp_tests tests/DspTests.cpp)
 target_link_libraries(nsr_dsp_tests PRIVATE nsr_dsp)
 add_test(NAME reverb_dsp COMMAND nsr_dsp_tests)
 
+add_executable(nsr_phase3_compare tools/phase3_compare.cpp)
+target_link_libraries(nsr_phase3_compare PRIVATE nsr_analysis)
+
 if(MSVC)
     target_compile_options(nekospace_reverb_analyze PRIVATE /W4 /utf-8)
     target_compile_options(nsr_analysis_tests PRIVATE /W4 /utf-8)
     target_compile_options(nsr_dsp_tests PRIVATE /W4 /utf-8)
+    target_compile_options(nsr_phase3_compare PRIVATE /W4 /utf-8)
 endif()

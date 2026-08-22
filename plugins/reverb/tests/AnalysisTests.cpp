@@ -222,6 +222,34 @@ void testSpacePreservesDecay()
     }
 }
 
+void testPhase3NetworkDecision()
+{
+    nsr::analysis::CoreRenderSettings settings;
+    settings.durationSeconds = 6.0;
+    settings.blockSize = 64;
+    settings.reverb.decaySeconds = 1.4f;
+    settings.reverb.bassTailRatio = settings.reverb.airTailRatio = 1.0f;
+    settings.configuration.inputDiffuserStages = 4;
+    const auto eight = nsr::analysis::analyze (nsr::analysis::renderCore8Impulse (settings));
+    const auto sixteen = nsr::analysis::analyze (nsr::analysis::renderCoreImpulse (settings));
+
+    CHECK (sixteen.nedT90Seconds > 0.0 && sixteen.nedT90Seconds <= 0.050,
+           "selected 16-line network reaches dense-tail t90 by 50 ms");
+    CHECK (sixteen.nedT90Seconds < eight.nedT90Seconds,
+           "selected 16-line network mixes faster than the matched 8-line network");
+    CHECK (sixteen.maxAutocorrelation < 0.15,
+           "selected 16-line network passes the periodicity warning threshold");
+    CHECK (sixteen.maxAutocorrelation < eight.maxAutocorrelation,
+           "selected 16-line network is less periodic than the matched 8-line network");
+    CHECK (std::abs (sixteen.rms - eight.rms) / eight.rms < 0.01,
+           "8/16-line comparison is wet-RMS matched within one percent");
+    const auto* mid = findBand (sixteen, 1000.0);
+    CHECK (mid != nullptr && mid->t20.valid
+           && std::abs (mid->t20.t60Seconds - 1.4) < 0.07
+           && mid->t20.rSquared > 0.995,
+           "selected network retains the matched mid-band decay");
+}
+
 void testReportArtifacts()
 {
     nsr::analysis::BaselineSettings settings;
@@ -274,34 +302,39 @@ int main (int argc, char** argv)
     const int only = argc > 1 ? std::atoi (argv[1]) : 0;
     if (only == 0 || only == 1)
     {
-        std::puts ("[1/6] FFT round trip"); std::fflush (stdout);
+        std::puts ("[1/7] FFT round trip"); std::fflush (stdout);
         testFftRoundTrip();
     }
     if (only == 0 || only == 2)
     {
-        std::puts ("[2/6] baseline determinism"); std::fflush (stdout);
+        std::puts ("[2/7] baseline determinism"); std::fflush (stdout);
         testBaselineIsDeterministicAndBlockInvariant();
         testSupportedSampleRatesStayFinite();
     }
     if (only == 0 || only == 3)
     {
-        std::puts ("[3/6] known decay and density"); std::fflush (stdout);
+        std::puts ("[3/7] known decay and density"); std::fflush (stdout);
         testKnownDecayAndDensity();
     }
     if (only == 0 || only == 4)
     {
-        std::puts ("[4/6] report artifacts"); std::fflush (stdout);
+        std::puts ("[4/7] report artifacts"); std::fflush (stdout);
         testReportArtifacts();
     }
     if (only == 0 || only == 5)
     {
-        std::puts ("[5/6] frequency-dependent decay"); std::fflush (stdout);
+        std::puts ("[5/7] frequency-dependent decay"); std::fflush (stdout);
         testCoreFrequencyDependentDecay();
     }
     if (only == 0 || only == 6)
     {
-        std::puts ("[6/6] Space/Decay independence"); std::fflush (stdout);
+        std::puts ("[6/7] Space/Decay independence"); std::fflush (stdout);
         testSpacePreservesDecay();
+    }
+    if (only == 0 || only == 7)
+    {
+        std::puts ("[7/7] 8/16-line network decision"); std::fflush (stdout);
+        testPhase3NetworkDecision();
     }
     if (failures == 0)
     {

@@ -20,6 +20,11 @@ struct ReverbSettings
     float mix = 1.0f;
 };
 
+struct ReverbConfiguration
+{
+    int inputDiffuserStages = 4;
+};
+
 namespace detail
 {
 inline float clamp (float value, float lo, float hi) noexcept
@@ -86,17 +91,94 @@ private:
     float lowState = 0.0f, highState = 0.0f;
 };
 
+class AllpassDiffuser
+{
+public:
+    void prepare (float sampleRate, int lengthAt48k, float coefficient)
+    {
+        const int samples = std::max (1, static_cast<int> (std::lround (
+            lengthAt48k * sampleRate / 48000.0f)));
+        delay.prepare (samples + 8);
+        length = static_cast<float> (samples);
+        gain = coefficient;
+    }
+    void reset() noexcept { delay.reset(); }
+    float process (float input) noexcept
+    {
+        const float delayed = delay.read (length);
+        const float output = delayed - gain * input;
+        delay.push (input + gain * output);
+        return output;
+    }
+
+private:
+    nekospace::dsp::FractionalDelay delay;
+    float length = 1.0f, gain = 0.0f;
+};
+
+class InputDiffuser
+{
+public:
+    void prepare (float sampleRate)
+    {
+        stages[0].prepare (sampleRate, 149, 0.63f);
+        stages[1].prepare (sampleRate, 211, -0.57f);
+        stages[2].prepare (sampleRate, 263, 0.51f);
+        stages[3].prepare (sampleRate, 293, -0.47f);
+    }
+    void reset() noexcept { for (auto& stage : stages) stage.reset(); }
+    float process (float input, int stageCount) noexcept
+    {
+        for (int stage = 0; stage < stageCount; ++stage) input = stages[stage].process (input);
+        return input;
+    }
+
+private:
+    AllpassDiffuser stages[4];
+};
+
+template<int LineCount>
+struct NetworkTraits;
+
+template<>
+struct NetworkTraits<8>
+{
+    static constexpr int baseLength[8] = { 1123, 1327, 1523, 1723,
+                                            1931, 2129, 2333, 2539 };
+    static constexpr float inputGain[8] = { 0.5f, -0.4f, 0.45f, -0.35f,
+                                             0.4f, -0.45f, 0.35f, -0.5f };
+    static constexpr float outputSign[8] = { 1, -1, 1, -1, 1, -1, 1, -1 };
+    static constexpr float outputScale = 0.30f;
+};
+
+template<>
+struct NetworkTraits<16>
+{
+    static constexpr int baseLength[16] = { 557, 613, 677, 743, 811, 883, 953, 1021,
+                                             1091, 1163, 1237, 1307, 1381, 1453, 1523, 1597 };
+    static constexpr float inputGain[16] = {
+        0.31f, -0.27f, 0.29f, -0.33f, 0.25f, -0.30f, 0.28f, -0.32f,
+        0.26f, -0.29f, 0.34f, -0.24f, 0.30f, -0.28f, 0.27f, -0.31f
+    };
+    static constexpr float outputSign[16] = {
+        1, -1, 1, -1, 1, -1, 1, -1, -1, 1, -1, 1, -1, 1, -1, 1
+    };
+    static constexpr float outputScale = 0.3042f;
+};
+
+template<int LineCount>
 class LateNetwork
 {
 public:
-    static constexpr int lines = 8;
+    static constexpr int lines = LineCount;
 
     void prepare (float sampleRate, const ReverbSettings& initialSettings)
     {
         sr = sampleRate;
         for (int i = 0; i < lines; ++i)
         {
-            maxLength[i] = static_cast<int> (baseLength[i] * (sr / 48000.0f) * 2.2f) + 8;
+            maxLength[i] = static_cast<int> (NetworkTraits<lines>::baseLength[i]
+                                             * (sr / 48000.0f) * 2.2f) + 8;
             delay[i].prepare (maxLength[i]);
             decayFilter[i].prepare (sr);
             length[i].prepare (sr, 0.05f);
@@ -135,7 +217,8 @@ public:
                                      0.15f, 8.0f);
         for (int i = 0; i < lines; ++i)
         {
-            const float scaledLength = clamp (static_cast<float> (baseLength[i]) * scale,
+            const float scaledLength = clamp (
+                static_cast<float> (NetworkTraits<lines>::baseLength[i]) * scale,
                                               32.0f, static_cast<float> (maxLength[i] - 8));
             // A static fractional tap adds interpolation loss that varies with its
             // fractional part, making high-band T60 drift when Space changes. Static
@@ -166,31 +249,26 @@ public:
                    * midGain[i].next();
         }
 
-        float s[lines];
-        for (int i = 0; i < 4; ++i)
-        {
-            s[i] = d[i] + d[i + 4];
-            s[i + 4] = d[i] - d[i + 4];
-        }
-        float t[lines];
-        for (int i = 0; i < 2; ++i)
-        {
-            t[i] = s[i] + s[i + 2];
-            t[i + 2] = s[i] - s[i + 2];
-            t[i + 4] = s[i + 4] + s[i + 6];
-            t[i + 6] = s[i + 4] - s[i + 6];
-        }
         float h[lines];
-        for (int i = 0; i < 4; ++i)
-        {
-            h[2 * i] = (t[2 * i] + t[2 * i + 1]) * 0.35355339f;
-            h[2 * i + 1] = (t[2 * i] - t[2 * i + 1]) * 0.35355339f;
-        }
+        for (int i = 0; i < lines; ++i) h[i] = d[i];
+        for (int width = 1; width < lines; width <<= 1)
+            for (int start = 0; start < lines; start += width * 2)
+                for (int offset = 0; offset < width; ++offset)
+                {
+                    const float a = h[start + offset];
+                    const float b = h[start + offset + width];
+                    h[start + offset] = a + b;
+                    h[start + offset + width] = a - b;
+                }
+        const float matrixScale = 1.0f / std::sqrt (static_cast<float> (lines));
 
         for (int i = 0; i < lines; ++i)
-            delay[i].push (h[i] + input * inputGain[i]);
+            delay[i].push (h[i] * matrixScale + input * NetworkTraits<lines>::inputGain[i]);
 
-        return (d[0] - d[1] + d[2] - d[3] + d[4] - d[5] + d[6] - d[7]) * 0.30f;
+        float output = 0.0f;
+        for (int i = 0; i < lines; ++i)
+            output += d[i] * NetworkTraits<lines>::outputSign[i];
+        return output * NetworkTraits<lines>::outputScale;
     }
 
 private:
@@ -286,10 +364,6 @@ private:
         return { std::exp (x[0]), std::exp (x[1]), std::exp (x[2]) };
     }
 
-    static constexpr int baseLength[lines] = { 1123, 1327, 1523, 1723,
-                                                1931, 2129, 2333, 2539 };
-    static constexpr float inputGain[lines] = { 0.5f, -0.4f, 0.45f, -0.35f,
-                                                0.4f, -0.45f, 0.35f, -0.5f };
     nekospace::dsp::FractionalDelay delay[lines];
     DecayFilter decayFilter[lines];
     LinearSmoother length[lines], midGain[lines], lowRatio[lines], highRatio[lines];
@@ -302,19 +376,30 @@ private:
 
 // JUCE-free fixed-stereo core. Mid and Side have independent late states so mono remains
 // exactly symmetric while stereo difference information cannot collapse at the input.
-class ReverbCore
+template<int LineCount>
+class BasicReverbCore
 {
 public:
     void prepare (double sampleRate, int /*maximumBlockSize*/,
-                  const ReverbSettings& initialSettings = {})
+                  const ReverbSettings& initialSettings = {},
+                  const ReverbConfiguration& initialConfiguration = {})
     {
         settings = initialSettings;
+        configuration = initialConfiguration;
+        configuration.inputDiffuserStages = std::max (0, std::min (4,
+            configuration.inputDiffuserStages));
         settings.mix = detail::clamp (settings.mix, 0.0f, 1.0f);
+        midDiffuser.prepare (static_cast<float> (sampleRate));
+        sideDiffuser.prepare (static_cast<float> (sampleRate));
         mid.prepare (static_cast<float> (sampleRate), settings);
         side.prepare (static_cast<float> (sampleRate), settings);
     }
 
-    void reset() noexcept { mid.reset(); side.reset(); }
+    void reset() noexcept
+    {
+        midDiffuser.reset(); sideDiffuser.reset();
+        mid.reset(); side.reset();
+    }
 
     void setSettings (const ReverbSettings& next) noexcept
     {
@@ -342,15 +427,27 @@ public:
         {
             const float left = inputLeft[i];
             const float right = inputRight[i];
-            const float wetMid = mid.processSample ((left + right) * 0.5f);
-            const float wetSide = side.processSample ((left - right) * 0.5f);
+            float midInput = (left + right) * 0.5f;
+            float sideInput = (left - right) * 0.5f;
+            if (configuration.inputDiffuserStages > 0)
+            {
+                midInput = midDiffuser.process (midInput, configuration.inputDiffuserStages);
+                sideInput = sideDiffuser.process (sideInput, configuration.inputDiffuserStages);
+            }
+            const float wetMid = mid.processSample (midInput);
+            const float wetSide = side.processSample (sideInput);
             outputLeft[i] = left * dry + (wetMid + wetSide) * settings.mix;
             outputRight[i] = right * dry + (wetMid - wetSide) * settings.mix;
         }
     }
 
 private:
-    detail::LateNetwork mid, side;
+    detail::InputDiffuser midDiffuser, sideDiffuser;
+    detail::LateNetwork<LineCount> mid, side;
     ReverbSettings settings;
+    ReverbConfiguration configuration;
 };
+
+using ReverbCore8 = BasicReverbCore<8>;
+using ReverbCore = BasicReverbCore<16>;
 } // namespace nsr
