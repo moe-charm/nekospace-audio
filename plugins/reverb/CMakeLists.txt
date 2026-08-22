@@ -36,6 +36,11 @@ target_compile_definitions(nsr_analysis INTERFACE
     NSR_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
     NSR_BUILD_CONFIG="$<CONFIG>")
 
+add_library(nsr_dsp INTERFACE)
+target_include_directories(nsr_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(nsr_dsp INTERFACE nekospace_dsp)
+target_compile_features(nsr_dsp INTERFACE cxx_std_17)
+
 add_executable(nekospace_reverb_analyze tools/analyze.cpp)
 target_link_libraries(nekospace_reverb_analyze PRIVATE nsr_analysis)
 
@@ -51,7 +56,12 @@ add_test(NAME reverb_analysis_smoke
         --decay 0.35
         --block-size 127)
 
+add_executable(nsr_dsp_tests tests/DspTests.cpp)
+target_link_libraries(nsr_dsp_tests PRIVATE nsr_dsp)
+add_test(NAME reverb_dsp COMMAND nsr_dsp_tests)
+
 if(MSVC)
     target_compile_options(nekospace_reverb_analyze PRIVATE /W4 /utf-8)
     target_compile_options(nsr_analysis_tests PRIVATE /W4 /utf-8)
+    target_compile_options(nsr_dsp_tests PRIVATE /W4 /utf-8)
 endif()
