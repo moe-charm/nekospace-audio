@@ -112,8 +112,9 @@ This checkpoint is complete only when:
 6. Reverb and existing Binaural/CleanVoice tests still pass;
 7. no private audio or rendered demonstration is tracked.
 
-Those checks record the completed Phase 3.5 history. At `b0c0475`, Room Body v1's targeted
-gate and complete Release CTest set were both 7/7; pluginval 1.0.4 passed strictness 10 for
-three randomised VST3 repeats. Those results do not cover v2. Its Mono Input, three modes,
-matching, retune and owner listening remain NOT RUN at this docs-first revision; see
+Those checks record the completed Phase 3.5 history. At `84a4df4`, Room Body v2's Mono
+Input, three continuously running modes, fixed matching and bounded retune passed their
+DSP/state tests; the complete Release CTest set passed 7/7 and pluginval 1.0.4 passed
+strictness 10 for three randomised VST3 repeats. The real Player layout and each new
+control were checked manually. Matched owner listening is still pending; see
 [room-body.md](room-body.md). The Steinberg validator remains unconfigured.

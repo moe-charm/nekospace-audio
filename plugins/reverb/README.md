@@ -17,8 +17,10 @@ The explicitly provisional listening surface uses the same Reverb
 processor/editor builds as VST3 and JUCE Standalone, while Reverb Player adds file and
 device transport around those exact objects. Room Body v1 implements a bounded six-image
 early field in front of the accepted tail. Owner listening found its first comparison
-mainly slightly louder, so v2 is defined around matched Tail/Body/ER isolation and a
-wet-only Mono Input before any order-2/3 or HRTF expansion. The permanent Phase 6
+mainly slightly louder. Room Body v2 is now implemented at `84a4df4`: matched
+Tail/Body/ER isolation, a wet-only Mono Input, one bounded surface/onset retune and a
+general mono-compatible ER spread stage. Engineering validation is complete; the matched
+owner audition remains before any order-2/3 or HRTF expansion. The permanent Phase 6
 parameter contract does not exist yet.
 
 ## What it is
@@ -123,11 +125,12 @@ is a saved, automatable Bool that feeds `0.5 * (L + R)` to the wet room only, le
 stereo and the output bus unchanged. All mode and input transitions are specified at
 50 ms. Bypass still feeds silence to the room and becomes exact dry in steady state.
 
-At `b0c0475`, the v1 Room Body checklist and complete Release CTest set were 7/7, and
-pluginval 1.0.4 passed strictness 10 for three randomised VST3 repeats. Those are baseline
-results, not v2 results. The v2 implementation, matching and owner listening are pending
-at this docs-first revision; exact gates and the recorded v1 observation are in
-[room-body.md](docs/room-body.md). Audio and rendered demonstrations remain globally
-ignored. The Steinberg validator is still unconfigured.
+At `84a4df4`, Room Body v2 passed the complete Release CTest set 7/7 and pluginval 1.0.4
+at strictness 10 for three randomised VST3 repeats. The matched default Body/Tail
+difference is `-0.000064 dB`; every 50 ms mode/Mono transition remained far below the
+`0.06` click-sized step guard. GUI layout and all four controls were also checked in the
+real Player. Only the sighted owner listening result remains; exact conditions and the v1
+comparison history are in [room-body.md](docs/room-body.md). Audio and rendered
+demonstrations remain globally ignored. The Steinberg validator is still unconfigured.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

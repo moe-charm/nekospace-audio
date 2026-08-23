@@ -292,10 +292,31 @@ The implementation exit checks are:
 | Wet-only mono | On supplies `0.5 * (L + R)` to wet only; Mix 0 and steady Bypass preserve original dry L/R exactly |
 | Audition identity | Tail Only, Room Body and ER Solo expose Late, ER+Late and ER respectively while all DSP keeps advancing |
 | Transitions | every mode and Mono Input change is finite, 50 ms smoothed, allocation-free and free of stale bursts |
-| Mono spatial safety | generated early Side is bounded, L/R energy is balanced and mono fold-down returns the Mid exactly |
+| Mono spatial safety | generated early Side is bounded, L/R energy is balanced and mono fold-down returns Mid within floating-point tolerance |
 | Match | default Tail/Body integrated wet levels differ by no more than `0.1 dB` under recorded conditions |
 | Regression | Room Body v1 gates, the complete Release CTest set and pluginval are rerun |
 | Listening | owner records accept, defer or remove after one matched v2 audition |
+
+#### Recorded implementation evidence
+
+Room Body v2 was implemented at `84a4df4`. The deterministic reference render is 48 kHz,
+block size 127, four seconds, default controls, Mix 100% and a duplicated-mono stereo unit
+impulse. Its fixed Body gain is `0.9913`; matched integrated `Body - Tail` is
+`-0.000064 dB`. Before that trim, the integrated difference is `+0.076579 dB`, the 0–50 ms
+difference is `+4.49981 dB`, and raw 0–50 ms ER Solo L+R energy is `0.0179523`.
+
+Mono ER Side/Mid is `-20.4056 dB` with L/R correlation `0.981956`. The maximum measured
+continuous-tone step is `0.000460103` for Wet Mono Input and `0.000459019` across all six
+directed audition-mode changes, against a `0.06` guard. The M/S fold-down maximum float
+error is `5.96046e-08`. Every all-mode ramp sample matches the explicit Early/Late linear
+gain reference with maximum error 0, and each path converges after exactly 2400 samples at
+48 kHz while matching continuously advanced reference buses.
+
+The complete Release CTest set passed 7/7. pluginval 1.0.4 passed strictness 10,
+`--repeat 3` and `--randomise`; its VST3-validator subtest remained skipped because no
+Steinberg validator path is configured. VST3, Standalone and Player built, and the Player
+GUI was manually checked for layout, selection and notice updates. Only the sighted owner
+listening gate remains pending.
 
 ## Calibrating the provisional gates
 

@@ -1,7 +1,7 @@
 # NekoSpace Reverb — Room Body Prototype
 
-Status: **Room Body v1 baseline recorded; v1 owner audition complete; Room Body v2
-contract defined, implementation pending**.
+Status: **Room Body v1 baseline recorded; Room Body v2 implemented and
+engineering-validated at `84a4df4`; matched owner audition pending**.
 
 The accepted 16-line late field remains unchanged. Room Body v1 placed six first-order
 shoebox reflections in front of it. On 2026-08-24 the owner heard the difference, but
@@ -34,7 +34,8 @@ Room Body v2 delivers:
 - the same six first-order images: left, right, front, back, floor and ceiling;
 - reduced floor dominance and more clearly differentiated surface damping;
 - a later, overlapping late-field onset rather than an early tail masking the images;
-- a controlled, deterministic early Side component for mono wet excitation;
+- a controlled, deterministic and mono-compatible early Side component for every wet
+  excitation;
 - three unsaved developer audition modes: `Tail Only`, `Room Body` and `ER Solo`;
 - one fixed, offline-calibrated audition gain for matched `Tail Only` / `Room Body` level;
 - a saved, automatable `Mono Input` parameter that sums only the wet feed;
@@ -51,12 +52,13 @@ Stereo input
    ├──────────────────────────────────────────────────────── Original dry L/R
    └─ wet input: original L/R or 0.5 * (L + R)
          └─ common wet pre-delay
-              ├─ six first-order images ── fixed audition trim ── Early
+              ├─ six first-order images ── general ER spread ─── Early
               └─ bounded late-onset delay
                      └─ accepted 16-line/4-stage FDN ─────────── Late
 
 Audition gains(Early, Late)
-   Tail Only = (0, 1)   Room Body = (1, 1)   ER Solo = (1, 0)
+   Tail Only = (0, 1)   Room Body = (k, k)   ER Solo = (1, 0)
+   k = 0.9913 fixed audition trim
 
 Dry + Mix * selected wet buses ───────────────────────────────► Stereo output
 ```
@@ -67,8 +69,8 @@ Early and late buses always continue processing. Audition modes change only prep
 
 The fixed audition gain is calculated offline and recorded with its render conditions.
 It is not a live level follower, saved parameter or future product Wet Trim. Tail/Body
-comparison uses one fixed post-wet gain and must match integrated wet level within
-`0.1 dB`; adaptive gain control is forbidden.
+comparison applies the same fixed gain to the summed Early and Late buses and must match
+integrated wet level within `0.1 dB`; adaptive gain control is forbidden.
 
 ## Wet Mono Input
 
@@ -83,10 +85,13 @@ The Mid signal is unchanged and the wet Side input moves to/from zero over 50 ms
 samples are captured before this operation and are never collapsed. A producer wanting
 the entire track in mono should use the DAW's channel utility instead.
 
-For mono wet excitation, v2 may derive a small decorrelated early Side signal from two
-different prepared allpass paths. It must not use an unprocessed polarity-inverted copy.
-The generated Side must cancel exactly under mono fold-down, keep L/R energy balanced and
-remain bounded below the Mid energy. The accepted late field is not redesigned here.
+For every wet excitation, v2 derives a small decorrelated early Side signal from two
+different prepared allpass paths. This is a general ER-spread stage, not a feature that
+appears only when `Mono Input` is On. With a mono wet feed it supplies the missing early
+width; with stereo it remains bounded beside the retained original Side. It does not use
+an unprocessed polarity-inverted copy. The generated Side cancels under mono fold-down,
+keeps L/R energy balanced and remains below the Mid energy. The accepted late field is
+not redesigned here.
 
 The provisional saved-state contract is:
 
@@ -107,14 +112,59 @@ is never delayed, attenuated or repanned by this geometry.
 
 For each image the renderer derives physical path length, inverse-distance level,
 left/right projection, far-field per-ear offset and deterministic surface damping. v2
-may change only the existing six surface gains/cutoffs and the Definition/late-onset
-mapping. It records the final constants and diagnostics after implementation. Adding
-reflections, HRTF convolution, a new FDN or adaptive normalization requires a later phase.
+changed only the existing six surface gains/cutoffs and the Definition/late-onset
+mapping. Adding reflections, HRTF convolution, a new FDN or adaptive normalization
+requires a later phase.
 
 Early reflections retain the complete Mid input and half of the original Side input
 before L/R reconstruction. `Mono Input` removes the original Side only from the wet feed;
 the bounded generated early Side described above can still give a centred mono source a
 speaker-compatible room width.
+
+## Recorded v2 implementation and measurements
+
+The bounded retune uses these internal surface values. Cutoff interpolates geometrically
+between the soft and hard endpoints as `Definition` moves from 0 to 1.
+
+| Surface | gain | soft cutoff | hard cutoff |
+| --- | ---: | ---: | ---: |
+| Left | 0.68 | 6500 Hz | 12000 Hz |
+| Right | 0.68 | 6500 Hz | 12000 Hz |
+| Front | 0.64 | 6000 Hz | 11000 Hz |
+| Back | 0.58 | 4500 Hz | 8000 Hz |
+| Floor | 0.46 | 3200 Hz | 6000 Hz |
+| Ceiling | 0.52 | 4000 Hz | 8000 Hz |
+
+The late excitation offset after common pre-delay is
+`6 + 18 * Definition + 4 * Space` ms. The ER-spread stage uses two prepared allpasses
+(257 and 379 samples at 48 kHz, coefficient 0.55), then a 250 Hz high-pass, 8 kHz
+low-pass and amount 0.22. Its `M + S` / `M - S` reconstruction is shared with the
+floating-point-tolerance fold-down test.
+
+The reference measurement used 48 kHz, block size 127, four seconds, default settings,
+Mix 100% and a duplicated-mono stereo unit impulse. Energy is the raw sum of squared L/R
+samples; it is diagnostic and not a loudness claim.
+
+| Measurement | v2 result |
+| --- | ---: |
+| untrimmed integrated `Body - Tail` | +0.076579 dB |
+| untrimmed 0–50 ms `Body - Tail` | +4.49981 dB |
+| raw `ER Solo` L+R energy, 0–50 ms | 0.0179523 |
+| fixed Body audition trim | 0.9913 |
+| matched integrated `Body - Tail` | -0.000064 dB |
+| first ER output above 1e-9 | 20.75 ms |
+| first Late output above 1e-9 | 38.6042 ms |
+| mono ER Side/Mid | -20.4056 dB |
+| mono ER L/R correlation | 0.981956 |
+| M/S fold-down maximum float error | 5.96046e-08 |
+| maximum Wet Mono transition step | 0.000460103 |
+| maximum of all six directed mode transitions | 0.000459019 |
+| explicit all-mode 2400-sample ramp error | 0 |
+
+Both transition measurements use continuous low-level stereo tones, the exact 2400-sample
+50 ms ramp and a click-sized guard of 0.06. After the ramp, every switched mode matches a
+reference instance whose target bus had run continuously, proving that muted buses are
+not frozen or stale.
 
 ## Provisional controls
 
@@ -148,23 +198,25 @@ dry and re-enabling cannot reveal programme material accumulated while bypassed.
 
 ## Validation history and v2 exit checks
 
-At commit `b0c0475`, the Room Body v1 targeted checklist passed 7/7. Separately, the
-complete Release CTest set passed 7/7 and pluginval 1.0.4 passed strictness 10 for three
-randomised VST3 repeats. Those are v1 baseline results. They do not cover Mono Input,
-three-bus isolation, matched audition or the bounded retune. The Steinberg validator was
-not configured and its pluginval subtest was skipped.
+At commit `84a4df4`, the complete Release CTest set passed 7/7. pluginval 1.0.4 passed
+strictness 10 for three randomised VST3 repeats, including editor automation and state
+restoration. The VST3, generated Standalone and Player all built. In the actual Player,
+the three audition buttons and Mono Input control were visible without overlap; `ER Solo`
+and `Mono Input` were clicked and their selected states/notices updated. The Steinberg
+validator was not configured and its pluginval subtest was skipped.
 
-| v2 gate | Required result | Docs-first status |
+| v2 gate | Required result | Status |
 | --- | --- | --- |
-| State | Mono Input saves/restores; missing old value becomes Off; audition mode is untouched | NOT RUN |
-| Wet-only mono | On uses `0.5 * (L + R)` only for wet; Mix 0 and steady Bypass preserve original L/R exactly | NOT RUN |
-| Mode identity | Tail, Body and ER Solo expose the defined buses while both DSP paths keep advancing | NOT RUN |
-| Isolation | static `Room Body - Tail Only` equals isolated ER within numerical tolerance before fixed trim | NOT RUN |
-| Transition | Mono Input and all mode changes remain finite, click-bounded and allocation-free | NOT RUN |
-| Spatial safety | mono wet has balanced non-identical L/R, bounded Side and exact mono fold-down | NOT RUN |
-| Matching | default Tail/Body integrated wet levels differ by no more than `0.1 dB`; fixed gain and render conditions are recorded | NOT RUN |
-| Regression | prior Room Body gates, complete Release CTest and pluginval are rerun | NOT RUN |
-| Listening | sighted, matched owner audition records accept/defer/remove; no blind test is required | NOT RUN |
+| State | Mono Input saves/restores; missing old value becomes Off; audition mode is untouched | PASS |
+| Wet-only mono | On uses `0.5 * (L + R)` only for wet; Mix 0 and steady Bypass preserve original L/R exactly | PASS |
+| Mode identity | Tail, Body and ER Solo expose the defined buses while both DSP paths keep advancing | PASS |
+| Isolation | static Body equals `(Tail + ER Solo) * 0.9913` within numerical tolerance | PASS |
+| Transition | Mono Input and all mode changes remain finite, 50 ms, click-bounded, allocation-free and free of stale returns | PASS |
+| Spatial safety | mono wet has balanced non-identical L/R, bounded Side and M/S fold-down within floating-point tolerance | PASS |
+| Matching | default Tail/Body integrated wet levels differ by no more than `0.1 dB`; fixed gain and render conditions are recorded | PASS |
+| Regression | prior Room Body gates, complete Release CTest and pluginval are rerun | PASS |
+| GUI | real Player layout, selected states and mode notices respond correctly | PASS (manual) |
+| Listening | sighted, matched owner audition records accept/defer/remove; no blind test is required | PENDING |
 
 The listening question is deliberately perceptual: does the matched Body sound more like
 a believable room boundary than Tail Only, not merely different or louder? If one bounded

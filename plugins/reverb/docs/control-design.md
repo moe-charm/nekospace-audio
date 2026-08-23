@@ -117,4 +117,5 @@ Room Body v2's fixed Tail/Body matching gain does not answer question 3. It is a
 offline-calibrated comparison correction, not a product ER/Late control. The provisional
 `Mono Input` implementation is a saved Bool with ID `reverb.wetMonoInput`, default Off and
 `versionHint = 3`; future multi-choice routing must use a new ID rather than reinterpret
-that Bool.
+that Bool. Its dry path remains stereo. The deterministic ER-spread stage is always part
+of the early renderer and is not another user control coupled to this Bool.

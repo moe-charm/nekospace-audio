@@ -144,12 +144,12 @@ adding:
 - one bounded retune of surface gain/damping and late onset;
 - controlled, mono-compatible early spread for centred wet excitation.
 
-**Docs-first status:** contract defined; implementation and every v2-specific gate are
-NOT RUN. Exit requires state/transition/realtime tests, 0.1 dB default Tail/Body matching,
-complete Release CTest and pluginval reruns, followed by one sighted matched owner
-audition. If the result is still only level/tone change, Phase 4A pauses for redesign.
-Order-2/3 and HRTF do not begin before this decision. The Steinberg validator remains an
-unconfigured Phase 7 gate.
+**Current status:** implemented at `84a4df4`. State, transition, continuous hidden-bus,
+realtime, mono safety and fixed matching tests pass. The complete Release CTest set is
+7/7 and pluginval 1.0.4 passes strictness 10/repeat 3. Default matched Body/Tail differs by
+`-0.000064 dB`. One sighted matched owner audition remains. If it still sounds only like
+level/tone change, Phase 4A pauses for redesign. Order-2/3 and HRTF do not begin before
+this decision. The Steinberg validator remains an unconfigured Phase 7 gate.
 
 ## Phase 5 — Late-field envelopment
 

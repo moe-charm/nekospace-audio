@@ -1,7 +1,7 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; 16-line late field selected, Room Body v1 result recorded and
-Room Body v2 defined but not yet implemented**.
+Status: **design contract; 16-line late field selected, Room Body v2 implemented and
+engineering-validated, matched owner audition pending**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -118,7 +118,8 @@ network with the accepted 16-line/4-stage path. Mid and Side wet outputs are rec
 as `L = Mid + Side`, `R = Mid - Side`. This deliberately spends more state than a mono
 feed to make these invariants exact:
 
-- mono input produces a centred, symmetric field;
+- mono input produces a centred, energy-balanced field; the late tail remains symmetric
+  while v2 ER is intentionally non-identical L/R;
 - stereo input does not collapse or reverse the existing image;
 - polarity-opposed side information does not disappear from the wet feed;
 - input and output energy stay bounded and comparable across mono and stereo material;
@@ -133,10 +134,12 @@ evidence; it is not a second shipping path or a current owner control.
 
 Room Body uses six first-order shoebox images around the accepted 16-line tail. The early
 renderer converts the wet input to Mid/Side, retains Mid at unity and retains original
-Side at `earlySideRetention = 0.5`, then reconstructs L/R per reflection. v2 also permits
-a small deterministic early Side from two different prepared allpass paths for centred
-mono excitation. That Side must cancel in mono fold-down, remain energy-bounded and never
-be a raw polarity-inverted copy.
+Side at `earlySideRetention = 0.5`, then reconstructs L/R per reflection. v2 applies one
+small deterministic ER-spread stage to every wet excitation: two different prepared
+allpass paths derive a filtered Side from the combined early Mid. This is a general early
+room stage, not a second switch tied to `Mono Input`; when the original wet feed is mono,
+it prevents the ER field from remaining identical L/R. The generated Side cancels in mono
+fold-down, remains energy-bounded and is never a raw polarity-inverted copy.
 
 Pre-delay, per-ear reflection delays and the late-excitation geometry delay change through
 a delay smoother capped at **0.5 sample of delay per processed sample**. This bound applies
@@ -322,12 +325,13 @@ The audio callback performs no allocation, deallocation, locking, file access, n
 access, string work, logging or UI access. Hosts may provide odd and changing block sizes;
 processing therefore uses prepared chunks and is block-size invariant at static settings.
 
-At `b0c0475`, Room Body v1's seven targeted engineering gates and the complete seven-test
-Release CTest set passed; pluginval 1.0.4 also passed strictness 10 for three randomised
-VST3 repeats. Owner listening then found that the v1 Body was perceived mainly as a small
-level increase. Those baseline checks do not cover the v2 Mono Input, three audition
-buses, matching or bounded retune. See [room-body.md](room-body.md) for the v2 gates and
-current status. The Steinberg VST3 validator remains unconfigured Phase 7 work.
+At `84a4df4`, Room Body v2's state, bus identity, all directed mode transitions, Wet Mono
+Input, mono compatibility and fixed matching checks passed. The complete Release CTest
+set passed 7/7 and pluginval 1.0.4 passed strictness 10 for three randomised VST3 repeats.
+The actual Player layout and button/checkbox interaction were checked manually. The
+matched owner audition remains the only Phase 4A.1 gate not complete; see
+[room-body.md](room-body.md). The Steinberg VST3 validator remains unconfigured Phase 7
+work.
 
 ## Reuse from Binaural
 
