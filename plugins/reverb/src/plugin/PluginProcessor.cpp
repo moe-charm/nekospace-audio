@@ -29,6 +29,17 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceReverbProcessor::createLa
     layout.add (std::make_unique<Float> (ParameterID { nsr::pid::mix, 1 }, "Mix",
                                           percent, 35.0f,
                                           AudioParameterFloatAttributes().withLabel ("%")));
+    // Prototype parameters are appended so the existing host-facing order stays stable.
+    layout.add (std::make_unique<Float> (ParameterID { nsr::pid::distance, 2 }, "Distance",
+                                          percent, 25.0f,
+                                          AudioParameterFloatAttributes().withLabel ("%")));
+    layout.add (std::make_unique<Float> (ParameterID { nsr::pid::definition, 2 }, "Definition",
+                                          percent, 65.0f,
+                                          AudioParameterFloatAttributes().withLabel ("%")));
+    layout.add (std::make_unique<Float> (ParameterID { nsr::pid::preDelay, 2 }, "Pre-delay",
+                                          NormalisableRange<float> (0.0f, 120.0f, 0.1f, 0.55f),
+                                          12.0f,
+                                          AudioParameterFloatAttributes().withLabel ("ms")));
     return layout;
 }
 
@@ -42,6 +53,8 @@ NekoSpaceReverbProcessor::NekoSpaceReverbProcessor()
     pBypass = raw (nsr::pid::bypass); pSpace = raw (nsr::pid::space);
     pDecay = raw (nsr::pid::decay); pBassTail = raw (nsr::pid::bassTail);
     pAirTail = raw (nsr::pid::airTail); pMix = raw (nsr::pid::mix);
+    pDistance = raw (nsr::pid::distance); pDefinition = raw (nsr::pid::definition);
+    pPreDelay = raw (nsr::pid::preDelay);
     bypassParameter = apvts.getParameter (nsr::pid::bypass);
 }
 
@@ -52,26 +65,40 @@ bool NekoSpaceReverbProcessor::isBusesLayoutSupported (const BusesLayout& layout
     return input == AudioChannelSet::mono() || input == AudioChannelSet::stereo();
 }
 
-nsr::ReverbSettings NekoSpaceReverbProcessor::readSettings() const noexcept
+double NekoSpaceReverbProcessor::getTailLengthSeconds() const
 {
-    return { pSpace->load() * 0.01f, pDecay->load(), pBassTail->load() * 0.01f,
-             pAirTail->load() * 0.01f, pMix->load() * 0.01f };
+    const float longestRatio = jmax (1.0f, jmax (pBassTail->load(), pAirTail->load()) * 0.01f);
+    return static_cast<double> (pDecay->load() * longestRatio
+                                + pPreDelay->load() * 0.001f + 0.5f);
+}
+
+nsr::RoomBodySettings NekoSpaceReverbProcessor::readSettings() const noexcept
+{
+    nsr::RoomBodySettings settings;
+    settings.space = pSpace->load() * 0.01f;
+    settings.decaySeconds = pDecay->load();
+    settings.bassTailRatio = pBassTail->load() * 0.01f;
+    settings.airTailRatio = pAirTail->load() * 0.01f;
+    settings.distance = pDistance->load() * 0.01f;
+    settings.definition = pDefinition->load() * 0.01f;
+    settings.preDelayMs = pPreDelay->load();
+    settings.mix = pMix->load() * 0.01f;
+    return settings;
 }
 
 void NekoSpaceReverbProcessor::prepareToPlay (double sampleRate, int maximumBlockSize)
 {
-    preparedSampleRate = sampleRate;
     preparedBlockSize = jmax (1, maximumBlockSize);
     dry.setSize (2, preparedBlockSize, false, true, false);
-    wet8.setSize (2, preparedBlockSize, false, true, false);
-    wet16.setSize (2, preparedBlockSize, false, true, false);
+    silence.setSize (2, preparedBlockSize, false, true, false);
+    silence.clear();
     lastSettings = readSettings();
-    core8.prepare (sampleRate, preparedBlockSize, lastSettings);
-    core16.prepare (sampleRate, preparedBlockSize, lastSettings);
-    core8.reset(); core16.reset();
-    auditionMix = auditionTarget.load (std::memory_order_relaxed);
-    tailSeconds.store (lastSettings.decaySeconds
-                       * jmax (lastSettings.bassTailRatio, lastSettings.airTailRatio) + 0.5);
+    core.setRoomBodyEnabled (roomBodyEnabled.load (std::memory_order_relaxed));
+    core.prepare (sampleRate, preparedBlockSize, lastSettings);
+    core.reset();
+    bypassMix.prepare (static_cast<float> (sampleRate), 0.05f);
+    const bool bypassed = pBypass->load() > 0.5f;
+    bypassMix.snap (bypassed ? 1.0f : 0.0f);
 }
 
 void NekoSpaceReverbProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer&)
@@ -86,16 +113,18 @@ void NekoSpaceReverbProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
     const auto settings = readSettings();
     if (settings.space != lastSettings.space || settings.decaySeconds != lastSettings.decaySeconds
         || settings.bassTailRatio != lastSettings.bassTailRatio
-        || settings.airTailRatio != lastSettings.airTailRatio || settings.mix != lastSettings.mix)
+        || settings.airTailRatio != lastSettings.airTailRatio
+        || settings.distance != lastSettings.distance
+        || settings.definition != lastSettings.definition
+        || settings.preDelayMs != lastSettings.preDelayMs || settings.mix != lastSettings.mix)
     {
         lastSettings = settings;
-        core8.setSettings (settings); core16.setSettings (settings);
-        tailSeconds.store (settings.decaySeconds
-                           * jmax (settings.bassTailRatio, settings.airTailRatio) + 0.5);
+        core.setSettings (settings);
     }
 
-    const float target = auditionTarget.load (std::memory_order_relaxed);
-    const float step = static_cast<float> (1.0 / jmax (1.0, preparedSampleRate * 0.05));
+    core.setRoomBodyEnabled (roomBodyEnabled.load (std::memory_order_relaxed));
+    const bool bypassRequested = pBypass->load() > 0.5f;
+    bypassMix.setTarget (bypassRequested ? 1.0f : 0.0f);
     for (int offset = 0; offset < sampleCount; offset += preparedBlockSize)
     {
         const int count = jmin (preparedBlockSize, sampleCount - offset);
@@ -103,19 +132,33 @@ void NekoSpaceReverbProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
         const float* right = buffer.getReadPointer (jmin (1, buffer.getNumChannels() - 1), offset);
         dry.copyFrom (0, 0, left, count);
         dry.copyFrom (1, 0, right, count);
-        core8.process (left, right, wet8.getWritePointer (0), wet8.getWritePointer (1), count);
-        core16.process (left, right, wet16.getWritePointer (0), wet16.getWritePointer (1), count);
+        // Once bypass is requested, stop charging the room immediately. The output still
+        // reaches exact dry through the prepared 50 ms fade while the existing tail drains
+        // naturally from silence. Un-bypass resumes excitation immediately and fades it in.
+        const auto* coreLeft = bypassRequested ? silence.getReadPointer (0)
+                                               : dry.getReadPointer (0);
+        const auto* coreRight = bypassRequested ? silence.getReadPointer (1)
+                                                : dry.getReadPointer (1);
+        core.process (coreLeft, coreRight,
+                      buffer.getWritePointer (0, offset), buffer.getWritePointer (1, offset), count);
+        float lastBypassAmount = bypassRequested ? 1.0f : 0.0f;
+        auto* outputLeft = buffer.getWritePointer (0, offset);
+        auto* outputRight = buffer.getWritePointer (1, offset);
         for (int i = 0; i < count; ++i)
         {
-            if (auditionMix < target) auditionMix = jmin (target, auditionMix + step);
-            else if (auditionMix > target) auditionMix = jmax (target, auditionMix - step);
-            for (int channel = 0; channel < jmin (2, buffer.getNumChannels()); ++channel)
+            lastBypassAmount = bypassMix.next();
+            if (lastBypassAmount == 0.0f) continue;
+            const float dryLeft = dry.getSample (0, i);
+            const float dryRight = dry.getSample (1, i);
+            if (lastBypassAmount == 1.0f)
             {
-                auto* output = buffer.getWritePointer (channel, offset);
-                const auto* a = wet8.getReadPointer (channel);
-                const auto* b = wet16.getReadPointer (channel);
-                output[i] = pBypass->load() > 0.5f ? dry.getSample (channel, i)
-                                                   : a[i] + (b[i] - a[i]) * auditionMix;
+                outputLeft[i] = dryLeft;
+                outputRight[i] = dryRight;
+            }
+            else
+            {
+                outputLeft[i] += (dryLeft - outputLeft[i]) * lastBypassAmount;
+                outputRight[i] += (dryRight - outputRight[i]) * lastBypassAmount;
             }
         }
     }

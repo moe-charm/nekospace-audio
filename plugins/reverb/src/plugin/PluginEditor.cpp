@@ -11,14 +11,18 @@ NekoSpaceReverbEditor::NekoSpaceReverbEditor (NekoSpaceReverbProcessor& p)
     title.setText ("NEKOSPACE REVERB", dontSendNotification);
     title.setFont (Font (FontOptions (27.0f, Font::bold)));
     title.setColour (Label::textColourId, Colour (0xfff2e9dc));
-    subtitle.setText ("LATE TAIL PROTOTYPE  |  OWNER AUDITION", dontSendNotification);
+    subtitle.setText ("ROOM BODY PROTOTYPE  |  OWNER AUDITION", dontSendNotification);
     subtitle.setColour (Label::textColourId, Colour (0xffd69562));
-    notice.setText ("Directional early reflections and Binaural output arrive in later phases.",
+    notice.setText ("Six first-order reflections are active. HRTF output and higher orders come later.",
                     dontSendNotification);
     notice.setColour (Label::textColourId, Colour (0xff9f9992));
     for (auto* label : { &title, &subtitle, &notice }) addAndMakeVisible (*label);
 
     addKnob (space, spaceLabel, "SPACE", nsr::pid::space, spaceAttachment);
+    addKnob (distance, distanceLabel, "DISTANCE", nsr::pid::distance, distanceAttachment);
+    addKnob (definition, definitionLabel, "DEFINITION", nsr::pid::definition,
+             definitionAttachment);
+    addKnob (preDelay, preDelayLabel, "PRE-DELAY", nsr::pid::preDelay, preDelayAttachment);
     addKnob (decay, decayLabel, "DECAY", nsr::pid::decay, decayAttachment);
     addKnob (bass, bassLabel, "BASS TAIL", nsr::pid::bassTail, bassAttachment);
     addKnob (air, airLabel, "AIR TAIL", nsr::pid::airTail, airAttachment);
@@ -28,16 +32,16 @@ NekoSpaceReverbEditor::NekoSpaceReverbEditor (NekoSpaceReverbProcessor& p)
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<ButtonAttachment> (p.apvts, nsr::pid::bypass, bypass);
 
-    for (auto* button : { &network8, &network16 })
+    for (auto* button : { &tailOnly, &roomBody })
     {
         button->setClickingTogglesState (false);
         button->setWantsKeyboardFocus (false);
         addAndMakeVisible (*button);
     }
-    network8.onClick = [this] { processor.setAuditionNetworkLines (8); updateNetworkButtons(); };
-    network16.onClick = [this] { processor.setAuditionNetworkLines (16); updateNetworkButtons(); };
-    updateNetworkButtons();
-    setSize (780, 390);
+    tailOnly.onClick = [this] { processor.setRoomBodyEnabled (false); updateRoomBodyButtons(); };
+    roomBody.onClick = [this] { processor.setRoomBodyEnabled (true); updateRoomBodyButtons(); };
+    updateRoomBodyButtons();
+    setSize (900, 520);
 }
 
 void NekoSpaceReverbEditor::addKnob (Slider& slider, Label& label, const String& text,
@@ -56,11 +60,17 @@ void NekoSpaceReverbEditor::addKnob (Slider& slider, Label& label, const String&
     attachment = std::make_unique<SliderAttachment> (processor.apvts, id, slider);
 }
 
-void NekoSpaceReverbEditor::updateNetworkButtons()
+void NekoSpaceReverbEditor::updateRoomBodyButtons()
 {
-    const bool eight = processor.getAuditionNetworkLines() == 8;
-    network8.setColour (TextButton::buttonColourId, eight ? Colour (0xffb9663e) : Colour (0xff393431));
-    network16.setColour (TextButton::buttonColourId, ! eight ? Colour (0xffb9663e) : Colour (0xff393431));
+    const bool enabled = processor.isRoomBodyEnabled();
+    tailOnly.setColour (TextButton::buttonColourId,
+                        ! enabled ? Colour (0xffb9663e) : Colour (0xff393431));
+    roomBody.setColour (TextButton::buttonColourId,
+                       enabled ? Colour (0xffb9663e) : Colour (0xff393431));
+    notice.setText (enabled
+                        ? "Six first-order reflections are active. HRTF output and higher orders come later."
+                        : "Tail Only mutes the six reflections; the accepted 16-line late tail keeps running.",
+                    dontSendNotification);
 }
 
 void NekoSpaceReverbEditor::paint (Graphics& g)
@@ -68,27 +78,35 @@ void NekoSpaceReverbEditor::paint (Graphics& g)
     g.fillAll (Colour (0xff171615));
     g.setColour (Colour (0xff2a2725));
     g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (18.0f).withTrimmedTop (73.0f), 10.0f);
+    g.setColour (Colour (0xffd69562));
+    g.setFont (Font (FontOptions (12.0f, Font::bold)));
+    g.drawText ("ROOM BODY", 35, 104, 180, 20, Justification::centredLeft);
+    g.drawText ("TAIL & BLEND", 35, 278, 180, 20, Justification::centredLeft);
     g.setColour (Colour (0xff7b716a));
     g.setFont (12.0f);
-    g.drawText ("AUDITION NETWORK | NOT SAVED OR AUTOMATABLE", 435, 307, 303, 20,
+    g.drawText ("AUDITION MODE | NOT SAVED OR AUTOMATABLE", 325, 467, 535, 20,
                 Justification::centred);
 }
 
 void NekoSpaceReverbEditor::resized()
 {
-    title.setBounds (24, 15, 400, 36);
-    subtitle.setBounds (26, 49, 430, 22);
-    bypass.setBounds (650, 25, 100, 30);
-    notice.setBounds (31, 82, 700, 25);
-    const int startX = 35, width = 125, gap = 16;
-    Slider* sliders[] = { &space, &decay, &bass, &air, &mix };
-    Label* labels[] = { &spaceLabel, &decayLabel, &bassLabel, &airLabel, &mixLabel };
-    for (int i = 0; i < 5; ++i)
+    title.setBounds (24, 15, 430, 36);
+    subtitle.setBounds (26, 49, 500, 22);
+    bypass.setBounds (770, 25, 100, 30);
+    notice.setBounds (31, 79, 835, 25);
+    constexpr int startX = 35, width = 175, gap = 35;
+    Slider* topSliders[] = { &space, &distance, &definition, &preDelay };
+    Label* topLabels[] = { &spaceLabel, &distanceLabel, &definitionLabel, &preDelayLabel };
+    Slider* bottomSliders[] = { &decay, &bass, &air, &mix };
+    Label* bottomLabels[] = { &decayLabel, &bassLabel, &airLabel, &mixLabel };
+    for (int i = 0; i < 4; ++i)
     {
         const int x = startX + i * (width + gap);
-        labels[i]->setBounds (x, 121, width, 23);
-        sliders[i]->setBounds (x, 143, width, 146);
+        topLabels[i]->setBounds (x, 122, width, 23);
+        topSliders[i]->setBounds (x, 142, width, 126);
+        bottomLabels[i]->setBounds (x, 296, width, 23);
+        bottomSliders[i]->setBounds (x, 316, width, 126);
     }
-    network8.setBounds (526, 329, 102, 32);
-    network16.setBounds (636, 329, 102, 32);
+    tailOnly.setBounds (40, 461, 120, 32);
+    roomBody.setBounds (168, 461, 130, 32);
 }

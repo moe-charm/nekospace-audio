@@ -17,17 +17,19 @@ private:
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     void addKnob (juce::Slider&, juce::Label&, const juce::String&, const char*,
                   std::unique_ptr<SliderAttachment>&);
-    void updateNetworkButtons();
+    void updateRoomBodyButtons();
 
     NekoSpaceReverbProcessor& processor;
     juce::Label title, subtitle, notice;
-    juce::Slider space, decay, bass, air, mix;
-    juce::Label spaceLabel, decayLabel, bassLabel, airLabel, mixLabel;
+    juce::Slider space, distance, definition, preDelay, decay, bass, air, mix;
+    juce::Label spaceLabel, distanceLabel, definitionLabel, preDelayLabel,
+                decayLabel, bassLabel, airLabel, mixLabel;
     juce::ToggleButton bypass;
-    juce::TextButton network8 { "8 LINE" }, network16 { "16 LINE" };
-    std::unique_ptr<SliderAttachment> spaceAttachment, decayAttachment, bassAttachment,
-                                      airAttachment, mixAttachment;
+    juce::TextButton tailOnly { "TAIL ONLY" }, roomBody { "ROOM BODY" };
+    std::unique_ptr<SliderAttachment> spaceAttachment, distanceAttachment,
+                                      definitionAttachment, preDelayAttachment,
+                                      decayAttachment, bassAttachment, airAttachment,
+                                      mixAttachment;
     std::unique_ptr<ButtonAttachment> bypassAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceReverbEditor)
 };
-

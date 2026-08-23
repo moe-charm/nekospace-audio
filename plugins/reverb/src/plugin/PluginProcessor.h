@@ -5,7 +5,7 @@
 
 #include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
-#include "../dsp/ReverbCore.h"
+#include "../dsp/RoomBodyCore.h"
 
 namespace nsr::pid
 {
@@ -15,6 +15,9 @@ inline constexpr auto decay = "reverb.decay";
 inline constexpr auto bassTail = "reverb.bassTail";
 inline constexpr auto airTail = "reverb.airTail";
 inline constexpr auto mix = "reverb.mix";
+inline constexpr auto distance = "reverb.distance";
+inline constexpr auto definition = "reverb.definition";
+inline constexpr auto preDelay = "reverb.preDelay";
 }
 
 class NekoSpaceReverbProcessor final : public juce::AudioProcessor
@@ -34,7 +37,7 @@ public:
     const juce::String getName() const override { return "NekoSpace Reverb"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return tailSeconds.load(); }
+    double getTailLengthSeconds() const override;
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
@@ -44,31 +47,24 @@ public:
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
 
-    // Phase 3.5 developer comparison. It is deliberately not a parameter or saved state.
-    void setAuditionNetworkLines (int lines) noexcept
-    {
-        auditionTarget.store (lines == 8 ? 0.0f : 1.0f, std::memory_order_relaxed);
-    }
-    int getAuditionNetworkLines() const noexcept
-    {
-        return auditionTarget.load (std::memory_order_relaxed) < 0.5f ? 8 : 16;
-    }
+    // Phase 4A developer comparison. It is deliberately not a parameter or saved state.
+    void setRoomBodyEnabled (bool enabled) noexcept
+    { roomBodyEnabled.store (enabled, std::memory_order_relaxed); }
+    bool isRoomBodyEnabled() const noexcept
+    { return roomBodyEnabled.load (std::memory_order_relaxed); }
 
     juce::AudioProcessorValueTreeState apvts;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
-    nsr::ReverbSettings readSettings() const noexcept;
+    nsr::RoomBodySettings readSettings() const noexcept;
 
-    nsr::ReverbCore8 core8;
-    nsr::ReverbCore core16;
-    juce::AudioBuffer<float> dry, wet8, wet16;
-    nsr::ReverbSettings lastSettings;
+    nsr::RoomBodyCore core;
+    juce::AudioBuffer<float> dry, silence;
+    nsr::detail::LinearSmoother bypassMix;
+    nsr::RoomBodySettings lastSettings;
     int preparedBlockSize = 1;
-    double preparedSampleRate = 48000.0;
-    float auditionMix = 1.0f;
-    std::atomic<float> auditionTarget { 1.0f };
-    std::atomic<double> tailSeconds { 1.9 };
+    std::atomic<bool> roomBodyEnabled { true };
 
     std::atomic<float>* pBypass = nullptr;
     std::atomic<float>* pSpace = nullptr;
@@ -76,6 +72,9 @@ private:
     std::atomic<float>* pBassTail = nullptr;
     std::atomic<float>* pAirTail = nullptr;
     std::atomic<float>* pMix = nullptr;
+    std::atomic<float>* pDistance = nullptr;
+    std::atomic<float>* pDefinition = nullptr;
+    std::atomic<float>* pPreDelay = nullptr;
     juce::AudioProcessorParameter* bypassParameter = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceReverbProcessor)
