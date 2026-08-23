@@ -1,7 +1,6 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; Phase 3 engineering candidate selected, Phase 3.5 audition
-shell in progress**.
+Status: **design contract; 16-line late field selected, Phase 4A Room Body in progress**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -22,9 +21,8 @@ live in [control-design.md](control-design.md).
    redefine the other.
 7. Low-, mid- and high-frequency decay are independently controllable. Output tone is a
    different operation from high-frequency decay and remains a separate control.
-8. The late network begins with the existing 8-line FDN as a measured baseline. Sixteen
-   lines are a candidate, not a foregone conclusion; line count is never a marketing
-   control.
+8. The measured 8-line FDN remains a regression baseline. The accepted product path uses
+   the 16-line FDN; line count is an engineering choice, never a marketing control.
 9. DSP is JUCE-free. JUCE belongs at the plug-in, state and GUI edges.
 10. The repository-wide [realtime contract](../../../docs/realtime-contract.md),
     [state rules](../../../docs/state-format.md) and
@@ -34,7 +32,7 @@ live in [control-design.md](control-design.md).
     made from topology or metrics alone. Such a claim needs level-matched listening
     evidence; see [validation.md](validation.md).
 
-## Host shells during Phase 3.5
+## Shared audition hosts
 
 The first audible product slice deliberately has one implementation behind three hosts.
 VST3 and JUCE Standalone are formats of the same `NekoSpaceReverbProcessor` and editor.
@@ -43,9 +41,10 @@ audio-device selection only. It does not maintain a second set of controls or a 
 DSP graph.
 
 This shell is an owner-listening tool, not an early declaration that Phase 6 is complete.
-Its reduced controls and saved state are provisional, and its 8/16 comparison is neither
-automatable nor serialized. The detailed boundary and exit checks are defined in
-[audition-shell.md](audition-shell.md).
+Its reduced controls and saved state are provisional. Phase 4A replaces the completed
+8/16 comparison with an unsaved `Tail only` / `Room body` comparison. The host boundary
+is defined in [audition-shell.md](audition-shell.md), and the current DSP slice in
+[room-body.md](room-body.md).
 
 ## Responsibility boundary
 
@@ -186,10 +185,11 @@ The late-field development order is fixed:
 4. build a 16-line FWHT candidate with comparable total order and decay targets;
 5. adopt the candidate only if measurements, CPU and listening all justify it.
 
-Phase 3 selects 16 lines with four late-input allpasses as the engineering default. At
+Phase 3 selects 16 lines with four late-input allpasses as the product path after owner
+listening. At
 matched wet RMS it reaches 45 ms NED t90 and 0.140 maximum autocorrelation, versus 65 ms
 and 0.180 for the best 8-line candidate. The production alias points to 16 lines, while
-the complete 8-line type remains available until owner listening closes the decision.
+the complete 8-line type remains available for regression evidence only.
 
 The feedback matrix stays orthogonal and densely connected. FWHT/Hadamard is the v1
 default because it is deterministic, already understood in this codebase and scales as

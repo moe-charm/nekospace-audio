@@ -1,8 +1,12 @@
 # NekoSpace Reverb — Audition Shell
 
-Status: **Phase 3.5 prototype contract**. This document defines the smallest honest way
+Status: **Phase 3.5 completed; retained as the audition-host contract**. This document defines the smallest honest way
 to hear the current late-field candidate before early reflections and the permanent
 product surface exist.
+
+The owner selected the 16-line path on 2026-08-23. Phase 4A keeps the same three hosts
+and replaces the temporary network selector with the Room Body comparison defined in
+[room-body.md](room-body.md).
 
 ## Purpose
 
@@ -75,4 +79,3 @@ This checkpoint is complete only when:
 5. state round-trip restores provisional user controls but not the audition network;
 6. Reverb and existing Binaural/CleanVoice tests still pass;
 7. no private audio or rendered demonstration is tracked.
-

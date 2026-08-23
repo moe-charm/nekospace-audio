@@ -1,6 +1,6 @@
 # NekoSpace Reverb
 
-Phase 3 engineering candidate, voice-focused algorithmic reverb for music, audio drama and headphone
+Room Body prototype, voice-focused algorithmic reverb for music, audio drama and headphone
 listening. It is **headphone-first, not headphone-only**: binaural wet rendering is the
 hero mode, while a conventional stereo wet output keeps the plug-in useful on sends and
 speakers.
@@ -9,14 +9,14 @@ The JUCE-free independent DSP core now exists. Its stereo wet excitation preserv
 and Side in separate deterministic 8-line networks. Each feedback line now follows a
 smooth three-band decay curve driven by provisional Mid Decay, Bass Tail and Air Tail
 settings. The Phase 0 analyzer continues to render the exact Binaural baseline for
-comparison. A 16-line FWHT network with four input allpasses is now the measured default;
-the 8-line fallback remains available until owner listening confirms the decision.
+comparison. A 16-line FWHT network with four input allpasses passed the measured
+comparison and owner listening; the 8-line type remains only for regression evidence.
 
-Phase 3.5 now provides an explicitly provisional listening surface: the same Reverb
+The explicitly provisional listening surface uses the same Reverb
 processor/editor builds as VST3 and JUCE Standalone, while Reverb Player adds file and
-device transport around those exact objects. The screen is labelled `LATE TAIL
-PROTOTYPE`; directional early reflections, Binaural output and the permanent Phase 6
-parameter contract do not exist yet.
+device transport around those exact objects. Phase 4A adds a bounded six-image Room Body
+in front of the accepted tail. Order-2/3 reflections, final Binaural output and the
+permanent Phase 6 parameter contract do not exist yet.
 
 ## What it is
 
@@ -64,8 +64,10 @@ multi-slope decay and a configurable feedback matrix.
   measurement and what it says about the current tail.
 - [Phase 3 network decision](docs/phase3-network-decision.md) — level-matched 8/16-line
   density, periodicity, decay, CPU and memory evidence.
-- [Audition shell](docs/audition-shell.md) — the shared VST3/Standalone/Player boundary,
-  provisional controls and unsaved 8/16 comparison.
+- [Audition shell](docs/audition-shell.md) — the shared VST3/Standalone/Player boundary
+  and completed 8/16 listening gate.
+- [Room Body prototype](docs/room-body.md) — the first-order reflection, control,
+  real-time and listening contract for Phase 4A.
 - [Roadmap](docs/roadmap.md) — vertical implementation slices and the exit condition for
   each one.
 - [Research basis](docs/research-basis.md) — what is evidence, what is a product decision

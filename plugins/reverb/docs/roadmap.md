@@ -58,7 +58,7 @@ within 5%. Settings ramp for 50 ms; extreme automation has no click-sized step a
 zero allocation in the instrumented process test. Five sample rates remain finite under
 five-second extreme-setting renders.
 
-## Phase 3 — Density and network selection (engineering complete; listening pending)
+## Phase 3 — Density and network selection ✅
 
 Measure the 8-line network, add 2–4 late-input diffuser stages, then build a 16-line FWHT
 candidate with comparable decay and a justified total order/delay set.
@@ -81,12 +81,13 @@ reduces autocorrelation from 0.180 to 0.140 while retaining the 1.4 s T20 target
 Release throughput is 1.10% of realtime versus 0.64%; estimated stereo FDN storage rises
 by about 33 kB. See [phase3-network-decision.md](phase3-network-decision.md).
 
-The final exit remains open until level-matched owner listening on voice confirms the
-candidate. Static modulation was intentionally disabled for this topology comparison;
-sustained-vowel Motion tuning remains part of the listening/control prototype. The
-8-line type stays compiled as the fallback.
+**Owner listening completed on 2026-08-23.** The owner heard the actual Player path and
+reported that the 16-line result sounded natural. Sixteen lines are now the product path;
+the 8-line type stays compiled as regression evidence. Static modulation was
+intentionally disabled for the topology comparison, so sustained-vowel Motion tuning
+remains part of the later listening/control prototype.
 
-## Phase 3.5 — Owner audition shell
+## Phase 3.5 — Owner audition shell ✅
 
 Before adding a directional early field, make the current late-field candidate easy to
 hear in its real product path. Build VST3 and generated Standalone from one provisional
@@ -101,6 +102,10 @@ be the finished reverb. See [audition-shell.md](audition-shell.md).
 **Exit:** all three hosts build, Player audio reaches the real processor, dry/bypass and
 state tests pass, 8/16 switching is real-time safe, and no private audio is tracked.
 
+**Completed at `b5956f6`; listening decision recorded in
+[phase3-network-decision.md](phase3-network-decision.md).** The temporary network switch
+is removed as Phase 4A lands.
+
 ## Phase 4 — Directional early field
 
 Generalise the six-image baseline to compile-time-bounded order-3 candidates. Add
@@ -109,6 +114,10 @@ rendering. Establish an overlapping ER/late transition.
 
 **Exit:** arrival references, ER HRTF tolerances and transition continuity pass; changing
 Space or a preset never allocates in the callback.
+
+Phase 4 begins with the bounded first-order Room Body prototype defined in
+[room-body.md](room-body.md). Order-2/3 generation, pruning and final HRTF output follow
+only after the six-image timing and energy balance survives owner listening.
 
 ## Phase 5 — Late-field envelopment
 

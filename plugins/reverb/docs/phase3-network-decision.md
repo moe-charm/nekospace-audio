@@ -1,6 +1,6 @@
 # Reverb Phase 3 — Network Decision
 
-Status: **16-line engineering candidate selected; owner listening still required**.
+Status: **16-line selected for the product path after engineering and owner listening**.
 
 ## Compared configurations
 
@@ -36,14 +36,13 @@ The 16 lengths total 17,010 samples at the 48 kHz reference before Space scaling
 with 14,628 for the 8-line set. This is a comparable-order candidate, not a doubled copy
 of all eight delays. FWHT feedback remains orthogonal and costs `N log2(N)` butterflies.
 
-## What is not proven yet
+## Owner listening decision
 
-No metric proves that the 16-line tail sounds better on voice. Owner listening against
-level-matched real voice is still required by the roadmap. Modulation is deliberately
-disabled in this static network comparison, so sustained-vowel Motion limits also remain
-for the later control/listening prototype. Until those checks happen, `ReverbCore8`
-remains compiled and covered as the immediate fallback.
+On 2026-08-23 the owner auditioned the actual shared Processor/Editor through Reverb
+Player and reported that the 16-line result sounded natural. This closes the Phase 3
+selection gate. The production path may now process only the 16-line network; the 8-line
+type remains compiled as regression evidence rather than a user-facing option.
 
-The code defaults to the 16-line/4-stage candidate because it won every measured network
-criterion without threatening the CPU or memory budget. That default is provisional and
-must be reversed if level-matched listening prefers the simpler tail.
+This is a project listening decision, not a universal claim that 16 lines are always
+better. Modulation remains disabled in the static comparison, so sustained-vowel Motion
+limits still belong to the later control prototype.
