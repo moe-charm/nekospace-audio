@@ -1,7 +1,7 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; 16-line late field selected, Phase 4A engineering complete and
-owner listening pending**.
+Status: **design contract; 16-line late field selected, Room Body v1 result recorded and
+Room Body v2 defined but not yet implemented**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -42,10 +42,11 @@ audio-device selection only. It does not maintain a second set of controls or a 
 DSP graph.
 
 This shell is an owner-listening tool, not an early declaration that Phase 6 is complete.
-Its reduced controls and saved state are provisional. Phase 4A replaces the completed
-8/16 comparison with an unsaved `Tail only` / `Room body` comparison. The host boundary
-is defined in [audition-shell.md](audition-shell.md), and the current DSP slice in
-[room-body.md](room-body.md).
+Its reduced controls and saved state are provisional. Room Body v2 replaces the v1
+two-button comparison with unsaved `Tail Only`, `Room Body` and `ER Solo` modes. A saved
+`Mono Input` Bool changes only the wet excitation; it never collapses the dry path. The
+host boundary is defined in [audition-shell.md](audition-shell.md), and the current DSP
+slice in [room-body.md](room-body.md).
 
 ## Responsibility boundary
 
@@ -68,10 +69,10 @@ then adds a room without moving that direct image.
 
 ```text
 Stereo input
+   ├──────────────────────────────────────────────────────────── Original dry L/R
    │
-   ├──────────────────────────────────────────────────────────── Dry
-   │
-   └─► input conditioning / common wet pre-delay
+   └─► wet input: original L/R or 0.5 * (L + R)
+          └─► input conditioning / common wet pre-delay
           │
           ├─► Image-source early field
           │      Phase 4A: six first-order images
@@ -96,7 +97,7 @@ Stereo input
                                     │
                               late-only ducking
                                     │
-                       wet tone / ER-late energy trim
+                       future wet tone / product ER-late trim
                                     │
                          Dry/Wet sum, output safety
                                     │
@@ -107,7 +108,9 @@ Stereo input
 
 The shipping bus is stereo-to-stereo so FL Studio and ordinary send workflows remain
 predictable. Mono material may arrive duplicated by the host. The dry path is not summed,
-HRTF-filtered or widened.
+HRTF-filtered or widened. The provisional `Mono Input` parameter applies
+`0.5 * (L + R)` to the ER and late wet excitation only. It is 50 ms smoothed, while the
+original L/R dry samples remain unchanged.
 
 Phase 1 established an energy-bounded Mid/Side transform with two independent 8-line
 networks. Phase 3 retained that channel architecture and replaced each historical 8-line
@@ -121,17 +124,19 @@ feed to make these invariants exact:
 - input and output energy stay bounded and comparable across mono and stereo material;
 - `Mix = 0` and room bypass reduce to the aligned dry signal exactly.
 
-A simple `(L + R) / 2` downmix is therefore not used. The 8-line implementation remains
-available only as analysis and regression evidence; it is not a second shipping path or
-a current owner control.
+A simple `(L + R) / 2` downmix is therefore not the default. It is available explicitly
+for the wet input only; turning it on removes original Side from the room without changing
+dry stereo. The 8-line implementation remains available only as analysis and regression
+evidence; it is not a second shipping path or a current owner control.
 
 ### Early field
 
-Phase 4A implements six first-order shoebox images around the accepted 16-line tail. The
-early renderer converts the stereo input to Mid/Side, retains Mid at unity and retains
-Side at `earlySideRetention = 0.5`, then reconstructs L/R per reflection. This preserves
-mono symmetry and existing stereo difference information without turning the first-order
-room into two disconnected hard-panned reverbs.
+Room Body uses six first-order shoebox images around the accepted 16-line tail. The early
+renderer converts the wet input to Mid/Side, retains Mid at unity and retains original
+Side at `earlySideRetention = 0.5`, then reconstructs L/R per reflection. v2 also permits
+a small deterministic early Side from two different prepared allpass paths for centred
+mono excitation. That Side must cancel in mono fold-down, remain energy-bounded and never
+be a raw polarity-inverted copy.
 
 Pre-delay, per-ear reflection delays and the late-excitation geometry delay change through
 a delay smoother capped at **0.5 sample of delay per processed sample**. This bound applies
@@ -317,13 +322,12 @@ The audio callback performs no allocation, deallocation, locking, file access, n
 access, string work, logging or UI access. Hosts may provide odd and changing block sizes;
 processing therefore uses prepared chunks and is block-size invariant at static settings.
 
-Phase 4A's seven automated engineering gates and the complete seven-test Release CTest set
-pass. pluginval 1.0.4 also passes strictness 10 for three randomised VST3 repeats. Owner
-listening remains the open Phase 4A product decision, while the provisional bandwise
-ER/late seam analysis remains pre-release acoustic work. The Steinberg VST3 validator
-subtest was skipped because no validator path was configured; it remains Phase 7 work and
-must not be inferred from the current unit/integration result. See
-[room-body.md](room-body.md) for exact measurements and caveats.
+At `b0c0475`, Room Body v1's seven targeted engineering gates and the complete seven-test
+Release CTest set passed; pluginval 1.0.4 also passed strictness 10 for three randomised
+VST3 repeats. Owner listening then found that the v1 Body was perceived mainly as a small
+level increase. Those baseline checks do not cover the v2 Mono Input, three audition
+buses, matching or bounded retune. See [room-body.md](room-body.md) for the v2 gates and
+current status. The Steinberg VST3 validator remains unconfigured Phase 7 work.
 
 ## Reuse from Binaural
 

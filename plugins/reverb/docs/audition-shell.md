@@ -1,12 +1,13 @@
 # NekoSpace Reverb — Audition Shell
 
-Status: **Phase 3.5 completed; retained as the audition-host contract for Phase 4A**. This
+Status: **Phase 3.5 completed; retained as the audition-host contract for Room Body v2**. This
 document defines the smallest honest way to hear the current processor before the
 permanent product surface exists.
 
-The owner selected the 16-line path on 2026-08-23. Phase 4A keeps the same three hosts
-and replaces the temporary network selector with the Room Body comparison defined in
-[room-body.md](room-body.md).
+The owner selected the 16-line path on 2026-08-23. Room Body v1 kept the same three hosts
+for its first Tail/Body comparison. The 2026-08-24 listening result was dominated by a
+small level increase, so v2 adds isolation, fixed matching and wet-only Mono Input as
+defined in [room-body.md](room-body.md).
 
 ## Purpose
 
@@ -53,7 +54,8 @@ The current editor exposes only the controls required to judge the Room Body pro
 - Decay;
 - Bass Tail;
 - Air Tail;
-- Mix.
+- Mix;
+- Mono Input, a saved/automatable wet-feed control whose dry path stays stereo.
 
 These names follow [control-design.md](control-design.md), but their IDs, ranges and
 defaults remain prototype data until Phase 6. Sessions saved with an audition build are
@@ -61,17 +63,30 @@ not a compatibility promise. The editor identifies this as `ROOM BODY PROTOTYPE`
 missing later reflection orders and spatial modes cannot be mistaken for a finished
 product.
 
-## Current Tail-only / Room-body comparison
+## Current Tail / Body / ER comparison
 
-The current developer audition control compares the accepted tail with the same tail plus
-the six first-order reflections:
+The developer audition control exposes three views of the continuously running wet graph:
+
+| Mode | Audible wet buses |
+| --- | --- |
+| `Tail Only` | accepted 16-line late tail |
+| `Room Body` | six first-order reflections plus the same late tail |
+| `ER Solo` | six first-order reflections only |
+
+The mode contract is:
 
 - it is not exposed to host automation;
 - it is not serialized in plug-in state;
-- `Room body` is selected on startup;
-- switching crossfades the early contribution over 50 ms and performs no allocation or
-  rebuild in the audio callback;
-- the 16-line tail is processed once in both positions.
+- `Room Body` is selected on startup;
+- independent Early/Late output gains crossfade over 50 ms with no allocation, reset or
+  rebuild in the callback;
+- both buses keep processing in every mode;
+- normal Mix remains active, so `ER Solo` needs Mix 100% when dry must be absent.
+
+Tail/Body listening uses one recorded fixed audition gain and the same source/settings at
+Mix 100%, matching integrated wet level within 0.1 dB. `ER Solo` may use a separately
+recorded monitoring gain based on the first 50 ms; that gain is diagnostic only. No live
+AGC or saved product Wet Trim is introduced.
 
 Bypass is separate from that developer switch. It crossfades to dry over 50 ms, feeds
 silence to the prepared room while bypassed so the tail cools down, and reaches exact dry
@@ -97,8 +112,8 @@ This checkpoint is complete only when:
 6. Reverb and existing Binaural/CleanVoice tests still pass;
 7. no private audio or rendered demonstration is tracked.
 
-Those checks record the completed Phase 3.5 history. For Phase 4A, the current automated
-engineering gate and complete Release CTest set are both 7/7; pluginval 1.0.4 passes
-strictness 10 for three randomised VST3 repeats. Owner listening is pending; see
-[room-body.md](room-body.md). pluginval skipped the Steinberg VST3 validator because no
-validator path was configured.
+Those checks record the completed Phase 3.5 history. At `b0c0475`, Room Body v1's targeted
+gate and complete Release CTest set were both 7/7; pluginval 1.0.4 passed strictness 10 for
+three randomised VST3 repeats. Those results do not cover v2. Its Mono Input, three modes,
+matching, retune and owner listening remain NOT RUN at this docs-first revision; see
+[room-body.md](room-body.md). The Steinberg validator remains unconfigured.

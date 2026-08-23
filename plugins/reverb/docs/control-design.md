@@ -20,6 +20,7 @@ apply permanently.
 | **Envelopment** | changes how much the late room surrounds the listener | binaural coherence target in Binaural mode; bounded width/decorrelation mapping in Stereo mode |
 | **Motion** | reduces static ringing or adds an intentional living tail | bounded modulation rate/depth macro |
 | **Pre-delay** | separates the whole wet room from the dry event | common delay before ER and late paths; physical ER timing remains relative to that origin |
+| **Mono Input** | sends a centred mono signal into the room while leaving the original dry stereo image intact | 50 ms transition from original wet Side to zero; both wet channels receive `0.5 * (L + R)` when On |
 | **Ducking** | keeps speech clear and lets the tail open after phrases | late-output attenuation only; no threshold control in the primary UI |
 | **Mix** | blends aligned dry with the complete wet field | 0% is exact dry; 100% contains no dry and is valid on an aux send |
 | **Output** | chooses the listening target | `Stereo` speaker-compatible wet renderer or `Binaural` headphone-optimised wet renderer |
@@ -40,6 +41,7 @@ The following are implementation details, not user goals:
 - per-line filter anchors;
 - per-line modulation rate, depth and phase;
 - interaural-coherence frequency anchors.
+- Room Body's fixed offline audition-matching gain and `ER Solo` monitoring gain.
 
 They may be visible in developer diagnostics, but they are never automatable production
 parameters in v1.
@@ -62,7 +64,7 @@ Knobs own quantities a producer may automate continuously:
 
 ```text
 Space, Decay, Bass Tail, Air Tail, Distance,
-Definition, Envelopment, Motion, Pre-delay, Ducking, Mix
+Definition, Envelopment, Motion, Pre-delay, Mono Input, Ducking, Mix
 ```
 
 Like Binaural, a factory preset must set every sound-shaping control it owns. Loading the
@@ -110,3 +112,9 @@ The Phase 6 parameter contract must answer and test these open questions:
 
 Answers come from prototypes and saved listening notes. Names and ranges are not frozen
 because a research document suggested them.
+
+Room Body v2's fixed Tail/Body matching gain does not answer question 3. It is an unsaved,
+offline-calibrated comparison correction, not a product ER/Late control. The provisional
+`Mono Input` implementation is a saved Bool with ID `reverb.wetMonoInput`, default Off and
+`versionHint = 3`; future multi-choice routing must use a new ID rather than reinterpret
+that Bool.

@@ -8,7 +8,7 @@ English: [README.md](README.md)
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
 | **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、アプリ + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | Room Body 試作 | 採用済み16-lineテール＋一次反射、VST3・Standalone・Player — [設計](plugins/reverb/README.md) |
+| **NekoSpace Reverb** | Room Body v2 実装中 | 採用済み16-lineテール＋音量整合した一次反射試聴＋Wet専用Mono Input、VST3・Standalone・Player — [設計](plugins/reverb/README.md) |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |
 

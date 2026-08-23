@@ -58,6 +58,14 @@ release claims depend on standardized room-acoustic values, the analyzer must fi
 validated against a trusted implementation and upgraded without rewriting old report
 schema 1 results.
 
+Room Body v1 later added six first-order reflections. At `b0c0475` its targeted checklist,
+the complete seven-test Release CTest set and pluginval strictness 10/repeat 3 passed. The
+owner's 2026-08-24 listening result was nevertheless level-dominated: Body was heard
+mainly as slightly louder than Tail. The default static render measured approximately
+`+0.17 dB` integrated and `+3.2 dB` in the first 50 ms. These are baseline observations,
+not acceptance targets. Room Body v2 must rerun the engineering gates after adding wet
+Mono Input, three-bus isolation, fixed matching and one bounded six-image retune.
+
 ## Reproducible test render
 
 The JUCE-free test tool must render at least:
@@ -260,6 +268,34 @@ A formal multi-listener test is **not a gate for early prototypes**. It becomes 
 only before publishing a broad claim such as “better than Pro-R” or “more realistic than
 Valhalla.” Without that evidence, documentation describes NekoSpace's measured behaviour
 and avoids comparative superiority claims.
+
+### Room Body v2 matched audition
+
+Room Body v2 uses sighted owner evaluation. It is not a forced-choice or blind-test gate,
+and the result is not a superiority claim. Loudness matching is still mandatory because
+the question is whether the boundary sounds believable rather than merely louder.
+
+- Render the same source, duration, settings and `Mix = 100%` for every mode.
+- For `Tail Only` versus `Room Body`, apply one fixed, recorded audition gain so integrated
+  wet level matches within `0.1 dB`. Do not use adaptive gain control.
+- `ER Solo` is an isolation diagnostic. Record its raw 0–50 ms energy and any separate
+  monitoring gain; never reuse that monitoring gain as the Tail/Body match.
+- Before fixed audition gain, static `Room Body - Tail Only` must equal the isolated ER
+  bus within floating-point tolerance.
+- Retain the constants, gain, sample rate, block size, duration and listening result.
+
+The implementation exit checks are:
+
+| Gate | Required result |
+| --- | --- |
+| State | saved Wet Mono Input round-trips; a missing old-state field restores Off; audition mode is unsaved |
+| Wet-only mono | On supplies `0.5 * (L + R)` to wet only; Mix 0 and steady Bypass preserve original dry L/R exactly |
+| Audition identity | Tail Only, Room Body and ER Solo expose Late, ER+Late and ER respectively while all DSP keeps advancing |
+| Transitions | every mode and Mono Input change is finite, 50 ms smoothed, allocation-free and free of stale bursts |
+| Mono spatial safety | generated early Side is bounded, L/R energy is balanced and mono fold-down returns the Mid exactly |
+| Match | default Tail/Body integrated wet levels differ by no more than `0.1 dB` under recorded conditions |
+| Regression | Room Body v1 gates, the complete Release CTest set and pluginval are rerun |
+| Listening | owner records accept, defer or remove after one matched v2 audition |
 
 ## Calibrating the provisional gates
 

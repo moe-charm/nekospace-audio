@@ -128,14 +128,28 @@ geometry-delay automation is limited to 0.5 sample of delay per processed sample
 dry over 50 ms, feeds silence into the room while bypassed so the tail cools down, and is
 exact dry in steady state.
 
-**Current status:** the seven automated engineering gates in
-[room-body.md](room-body.md), the complete seven-test Release CTest set and pluginval 1.0.4
-at strictness 10/repeat 3 pass. Owner listening is the remaining Phase 4A product
-decision; no subjective Room Body result is recorded yet. The provisional bandwise
-ER/late seam analysis is still pre-release work. The old 8/16 switch belongs to completed
-Phase 3.5 history: 16 lines are the sole product tail and 8 lines remain regression
-evidence. pluginval skipped the Steinberg VST3 validator because no path was configured;
-that separate Phase 7 gate remains open.
+**v1 result:** at `b0c0475`, the seven targeted gates, complete seven-test Release CTest
+set and pluginval 1.0.4 strictness 10/repeat 3 passed. On 2026-08-24 the owner heard Body
+mainly as slightly louder than Tail rather than as a clearly realistic boundary. The
+default comparison was not matched: its integrated wet difference was about `+0.17 dB`.
+
+### Phase 4A.1 — Room Body v2 listening correction
+
+Before adding reflection orders or HRTF, keep the same six images and accepted tail while
+adding:
+
+- unsaved `Tail Only`, `Room Body` and `ER Solo` audition modes;
+- a saved wet-only `Mono Input` Bool, with original dry stereo unchanged;
+- fixed offline Tail/Body level matching and explicit ER isolation;
+- one bounded retune of surface gain/damping and late onset;
+- controlled, mono-compatible early spread for centred wet excitation.
+
+**Docs-first status:** contract defined; implementation and every v2-specific gate are
+NOT RUN. Exit requires state/transition/realtime tests, 0.1 dB default Tail/Body matching,
+complete Release CTest and pluginval reruns, followed by one sighted matched owner
+audition. If the result is still only level/tone change, Phase 4A pauses for redesign.
+Order-2/3 and HRTF do not begin before this decision. The Steinberg validator remains an
+unconfigured Phase 7 gate.
 
 ## Phase 5 — Late-field envelopment
 

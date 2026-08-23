@@ -15,11 +15,11 @@ regression evidence.
 
 The explicitly provisional listening surface uses the same Reverb
 processor/editor builds as VST3 and JUCE Standalone, while Reverb Player adds file and
-device transport around those exact objects. Phase 4A implements a bounded six-image Room
-Body in front of the accepted tail. Its early field retains full Mid and half Side, while
-pre-delay and geometry delay move by at most 0.5 sample per processed sample. Order-2/3
-reflections, final Binaural output and the permanent Phase 6 parameter contract do not
-exist yet.
+device transport around those exact objects. Room Body v1 implements a bounded six-image
+early field in front of the accepted tail. Owner listening found its first comparison
+mainly slightly louder, so v2 is defined around matched Tail/Body/ER isolation and a
+wet-only Mono Input before any order-2/3 or HRTF expansion. The permanent Phase 6
+parameter contract does not exist yet.
 
 ## What it is
 
@@ -117,16 +117,17 @@ build/plugins/reverb/NekoSpaceReverb_artefacts/Release/Standalone/NekoSpace Reve
 build/plugins/reverb/NekoSpaceReverbPlayer_artefacts/Release/NekoSpace Reverb Player.exe
 ```
 
-Use the Player to open or drop a WAV, AIFF or FLAC take, then compare `Tail only` with
-`Room body`. The switch is deliberately not automatable or saved, and both positions use
-the accepted 16-line tail. Bypass crossfades to dry over 50 ms; while bypass is requested,
-the room processes silence so its tail cools down, and steady bypass is exact dry.
+Use the Player to open or drop a WAV, AIFF or FLAC take. Room Body v2 compares `Tail Only`,
+`Room Body` and `ER Solo` through unsaved developer modes. `Mono Input` is different: it
+is a saved, automatable Bool that feeds `0.5 * (L + R)` to the wet room only, leaving dry
+stereo and the output bus unchanged. All mode and input transitions are specified at
+50 ms. Bypass still feeds silence to the room and becomes exact dry in steady state.
 
-The current Phase 4A automated engineering gate is 7/7, the complete Release CTest set is
-7/7, and pluginval 1.0.4 passes strictness 10 for three randomised VST3 repeats. Owner
-listening is the open Phase 4A product decision, so no subjective result is claimed yet.
-The provisional ER/late seam analysis is not automated, and pluginval skipped the
-Steinberg VST3 validator because no validator path was configured. Audio files and
-rendered demonstrations are globally ignored and must not be committed.
+At `b0c0475`, the v1 Room Body checklist and complete Release CTest set were 7/7, and
+pluginval 1.0.4 passed strictness 10 for three randomised VST3 repeats. Those are baseline
+results, not v2 results. The v2 implementation, matching and owner listening are pending
+at this docs-first revision; exact gates and the recorded v1 observation are in
+[room-body.md](docs/room-body.md). Audio and rendered demonstrations remain globally
+ignored. The Steinberg validator is still unconfigured.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.
