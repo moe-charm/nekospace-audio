@@ -6,13 +6,58 @@
 
 using namespace juce;
 
+namespace
+{
+// JUCE's AudioParameterBool intentionally retains arbitrary host-normalised values even
+// though its semantic value is boolean. Its NormalisableRange snaps the APVTS state to
+// 0/1, so an editor-open save/restore can leave the raw host value unrestored. Keeping the
+// parameter canonical at its boundary makes automation, state and pluginval agree.
+class CanonicalBoolParameter final : public RangedAudioParameter
+{
+public:
+    CanonicalBoolParameter (const ParameterID& id, const String& name, bool defaultValue)
+        : RangedAudioParameter (id, name, AudioProcessorParameterWithIDAttributes {}),
+          value (defaultValue ? 1.0f : 0.0f),
+          defaultNormalised (defaultValue ? 1.0f : 0.0f)
+    {
+    }
+
+    const NormalisableRange<float>& getNormalisableRange() const override { return range; }
+    float getValue() const override { return value.load (std::memory_order_relaxed); }
+    void setValue (float next) override
+    {
+        value.store (next >= 0.5f ? 1.0f : 0.0f, std::memory_order_relaxed);
+    }
+    float getDefaultValue() const override { return defaultNormalised; }
+    int getNumSteps() const override { return 2; }
+    bool isDiscrete() const override { return true; }
+    bool isBoolean() const override { return true; }
+    String getText (float normalised, int) const override
+    {
+        return normalised >= 0.5f ? "On" : "Off";
+    }
+    float getValueForText (const String& text) const override
+    {
+        const auto valueText = text.trim().toLowerCase();
+        return valueText == "on" || valueText == "yes" || valueText == "true"
+                   || valueText.getIntValue() != 0
+               ? 1.0f : 0.0f;
+    }
+
+private:
+    const NormalisableRange<float> range { 0.0f, 1.0f, 1.0f };
+    std::atomic<float> value;
+    const float defaultNormalised;
+};
+}
+
 AudioProcessorValueTreeState::ParameterLayout NekoSpaceReverbProcessor::createLayout()
 {
     AudioProcessorValueTreeState::ParameterLayout layout;
     using Float = AudioParameterFloat;
     const auto percent = NormalisableRange<float> (0.0f, 100.0f, 0.1f);
-    layout.add (std::make_unique<AudioParameterBool> (ParameterID { nsr::pid::bypass, 1 },
-                                                       "Bypass", false));
+    layout.add (std::make_unique<CanonicalBoolParameter> (
+        ParameterID { nsr::pid::bypass, 1 }, "Bypass", false));
     layout.add (std::make_unique<Float> (ParameterID { nsr::pid::space, 1 }, "Space",
                                           percent, 35.0f,
                                           AudioParameterFloatAttributes().withLabel ("%")));
@@ -40,6 +85,8 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceReverbProcessor::createLa
                                           NormalisableRange<float> (0.0f, 120.0f, 0.1f, 0.55f),
                                           12.0f,
                                           AudioParameterFloatAttributes().withLabel ("ms")));
+    layout.add (std::make_unique<CanonicalBoolParameter> (
+        ParameterID { nsr::pid::wetMonoInput, 3 }, "Wet Mono Input", false));
     return layout;
 }
 
@@ -55,6 +102,7 @@ NekoSpaceReverbProcessor::NekoSpaceReverbProcessor()
     pAirTail = raw (nsr::pid::airTail); pMix = raw (nsr::pid::mix);
     pDistance = raw (nsr::pid::distance); pDefinition = raw (nsr::pid::definition);
     pPreDelay = raw (nsr::pid::preDelay);
+    pWetMonoInput = raw (nsr::pid::wetMonoInput);
     bypassParameter = apvts.getParameter (nsr::pid::bypass);
 }
 
@@ -83,7 +131,18 @@ nsr::RoomBodySettings NekoSpaceReverbProcessor::readSettings() const noexcept
     settings.definition = pDefinition->load() * 0.01f;
     settings.preDelayMs = pPreDelay->load();
     settings.mix = pMix->load() * 0.01f;
+    settings.wetMonoInput = pWetMonoInput->load();
     return settings;
+}
+
+nsr::RoomBodyAuditionMode NekoSpaceReverbProcessor::getAuditionMode() const noexcept
+{
+    const int value = auditionMode.load (std::memory_order_relaxed);
+    if (value == static_cast<int> (nsr::RoomBodyAuditionMode::tailOnly))
+        return nsr::RoomBodyAuditionMode::tailOnly;
+    if (value == static_cast<int> (nsr::RoomBodyAuditionMode::earlyOnly))
+        return nsr::RoomBodyAuditionMode::earlyOnly;
+    return nsr::RoomBodyAuditionMode::roomBody;
 }
 
 void NekoSpaceReverbProcessor::prepareToPlay (double sampleRate, int maximumBlockSize)
@@ -93,7 +152,7 @@ void NekoSpaceReverbProcessor::prepareToPlay (double sampleRate, int maximumBloc
     silence.setSize (2, preparedBlockSize, false, true, false);
     silence.clear();
     lastSettings = readSettings();
-    core.setRoomBodyEnabled (roomBodyEnabled.load (std::memory_order_relaxed));
+    core.setAuditionMode (getAuditionMode());
     core.prepare (sampleRate, preparedBlockSize, lastSettings);
     core.reset();
     bypassMix.prepare (static_cast<float> (sampleRate), 0.05f);
@@ -116,13 +175,14 @@ void NekoSpaceReverbProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
         || settings.airTailRatio != lastSettings.airTailRatio
         || settings.distance != lastSettings.distance
         || settings.definition != lastSettings.definition
-        || settings.preDelayMs != lastSettings.preDelayMs || settings.mix != lastSettings.mix)
+        || settings.preDelayMs != lastSettings.preDelayMs || settings.mix != lastSettings.mix
+        || settings.wetMonoInput != lastSettings.wetMonoInput)
     {
         lastSettings = settings;
         core.setSettings (settings);
     }
 
-    core.setRoomBodyEnabled (roomBodyEnabled.load (std::memory_order_relaxed));
+    core.setAuditionMode (getAuditionMode());
     const bool bypassRequested = pBypass->load() > 0.5f;
     bypassMix.setTarget (bypassRequested ? 1.0f : 0.0f);
     for (int offset = 0; offset < sampleCount; offset += preparedBlockSize)

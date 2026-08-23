@@ -18,6 +18,7 @@ inline constexpr auto mix = "reverb.mix";
 inline constexpr auto distance = "reverb.distance";
 inline constexpr auto definition = "reverb.definition";
 inline constexpr auto preDelay = "reverb.preDelay";
+inline constexpr auto wetMonoInput = "reverb.wetMonoInput";
 }
 
 class NekoSpaceReverbProcessor final : public juce::AudioProcessor
@@ -47,11 +48,10 @@ public:
     void getStateInformation (juce::MemoryBlock&) override;
     void setStateInformation (const void*, int) override;
 
-    // Phase 4A developer comparison. It is deliberately not a parameter or saved state.
-    void setRoomBodyEnabled (bool enabled) noexcept
-    { roomBodyEnabled.store (enabled, std::memory_order_relaxed); }
-    bool isRoomBodyEnabled() const noexcept
-    { return roomBodyEnabled.load (std::memory_order_relaxed); }
+    // Room Body developer isolation. It is deliberately not a parameter or saved state.
+    void setAuditionMode (nsr::RoomBodyAuditionMode mode) noexcept
+    { auditionMode.store (static_cast<int> (mode), std::memory_order_relaxed); }
+    nsr::RoomBodyAuditionMode getAuditionMode() const noexcept;
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -64,7 +64,9 @@ private:
     nsr::detail::LinearSmoother bypassMix;
     nsr::RoomBodySettings lastSettings;
     int preparedBlockSize = 1;
-    std::atomic<bool> roomBodyEnabled { true };
+    std::atomic<int> auditionMode {
+        static_cast<int> (nsr::RoomBodyAuditionMode::roomBody)
+    };
 
     std::atomic<float>* pBypass = nullptr;
     std::atomic<float>* pSpace = nullptr;
@@ -75,6 +77,7 @@ private:
     std::atomic<float>* pDistance = nullptr;
     std::atomic<float>* pDefinition = nullptr;
     std::atomic<float>* pPreDelay = nullptr;
+    std::atomic<float>* pWetMonoInput = nullptr;
     juce::AudioProcessorParameter* bypassParameter = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NekoSpaceReverbProcessor)

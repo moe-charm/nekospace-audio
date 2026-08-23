@@ -32,15 +32,34 @@ NekoSpaceReverbEditor::NekoSpaceReverbEditor (NekoSpaceReverbProcessor& p)
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<ButtonAttachment> (p.apvts, nsr::pid::bypass, bypass);
 
-    for (auto* button : { &tailOnly, &roomBody })
+    monoInput.setButtonText ("MONO INPUT");
+    monoInput.setColour (ToggleButton::textColourId, Colour (0xfff2e9dc));
+    addAndMakeVisible (monoInput);
+    monoInputAttachment = std::make_unique<ButtonAttachment> (
+        p.apvts, nsr::pid::wetMonoInput, monoInput);
+
+    for (auto* button : { &tailOnly, &roomBody, &erSolo })
     {
         button->setClickingTogglesState (false);
         button->setWantsKeyboardFocus (false);
         addAndMakeVisible (*button);
     }
-    tailOnly.onClick = [this] { processor.setRoomBodyEnabled (false); updateRoomBodyButtons(); };
-    roomBody.onClick = [this] { processor.setRoomBodyEnabled (true); updateRoomBodyButtons(); };
-    updateRoomBodyButtons();
+    tailOnly.onClick = [this]
+    {
+        processor.setAuditionMode (nsr::RoomBodyAuditionMode::tailOnly);
+        updateAuditionButtons();
+    };
+    roomBody.onClick = [this]
+    {
+        processor.setAuditionMode (nsr::RoomBodyAuditionMode::roomBody);
+        updateAuditionButtons();
+    };
+    erSolo.onClick = [this]
+    {
+        processor.setAuditionMode (nsr::RoomBodyAuditionMode::earlyOnly);
+        updateAuditionButtons();
+    };
+    updateAuditionButtons();
     setSize (900, 520);
 }
 
@@ -60,17 +79,27 @@ void NekoSpaceReverbEditor::addKnob (Slider& slider, Label& label, const String&
     attachment = std::make_unique<SliderAttachment> (processor.apvts, id, slider);
 }
 
-void NekoSpaceReverbEditor::updateRoomBodyButtons()
+void NekoSpaceReverbEditor::updateAuditionButtons()
 {
-    const bool enabled = processor.isRoomBodyEnabled();
+    const auto mode = processor.getAuditionMode();
     tailOnly.setColour (TextButton::buttonColourId,
-                        ! enabled ? Colour (0xffb9663e) : Colour (0xff393431));
+                        mode == nsr::RoomBodyAuditionMode::tailOnly
+                            ? Colour (0xffb9663e) : Colour (0xff393431));
     roomBody.setColour (TextButton::buttonColourId,
-                       enabled ? Colour (0xffb9663e) : Colour (0xff393431));
-    notice.setText (enabled
-                        ? "Six first-order reflections are active. HRTF output and higher orders come later."
-                        : "Tail Only mutes the six reflections; the accepted 16-line late tail keeps running.",
-                    dontSendNotification);
+                        mode == nsr::RoomBodyAuditionMode::roomBody
+                            ? Colour (0xffb9663e) : Colour (0xff393431));
+    erSolo.setColour (TextButton::buttonColourId,
+                      mode == nsr::RoomBodyAuditionMode::earlyOnly
+                          ? Colour (0xffb9663e) : Colour (0xff393431));
+    if (mode == nsr::RoomBodyAuditionMode::tailOnly)
+        notice.setText ("Wet audition: accepted 16-line tail only. MIX still controls dry/wet.",
+                        dontSendNotification);
+    else if (mode == nsr::RoomBodyAuditionMode::earlyOnly)
+        notice.setText ("Wet audition: early reflections only. Set MIX to 100% to remove dry.",
+                        dontSendNotification);
+    else
+        notice.setText ("Wet audition: six early reflections + matched 16-line tail.",
+                        dontSendNotification);
 }
 
 void NekoSpaceReverbEditor::paint (Graphics& g)
@@ -84,8 +113,10 @@ void NekoSpaceReverbEditor::paint (Graphics& g)
     g.drawText ("TAIL & BLEND", 35, 278, 180, 20, Justification::centredLeft);
     g.setColour (Colour (0xff7b716a));
     g.setFont (12.0f);
-    g.drawText ("AUDITION MODE | NOT SAVED OR AUTOMATABLE", 325, 467, 535, 20,
-                Justification::centred);
+    g.drawText ("WET AUDITION | NOT SAVED OR AUTOMATABLE", 35, 439, 380, 18,
+                Justification::centredLeft);
+    g.drawText ("WET INPUT ONLY | SAVED & AUTOMATABLE", 590, 439, 270, 18,
+                Justification::centredRight);
 }
 
 void NekoSpaceReverbEditor::resized()
@@ -107,6 +138,8 @@ void NekoSpaceReverbEditor::resized()
         bottomLabels[i]->setBounds (x, 296, width, 23);
         bottomSliders[i]->setBounds (x, 316, width, 126);
     }
-    tailOnly.setBounds (40, 461, 120, 32);
-    roomBody.setBounds (168, 461, 130, 32);
+    tailOnly.setBounds (40, 461, 112, 32);
+    roomBody.setBounds (160, 461, 130, 32);
+    erSolo.setBounds (298, 461, 104, 32);
+    monoInput.setBounds (690, 461, 170, 32);
 }

@@ -50,10 +50,36 @@ int main()
            < 0.001f, "Definition has the documented prototype default");
     check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::preDelay)->load() - 12.0f)
            < 0.001f, "Pre-delay has the documented prototype default");
-    check (processor.isRoomBodyEnabled(), "Room Body is the fresh-instance audition default");
+    check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::wetMonoInput)->load())
+           < 0.001f, "Wet Mono Input defaults Off");
+    check (processor.getAuditionMode() == nsr::RoomBodyAuditionMode::roomBody,
+           "Room Body is the fresh-instance audition default");
+
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+        auto* parameter = processor.apvts.getParameter (nsr::pid::wetMonoInput);
+        check (parameter != nullptr, "Wet Mono Input host parameter exists");
+        if (parameter != nullptr)
+        {
+            constexpr float savedNormalised = 0.852673f;
+            parameter->setValueNotifyingHost (savedNormalised);
+            const float canonicalSaved = parameter->getValue();
+            check (canonicalSaved == 1.0f,
+                   "Wet Mono Input canonicalises arbitrary host values at the parameter boundary");
+            juce::MemoryBlock state;
+            processor.getStateInformation (state);
+            parameter->setValueNotifyingHost (0.123137f);
+            processor.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
+            const float restored = parameter->getValue();
+            check (restored == canonicalSaved,
+                   "Wet Mono Input restores its canonical host value with its editor open");
+        }
+        setPlain (processor, nsr::pid::wetMonoInput, 0.0f);
+    }
 
     {
         setPlain (processor, nsr::pid::mix, 0.0f);
+        setPlain (processor, nsr::pid::wetMonoInput, 1.0f);
         juce::AudioBuffer<float> settle (2, 2400);
         settle.clear();
         process (processor, settle);
@@ -65,10 +91,12 @@ int main()
             for (int i = 0; i < output.getNumSamples(); ++i)
                 exact = exact && output.getSample (channel, i) == input.getSample (channel, i);
         check (exact, "Mix zero is exact dry after its bounded transition");
+        setPlain (processor, nsr::pid::wetMonoInput, 0.0f);
     }
 
     {
         setPlain (processor, nsr::pid::mix, 100.0f);
+        setPlain (processor, nsr::pid::wetMonoInput, 1.0f);
         setPlain (processor, nsr::pid::bypass, 1.0f);
         juce::AudioBuffer<float> settle (2, 2400);
         settle.clear();
@@ -80,8 +108,9 @@ int main()
         for (int channel = 0; channel < 2; ++channel)
             for (int i = 0; i < output.getNumSamples(); ++i)
                 exact = exact && output.getSample (channel, i) == input.getSample (channel, i);
-        check (exact, "Bypass is exact dry after its bounded transition");
+        check (exact, "Bypass is exact original stereo dry with Wet Mono Input On");
         setPlain (processor, nsr::pid::bypass, 0.0f);
+        setPlain (processor, nsr::pid::wetMonoInput, 0.0f);
     }
 
     {
@@ -133,14 +162,16 @@ int main()
         setPlain (processor, nsr::pid::distance, 83.0f);
         setPlain (processor, nsr::pid::definition, 17.0f);
         setPlain (processor, nsr::pid::preDelay, 97.0f);
-        processor.setRoomBodyEnabled (false);
+        setPlain (processor, nsr::pid::wetMonoInput, 1.0f);
+        processor.setAuditionMode (nsr::RoomBodyAuditionMode::tailOnly);
         juce::MemoryBlock state;
         processor.getStateInformation (state);
         setPlain (processor, nsr::pid::space, 12.0f);
         setPlain (processor, nsr::pid::distance, 4.0f);
         setPlain (processor, nsr::pid::definition, 92.0f);
         setPlain (processor, nsr::pid::preDelay, 3.0f);
-        processor.setRoomBodyEnabled (true);
+        setPlain (processor, nsr::pid::wetMonoInput, 0.0f);
+        processor.setAuditionMode (nsr::RoomBodyAuditionMode::earlyOnly);
         processor.setStateInformation (state.getData(), static_cast<int> (state.getSize()));
         check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::space)->load() - 73.0f)
                < 0.001f, "state restores provisional controls");
@@ -150,7 +181,11 @@ int main()
                < 0.001f, "state restores Definition");
         check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::preDelay)->load() - 97.0f)
                < 0.001f, "state restores Pre-delay");
-        check (processor.isRoomBodyEnabled(), "Room Body audition is not serialized");
+        check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::wetMonoInput)->load()
+                        - 1.0f) < 0.001f,
+               "state restores Wet Mono Input");
+        check (processor.getAuditionMode() == nsr::RoomBodyAuditionMode::earlyOnly,
+               "Room Body audition mode is not serialized");
     }
 
     {
@@ -163,7 +198,8 @@ int main()
         for (int child = oldTree.getNumChildren(); --child >= 0;)
         {
             const auto id = oldTree.getChild (child).getProperty ("id").toString();
-            if (id == nsr::pid::distance || id == nsr::pid::definition || id == nsr::pid::preDelay)
+            if (id == nsr::pid::distance || id == nsr::pid::definition
+                || id == nsr::pid::preDelay || id == nsr::pid::wetMonoInput)
                 oldTree.removeChild (child, nullptr);
         }
         juce::MemoryBlock oldState;
@@ -172,6 +208,7 @@ int main()
         setPlain (processor, nsr::pid::distance, 91.0f);
         setPlain (processor, nsr::pid::definition, 9.0f);
         setPlain (processor, nsr::pid::preDelay, 119.0f);
+        setPlain (processor, nsr::pid::wetMonoInput, 1.0f);
         processor.setStateInformation (oldState.getData(), static_cast<int> (oldState.getSize()));
         check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::distance)->load() - 25.0f)
                < 0.001f, "old state supplies the Distance default");
@@ -179,6 +216,8 @@ int main()
                < 0.001f, "old state supplies the Definition default");
         check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::preDelay)->load() - 12.0f)
                < 0.001f, "old state supplies the Pre-delay default");
+        check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::wetMonoInput)->load())
+               < 0.001f, "old state supplies the Wet Mono Input Off default");
     }
 
     {
@@ -189,8 +228,12 @@ int main()
         float maximumStep = 0.0f;
         for (int block = 0; block < 80; ++block)
         {
-            if (block == 20) processor.setRoomBodyEnabled (false);
-            if (block == 50) processor.setRoomBodyEnabled (true);
+            if (block == 20)
+                processor.setAuditionMode (nsr::RoomBodyAuditionMode::tailOnly);
+            if (block == 35)
+                processor.setAuditionMode (nsr::RoomBodyAuditionMode::earlyOnly);
+            if (block == 50)
+                processor.setAuditionMode (nsr::RoomBodyAuditionMode::roomBody);
             juce::AudioBuffer<float> output (2, 127);
             for (int i = 0; i < output.getNumSamples(); ++i)
             {
@@ -211,7 +254,7 @@ int main()
                 previousLeft = output.getSample (0, i);
             }
         }
-        check (maximumStep < 0.2f, "Room Body crossfade has no click-sized output step");
+        check (maximumStep < 0.06f, "Room Body crossfade has no click-sized output step");
     }
 
     {

@@ -13,6 +13,24 @@
 
 namespace nsr
 {
+namespace detail
+{
+// Keep the reconstruction in one tested helper. Any generated Side cancels under a
+// mono fold-down because the two output channels are formed as the same Mid +/- Side.
+inline void reconstructMidSide (float mid, float side, float& left, float& right) noexcept
+{
+    left = mid + side;
+    right = mid - side;
+}
+} // namespace detail
+
+enum class RoomBodyAuditionMode : int
+{
+    tailOnly = 0,
+    roomBody,
+    earlyOnly
+};
+
 struct RoomBodySettings
 {
     float space = 0.35f;
@@ -23,6 +41,7 @@ struct RoomBodySettings
     float definition = 0.65f;
     float preDelayMs = 12.0f;
     float mix = 1.0f;
+    float wetMonoInput = 0.0f;
 };
 
 // A fixed-capacity first-order shoebox wrapped around the selected 16-line late tail.
@@ -65,8 +84,15 @@ public:
             }
         }
         lateExcitationDelay.prepare (sr, smoothingSeconds);
-        roomBodyMix.prepare (sr, smoothingSeconds);
+        earlyAuditionGain.prepare (sr, smoothingSeconds);
+        lateAuditionGain.prepare (sr, smoothingSeconds);
+        wetStereoAmount.prepare (sr, smoothingSeconds);
         mixSmoother.prepare (sr, smoothingSeconds);
+
+        earlySpreadA.prepare (sr, 257, 0.55f);
+        earlySpreadB.prepare (sr, 379, 0.55f);
+        earlySpreadHighpassCoefficient = onePoleCoefficient (250.0f);
+        earlySpreadLowpassCoefficient = onePoleCoefficient (8000.0f);
 
         dryLeft.assign (static_cast<std::size_t> (preparedBlockSize), 0.0f);
         dryRight.assign (static_cast<std::size_t> (preparedBlockSize), 0.0f);
@@ -84,7 +110,8 @@ public:
 
         prepared = true;
         updateTargets (true);
-        roomBodyMix.snap (roomBodyEnabled.load (std::memory_order_relaxed) ? 1.0f : 0.0f);
+        snapAuditionGains();
+        wetStereoAmount.snap (1.0f - settings.wetMonoInput);
         mixSmoother.snap (settings.mix);
         clearSignalState();
     }
@@ -107,7 +134,8 @@ public:
             }
         }
         lateExcitationDelay.snap (targetLateExcitationDelay);
-        roomBodyMix.snap (roomBodyEnabled.load (std::memory_order_relaxed) ? 1.0f : 0.0f);
+        snapAuditionGains();
+        wetStereoAmount.snap (1.0f - settings.wetMonoInput);
         mixSmoother.snap (settings.mix);
     }
 
@@ -117,21 +145,32 @@ public:
         if (! prepared) return;
 
         mixSmoother.setTarget (settings.mix);
+        wetStereoAmount.setTarget (1.0f - settings.wetMonoInput);
         ReverbSettings lateSettings;
         copyLateSettings (lateSettings);
         lateCore.setSettings (lateSettings);
         updateTargets (false);
     }
 
-    void setRoomBodyEnabled (bool enabled) noexcept
+    void setAuditionMode (RoomBodyAuditionMode mode) noexcept
     {
-        roomBodyEnabled.store (enabled, std::memory_order_relaxed);
+        auditionMode.store (static_cast<int> (mode), std::memory_order_relaxed);
     }
 
-    bool isRoomBodyEnabled() const noexcept
+    RoomBodyAuditionMode getAuditionMode() const noexcept
     {
-        return roomBodyEnabled.load (std::memory_order_relaxed);
+        const int value = auditionMode.load (std::memory_order_relaxed);
+        if (value == static_cast<int> (RoomBodyAuditionMode::tailOnly))
+            return RoomBodyAuditionMode::tailOnly;
+        if (value == static_cast<int> (RoomBodyAuditionMode::earlyOnly))
+            return RoomBodyAuditionMode::earlyOnly;
+        return RoomBodyAuditionMode::roomBody;
     }
+
+    // Fixed default-reference correction, calibrated offline after the bounded v2 retune.
+    // It belongs only to the unsaved Room Body comparison; it is not live AGC or a product
+    // Wet Trim parameter.
+    static constexpr float roomBodyAuditionTrim = 0.9913f;
 
     // Includes common wet pre-delay and the physical image-to-ear travel time.
     // reflectionIndex follows Reflection; earIndex is 0 = left, 1 = right.
@@ -179,6 +218,7 @@ private:
     // Keep stereo difference information without turning the early room into two
     // disconnected left/right reverbs. A hard-panned source must still reach both ears.
     static constexpr float earlySideRetention = 0.5f;
+    static constexpr float earlySpreadAmount = 0.22f;
     static constexpr float pi = 3.14159265358979323846f;
 
     struct Vec3
@@ -261,7 +301,42 @@ private:
         value.definition = detail::clamp (value.definition, 0.0f, 1.0f);
         value.preDelayMs = detail::clamp (value.preDelayMs, 0.0f, 120.0f);
         value.mix = detail::clamp (value.mix, 0.0f, 1.0f);
+        value.wetMonoInput = value.wetMonoInput >= 0.5f ? 1.0f : 0.0f;
         return value;
+    }
+
+    float onePoleCoefficient (float cutoffHz) const noexcept
+    {
+        const float cutoff = detail::clamp (cutoffHz, 40.0f, 0.45f * sr);
+        return 1.0f - std::exp (-2.0f * pi * cutoff / sr);
+    }
+
+    void auditionTargets (float& early, float& late) const noexcept
+    {
+        switch (getAuditionMode())
+        {
+            case RoomBodyAuditionMode::tailOnly:
+                early = 0.0f;
+                late = 1.0f;
+                break;
+            case RoomBodyAuditionMode::earlyOnly:
+                early = 1.0f;
+                late = 0.0f;
+                break;
+            case RoomBodyAuditionMode::roomBody:
+            default:
+                early = roomBodyAuditionTrim;
+                late = roomBodyAuditionTrim;
+                break;
+        }
+    }
+
+    void snapAuditionGains() noexcept
+    {
+        float early = 1.0f, late = 1.0f;
+        auditionTargets (early, late);
+        earlyAuditionGain.snap (early);
+        lateAuditionGain.snap (late);
     }
 
     void copyLateSettings (ReverbSettings& destination) const noexcept
@@ -295,18 +370,21 @@ private:
             { 0.0f, 2.0f * (height - listenerEarHeight), sourceZ }
         }};
 
-        // Left/right surfaces deliberately match so duplicated mono remains exactly
-        // symmetric. These are internal first-listening values, not user parameters.
+        // Left/right surfaces deliberately match so the physical field remains centred;
+        // the later bounded decorrelator adds energy-balanced Side. These are internal
+        // listening values, not user parameters.
         constexpr float surfaceGain[reflectionCount] = {
-            0.70f, 0.70f, 0.66f, 0.62f, 0.76f, 0.58f
+            0.68f, 0.68f, 0.64f, 0.58f, 0.46f, 0.52f
         };
-        constexpr float surfaceCutoffHz[reflectionCount] = {
-            9000.0f, 9000.0f, 10000.0f, 7000.0f, 12000.0f, 6000.0f
+        constexpr float softSurfaceCutoffHz[reflectionCount] = {
+            6500.0f, 6500.0f, 6000.0f, 4500.0f, 3200.0f, 4000.0f
+        };
+        constexpr float hardSurfaceCutoffHz[reflectionCount] = {
+            12000.0f, 12000.0f, 11000.0f, 8000.0f, 6000.0f, 8000.0f
         };
 
         const float preDelaySamples = settings.preDelayMs * 0.001f * sr;
         const float prominence = 0.45f + 0.55f * settings.definition;
-        const float cutoffScale = 0.65f + 0.55f * settings.definition;
 
         for (int reflection = 0; reflection < reflectionCount; ++reflection)
         {
@@ -318,8 +396,11 @@ private:
                 std::sqrt (0.5f * (1.0f + pan))
             };
 
-            const float cutoff = detail::clamp (surfaceCutoffHz[reflection] * cutoffScale,
-                                                 40.0f, 0.45f * sr);
+            const float softCutoff = softSurfaceCutoffHz[reflection];
+            const float cutoff = detail::clamp (
+                softCutoff * std::pow (hardSurfaceCutoffHz[reflection] / softCutoff,
+                                       settings.definition),
+                40.0f, 0.45f * sr);
             targetFilterCoefficient[reflection] =
                 1.0f - std::exp (-2.0f * pi * cutoff / sr);
 
@@ -359,7 +440,8 @@ private:
 
         // Higher Definition leaves the explicit wall arrivals exposed for longer. The
         // existing diffuser supplies the continuous buildup after this bounded delay.
-        const float lateOnsetMs = 2.0f + 16.0f * settings.definition;
+        const float lateOnsetMs = 6.0f + 18.0f * settings.definition
+                                + 4.0f * settings.space;
         targetLateExcitationDelay = detail::clamp (
             preDelaySamples + lateOnsetMs * 0.001f * sr,
             1.0f, static_cast<float> (maxHistoryDelaySamples - 8));
@@ -371,6 +453,10 @@ private:
     {
         midHistory.reset();
         sideHistory.reset();
+        earlySpreadA.reset();
+        earlySpreadB.reset();
+        earlySpreadHighpassState = 0.0f;
+        earlySpreadLowpassState = 0.0f;
         for (auto& reflection : reflections)
             for (auto& ear : reflection.filterState)
                 for (float& state : ear)
@@ -388,8 +474,10 @@ private:
     void processChunk (const float* inputLeft, const float* inputRight,
                        float* outputLeft, float* outputRight, int count) noexcept
     {
-        roomBodyMix.setTarget (
-            roomBodyEnabled.load (std::memory_order_relaxed) ? 1.0f : 0.0f);
+        float earlyTarget = 1.0f, lateTarget = 1.0f;
+        auditionTargets (earlyTarget, lateTarget);
+        earlyAuditionGain.setTarget (earlyTarget);
+        lateAuditionGain.setTarget (lateTarget);
 
         for (int sample = 0; sample < count; ++sample)
         {
@@ -399,7 +487,7 @@ private:
             dryRight[static_cast<std::size_t> (sample)] = right;
 
             const float mid = 0.5f * (left + right);
-            const float side = 0.5f * (left - right);
+            const float side = 0.5f * (left - right) * wetStereoAmount.next();
             midHistory.push (mid);
             sideHistory.push (side);
 
@@ -435,9 +523,21 @@ private:
                 }
             }
 
-            const float bodyAmount = roomBodyMix.next();
-            earlyLeft[static_cast<std::size_t> (sample)] = erLeft * bodyAmount;
-            earlyRight[static_cast<std::size_t> (sample)] = erRight * bodyAmount;
+            const float earlyMid = 0.5f * (erLeft + erRight);
+            float earlySide = 0.5f * (erLeft - erRight);
+            const float spreadDifference = 0.5f * (earlySpreadA.process (earlyMid)
+                                                   - earlySpreadB.process (earlyMid));
+            earlySpreadHighpassState += earlySpreadHighpassCoefficient
+                                      * (spreadDifference - earlySpreadHighpassState);
+            const float highpassed = spreadDifference - earlySpreadHighpassState;
+            earlySpreadLowpassState += earlySpreadLowpassCoefficient
+                                     * (highpassed - earlySpreadLowpassState);
+            earlySide += earlySpreadAmount * earlySpreadLowpassState;
+
+            detail::reconstructMidSide (
+                earlyMid, earlySide,
+                earlyLeft[static_cast<std::size_t> (sample)],
+                earlyRight[static_cast<std::size_t> (sample)]);
         }
 
         // The embedded core is permanently 100% wet. It continues processing even when
@@ -449,6 +549,12 @@ private:
         {
             const auto index = static_cast<std::size_t> (sample);
             const float wet = mixSmoother.next();
+            const float earlyGain = earlyAuditionGain.next();
+            const float lateGain = lateAuditionGain.next();
+            const float selectedLeft = earlyLeft[index] * earlyGain
+                                     + lateOutputLeft[index] * lateGain;
+            const float selectedRight = earlyRight[index] * earlyGain
+                                      + lateOutputRight[index] * lateGain;
             if (wet == 0.0f)
             {
                 outputLeft[sample] = dryLeft[index];
@@ -456,16 +562,14 @@ private:
             }
             else if (wet == 1.0f)
             {
-                outputLeft[sample] = lateOutputLeft[index] + earlyLeft[index];
-                outputRight[sample] = lateOutputRight[index] + earlyRight[index];
+                outputLeft[sample] = selectedLeft;
+                outputRight[sample] = selectedRight;
             }
             else
             {
                 const float dry = 1.0f - wet;
-                outputLeft[sample] = dryLeft[index] * dry
-                                   + (lateOutputLeft[index] + earlyLeft[index]) * wet;
-                outputRight[sample] = dryRight[index] * dry
-                                    + (lateOutputRight[index] + earlyRight[index]) * wet;
+                outputLeft[sample] = dryLeft[index] * dry + selectedLeft * wet;
+                outputRight[sample] = dryRight[index] * dry + selectedRight * wet;
             }
         }
     }
@@ -473,8 +577,9 @@ private:
     ReverbCore lateCore;
     nekospace::dsp::FractionalDelay midHistory, sideHistory;
     std::array<ReflectionState, reflectionCount> reflections;
+    detail::AllpassDiffuser earlySpreadA, earlySpreadB;
     DelaySmoother lateExcitationDelay;
-    detail::LinearSmoother roomBodyMix, mixSmoother;
+    detail::LinearSmoother earlyAuditionGain, lateAuditionGain, wetStereoAmount, mixSmoother;
 
     std::vector<float> dryLeft, dryRight, earlyLeft, earlyRight;
     std::vector<float> lateInputLeft, lateInputRight, lateOutputLeft, lateOutputRight;
@@ -483,8 +588,12 @@ private:
     float targetReflectionGain[reflectionCount][2] = {};
     float targetFilterCoefficient[reflectionCount] = {};
     float targetLateExcitationDelay = 1.0f;
+    float earlySpreadHighpassCoefficient = 0.0f;
+    float earlySpreadLowpassCoefficient = 0.0f;
+    float earlySpreadHighpassState = 0.0f;
+    float earlySpreadLowpassState = 0.0f;
     RoomBodySettings settings;
-    std::atomic<bool> roomBodyEnabled { true };
+    std::atomic<int> auditionMode { static_cast<int> (RoomBodyAuditionMode::roomBody) };
     float sr = 48000.0f;
     int preparedBlockSize = 1;
     int maxHistoryDelaySamples = 16;

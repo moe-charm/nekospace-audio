@@ -5,10 +5,12 @@
 #include "dsp/RoomBodyCore.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdlib>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 namespace
@@ -68,10 +70,10 @@ Render render (const std::vector<float>& left, const std::vector<float>& right,
 
 Render renderRoomBody (const std::vector<float>& left, const std::vector<float>& right,
                        const nsr::RoomBodySettings& settings, int blockSize,
-                       bool roomBodyEnabled = true)
+                       nsr::RoomBodyAuditionMode mode = nsr::RoomBodyAuditionMode::roomBody)
 {
     nsr::RoomBodyCore core;
-    core.setRoomBodyEnabled (roomBodyEnabled);
+    core.setAuditionMode (mode);
     core.prepare (48000.0, 512, settings);
 
     Render result { std::vector<float> (left.size()), std::vector<float> (right.size()) };
@@ -165,10 +167,10 @@ void testRoomBodyTargets()
     const float blendedLateTarget = core.targetLateExcitationDelaySamples();
     settings.definition = 1.0f;
     core.setSettings (settings);
-    constexpr float expectedDefinitionShift = 0.016f * sampleRate;
+    constexpr float expectedDefinitionShift = 0.018f * sampleRate;
     expect (std::abs ((core.targetLateExcitationDelaySamples() - blendedLateTarget)
                       - expectedDefinitionShift) < targetTolerance,
-            "Definition moves the late excitation target across its documented 16 ms range");
+            "Definition moves the late excitation target across its documented 18 ms range");
 }
 
 void testRoomBodyActualEarlyArrival()
@@ -179,7 +181,7 @@ void testRoomBodyActualEarlyArrival()
     settings.mix = 1.0f;
 
     nsr::RoomBodyCore withBody, tailOnly;
-    tailOnly.setRoomBodyEnabled (false);
+    tailOnly.setAuditionMode (nsr::RoomBodyAuditionMode::tailOnly);
     withBody.prepare (sampleRate, 127, settings);
     tailOnly.prepare (sampleRate, 127, settings);
 
@@ -358,9 +360,70 @@ void testRoomBodySignalInvariants()
     std::vector<float> monoLeft (samples, 0.0f), monoRight (samples, 0.0f);
     monoLeft[0] = monoRight[0] = 1.0f;
     const auto mono = renderRoomBody (monoLeft, monoRight, settings, 127);
-    expect (mono.left == mono.right,
-            "full room-body core keeps duplicated mono exactly symmetric");
     expect (energy (mono.left) > 0.0f, "full room-body mono impulse produces wet output");
+    bool spreadIsNonZero = false;
+    double leftEnergy = 0.0, rightEnergy = 0.0;
+    for (std::size_t i = 0; i < samples; ++i)
+    {
+        spreadIsNonZero = spreadIsNonZero || mono.left[i] != mono.right[i];
+        leftEnergy += static_cast<double> (mono.left[i]) * mono.left[i];
+        rightEnergy += static_cast<double> (mono.right[i]) * mono.right[i];
+    }
+    const double balanceDb = 10.0 * std::log10 (leftEnergy / rightEnergy);
+    expect (spreadIsNonZero, "duplicated mono gains a deterministic non-zero early Side field");
+    expect (std::abs (balanceDb) < 0.5,
+            "duplicated-mono Room Body keeps left/right energy balanced within 0.5 dB");
+
+    const auto monoEarly = renderRoomBody (monoLeft, monoRight, settings, 127,
+                                           nsr::RoomBodyAuditionMode::earlyOnly);
+    double earlyMidEnergy = 0.0, earlySideEnergy = 0.0, earlyCross = 0.0;
+    double earlyLeftEnergy = 0.0, earlyRightEnergy = 0.0;
+    for (std::size_t i = 0; i < samples; ++i)
+    {
+        const double left = monoEarly.left[i];
+        const double right = monoEarly.right[i];
+        const double mid = 0.5 * (left + right);
+        const double sideValue = 0.5 * (left - right);
+        earlyMidEnergy += mid * mid;
+        earlySideEnergy += sideValue * sideValue;
+        earlyCross += left * right;
+        earlyLeftEnergy += left * left;
+        earlyRightEnergy += right * right;
+    }
+    const double earlySideMidDb = 10.0 * std::log10 (earlySideEnergy / earlyMidEnergy);
+    const double earlyCorrelation = earlyCross
+                                  / std::sqrt (earlyLeftEnergy * earlyRightEnergy);
+    std::cout << "RoomBody mono ER spread: Side/Mid=" << earlySideMidDb
+              << " dB, correlation=" << earlyCorrelation << '\n';
+    expect (earlySideMidDb >= -30.0 && earlySideMidDb <= -10.0,
+            "mono early Side stays audible but at least 10 dB below early Mid");
+    expect (earlyCorrelation >= 0.75 && earlyCorrelation < 0.999,
+            "mono early L/R remains centred without staying effectively identical");
+
+    bool foldDownWithinFloatTolerance = true;
+    float maximumFoldDownError = 0.0f;
+    for (const auto& midSide : std::array<std::array<float, 2>, 7> {
+             std::array<float, 2> { 0.0f, 0.0f },
+             std::array<float, 2> { 0.5f, 0.125f },
+             std::array<float, 2> { -0.25f, 0.0625f },
+             std::array<float, 2> { 0.75f, -0.25f },
+             std::array<float, 2> { 0.1234567f, -0.7654321f },
+             std::array<float, 2> { -0.361805886f, -0.763817549f },
+             std::array<float, 2> { 0.917263f, 0.238719f } })
+    {
+        float left = 0.0f, right = 0.0f;
+        nsr::detail::reconstructMidSide (midSide[0], midSide[1], left, right);
+        const float error = std::abs (0.5f * (left + right) - midSide[0]);
+        const float tolerance = 2.0f * std::numeric_limits<float>::epsilon()
+                              * std::max ({ 1.0f, std::abs (midSide[0]),
+                                           std::abs (midSide[1]) });
+        maximumFoldDownError = std::max (maximumFoldDownError, error);
+        foldDownWithinFloatTolerance = foldDownWithinFloatTolerance && error <= tolerance;
+    }
+    expect (foldDownWithinFloatTolerance,
+            "the actual early M+S/M-S reconstruction folds generated Side to Mid within float tolerance");
+    std::cout << "RoomBody M/S fold-down maximum float error="
+              << maximumFoldDownError << '\n';
 
     std::vector<float> sideLeft (samples, 0.0f), sideRight (samples, 0.0f);
     sideLeft[0] = 1.0f;
@@ -376,6 +439,27 @@ void testRoomBodySignalInvariants()
     const auto panned = renderRoomBody (hardLeft, silentRight, settings, 127);
     expect (energy (panned.right) > 1.0e-8f,
             "a hard-left source reaches the opposite ear through room reflections");
+
+    auto monoWetSettings = settings;
+    monoWetSettings.wetMonoInput = 1.0f;
+    const auto monoWet = renderRoomBody (monoLeft, monoRight, monoWetSettings, 127);
+    expect (monoWet.left == mono.left && monoWet.right == mono.right,
+            "Wet Mono Input does not change an already duplicated-mono excitation");
+    const auto cancelledSide = renderRoomBody (sideLeft, sideRight, monoWetSettings, 127);
+    expect (energy (cancelledSide.left) == 0.0f && energy (cancelledSide.right) == 0.0f,
+            "Wet Mono Input cancels a polarity-opposed stereo excitation to zero");
+
+    std::vector<float> arbitraryStereoLeft (samples, 0.0f), arbitraryStereoRight (samples, 0.0f);
+    std::vector<float> explicitMonoLeft (samples, 0.0f), explicitMonoRight (samples, 0.0f);
+    arbitraryStereoLeft[0] = 1.0f;
+    arbitraryStereoRight[0] = 0.25f;
+    explicitMonoLeft[0] = explicitMonoRight[0] = 0.625f;
+    const auto summedByMode = renderRoomBody (arbitraryStereoLeft, arbitraryStereoRight,
+                                              monoWetSettings, 127);
+    const auto explicitSum = renderRoomBody (explicitMonoLeft, explicitMonoRight,
+                                             settings, 127);
+    expect (summedByMode.left == explicitSum.left && summedByMode.right == explicitSum.right,
+            "Wet Mono Input exactly matches an explicit 0.5*(L+R) duplicated wet feed");
 
     const auto block1 = renderRoomBody (monoLeft, monoRight, settings, 1);
     const auto block512 = renderRoomBody (monoLeft, monoRight, settings, 512);
@@ -456,8 +540,14 @@ void testRoomBodyRealtimeSafety()
                 settings.preDelayMs = 0.0f;
                 core.setSettings (settings);
             }
-            if (block == 16) core.setRoomBodyEnabled (false);
-            if (block == 28) core.setRoomBodyEnabled (true);
+            if (block == 12)
+            {
+                settings.wetMonoInput = 1.0f;
+                core.setSettings (settings);
+            }
+            if (block == 16) core.setAuditionMode (nsr::RoomBodyAuditionMode::tailOnly);
+            if (block == 22) core.setAuditionMode (nsr::RoomBodyAuditionMode::earlyOnly);
+            if (block == 28) core.setAuditionMode (nsr::RoomBodyAuditionMode::roomBody);
             core.process (inputLeft, inputRight, outputLeft, outputRight, 127);
             inputLeft[0] = inputRight[0] = 0.0f;
             for (int i = 0; i < 127; ++i)
@@ -469,7 +559,7 @@ void testRoomBodyRealtimeSafety()
     }
 }
 
-void testRoomBodyAuditionTransition()
+void testRoomBodyWetMonoTransition()
 {
     nsr::RoomBodySettings settings;
     settings.mix = 1.0f;
@@ -477,46 +567,290 @@ void testRoomBodyAuditionTransition()
     switched.prepare (48000.0, 127, settings);
     reference.prepare (48000.0, 127, settings);
 
-    float input[127], switchedLeft[127], switchedRight[127], referenceLeft[127], referenceRight[127];
-    std::fill (std::begin (input), std::end (input), 0.01f);
-    for (int block = 0; block < 120; ++block)
-    {
-        switched.process (input, input, switchedLeft, switchedRight, 127);
-        reference.process (input, input, referenceLeft, referenceRight, 127);
-    }
-
-    switched.setRoomBodyEnabled (false);
+    constexpr int warmSamples = 8192;
     constexpr int transitionSamples = 3000;
-    std::vector<float> transitionInput (transitionSamples, 0.01f);
-    std::vector<float> switchedTransitionLeft (transitionSamples), switchedTransitionRight (transitionSamples);
-    std::vector<float> referenceTransitionLeft (transitionSamples), referenceTransitionRight (transitionSamples);
-    switched.process (transitionInput.data(), transitionInput.data(), switchedTransitionLeft.data(),
-                      switchedTransitionRight.data(), transitionSamples);
-    reference.process (transitionInput.data(), transitionInput.data(), referenceTransitionLeft.data(),
-                       referenceTransitionRight.data(), transitionSamples);
-
-    bool finite = true;
-    float maximumDifference = 0.0f;
-    float maximumDifferenceStep = 0.0f;
-    float previousDifference = 0.0f;
-    for (int sample = 0; sample < transitionSamples; ++sample)
+    constexpr int rampSamples = 2400; // 50 ms at 48 kHz.
+    std::vector<float> warmLeft (warmSamples), warmRight (warmSamples);
+    std::vector<float> switchedWarmLeft (warmSamples), switchedWarmRight (warmSamples);
+    std::vector<float> referenceWarmLeft (warmSamples), referenceWarmRight (warmSamples);
+    for (int sample = 0; sample < warmSamples; ++sample)
     {
-        const float difference = switchedTransitionLeft[static_cast<std::size_t> (sample)]
-                               - referenceTransitionLeft[static_cast<std::size_t> (sample)];
-        finite = finite && std::isfinite (switchedTransitionLeft[static_cast<std::size_t> (sample)])
-                        && std::isfinite (switchedTransitionRight[static_cast<std::size_t> (sample)]);
-        maximumDifference = std::max (maximumDifference, std::abs (difference));
-        maximumDifferenceStep = std::max (maximumDifferenceStep,
-                                          std::abs (difference - previousDifference));
-        previousDifference = difference;
+        warmLeft[static_cast<std::size_t> (sample)] =
+            0.021f * std::sin (0.011f * static_cast<float> (sample));
+        warmRight[static_cast<std::size_t> (sample)] =
+            0.017f * std::cos (0.017f * static_cast<float> (sample));
     }
-    const float firstDifference = std::abs (switchedTransitionLeft[0]
-                                            - referenceTransitionLeft[0]);
-    expect (finite && maximumDifference > 1.0e-6f,
-            "RoomBody audition transition stays finite and removes a real early field");
-    expect (firstDifference < maximumDifference * 0.02f + 1.0e-7f
-            && maximumDifferenceStep < maximumDifference * 0.02f + 1.0e-7f,
-            "RoomBody audition change is bounded by the 50 ms smoother rather than hard-switched");
+    switched.process (warmLeft.data(), warmRight.data(), switchedWarmLeft.data(),
+                      switchedWarmRight.data(), warmSamples);
+    reference.process (warmLeft.data(), warmRight.data(), referenceWarmLeft.data(),
+                       referenceWarmRight.data(), warmSamples);
+
+    const auto runTransition = [&] (bool toMono, int sourceOffset,
+                                    float previousLeft, float previousRight)
+    {
+        settings.wetMonoInput = toMono ? 1.0f : 0.0f;
+        switched.setSettings (settings);
+        std::vector<float> inputLeft (transitionSamples), inputRight (transitionSamples);
+        std::vector<float> referenceInputLeft (transitionSamples),
+                           referenceInputRight (transitionSamples);
+        std::vector<float> switchedLeft (transitionSamples), switchedRight (transitionSamples);
+        std::vector<float> referenceLeft (transitionSamples), referenceRight (transitionSamples);
+        for (int sample = 0; sample < transitionSamples; ++sample)
+        {
+            const float position = static_cast<float> (sourceOffset + sample);
+            const float left = 0.021f * std::sin (0.011f * position);
+            const float right = 0.017f * std::cos (0.017f * position);
+            inputLeft[static_cast<std::size_t> (sample)] = left;
+            inputRight[static_cast<std::size_t> (sample)] = right;
+            const float progress = std::min (
+                1.0f, static_cast<float> (sample + 1) / static_cast<float> (rampSamples));
+            const float stereoAmount = toMono ? 1.0f - progress : progress;
+            const float mid = 0.5f * (left + right);
+            const float side = 0.5f * (left - right) * stereoAmount;
+            nsr::detail::reconstructMidSide (
+                mid, side, referenceInputLeft[static_cast<std::size_t> (sample)],
+                referenceInputRight[static_cast<std::size_t> (sample)]);
+        }
+        switched.process (inputLeft.data(), inputRight.data(), switchedLeft.data(),
+                          switchedRight.data(), transitionSamples);
+        reference.process (referenceInputLeft.data(), referenceInputRight.data(),
+                           referenceLeft.data(), referenceRight.data(), transitionSamples);
+
+        float maximumError = 0.0f;
+        float maximumStep = 0.0f;
+        bool settledMatches = true;
+        for (int sample = 0; sample < transitionSamples; ++sample)
+        {
+            const auto index = static_cast<std::size_t> (sample);
+            maximumError = std::max ({ maximumError,
+                                      std::abs (switchedLeft[index] - referenceLeft[index]),
+                                      std::abs (switchedRight[index] - referenceRight[index]) });
+            maximumStep = std::max ({ maximumStep,
+                                      std::abs (switchedLeft[index] - previousLeft),
+                                      std::abs (switchedRight[index] - previousRight) });
+            previousLeft = switchedLeft[index];
+            previousRight = switchedRight[index];
+            if (sample >= rampSamples - 1)
+                settledMatches = settledMatches
+                    && std::abs (switchedLeft[index] - referenceLeft[index]) < 1.0e-6f
+                    && std::abs (switchedRight[index] - referenceRight[index]) < 1.0e-6f;
+        }
+        expect (maximumError < 1.0e-6f && settledMatches,
+                toMono
+                    ? "Wet Mono Input Off-to-On follows the exact 2400-sample Side ramp"
+                    : "Wet Mono Input On-to-Off follows the exact 2400-sample Side ramp");
+        expect (maximumStep < 0.06f,
+                toMono
+                    ? "Wet Mono Input Off-to-On stays below the click-sized step limit"
+                    : "Wet Mono Input On-to-Off stays below the click-sized step limit");
+        return std::array<float, 3> { switchedLeft.back(), switchedRight.back(), maximumStep };
+    };
+
+    const auto monoResult = runTransition (true, warmSamples,
+                                           switchedWarmLeft.back(), switchedWarmRight.back());
+    const auto stereoResult = runTransition (false, warmSamples + transitionSamples,
+                                             monoResult[0], monoResult[1]);
+    std::cout << "RoomBody Wet Mono 50 ms transitions: max steps Off-On="
+              << monoResult[2] << ", On-Off=" << stereoResult[2] << '\n';
+}
+
+void testRoomBodyAuditionTransition()
+{
+    constexpr std::array<nsr::RoomBodyAuditionMode, 3> modes {
+        nsr::RoomBodyAuditionMode::tailOnly,
+        nsr::RoomBodyAuditionMode::roomBody,
+        nsr::RoomBodyAuditionMode::earlyOnly
+    };
+    constexpr int warmSamples = 8192;
+    constexpr int transitionSamples = 3000;
+    constexpr int rampSamples = 2400; // 50 ms at 48 kHz.
+    float globalMaximumStep = 0.0f;
+    float globalMaximumRampError = 0.0f;
+    const auto gainsFor = [] (nsr::RoomBodyAuditionMode mode)
+    {
+        if (mode == nsr::RoomBodyAuditionMode::tailOnly)
+            return std::array<float, 2> { 0.0f, 1.0f };
+        if (mode == nsr::RoomBodyAuditionMode::earlyOnly)
+            return std::array<float, 2> { 1.0f, 0.0f };
+        return std::array<float, 2> { nsr::RoomBodyCore::roomBodyAuditionTrim,
+                                      nsr::RoomBodyCore::roomBodyAuditionTrim };
+    };
+
+    for (const auto from : modes)
+        for (const auto to : modes)
+        {
+            if (from == to) continue;
+            nsr::RoomBodySettings settings;
+            settings.mix = 1.0f;
+            nsr::RoomBodyCore switched, tailReference, earlyReference;
+            switched.setAuditionMode (from);
+            tailReference.setAuditionMode (nsr::RoomBodyAuditionMode::tailOnly);
+            earlyReference.setAuditionMode (nsr::RoomBodyAuditionMode::earlyOnly);
+            switched.prepare (48000.0, 127, settings);
+            tailReference.prepare (48000.0, 127, settings);
+            earlyReference.prepare (48000.0, 127, settings);
+
+            std::vector<float> warmLeft (warmSamples), warmRight (warmSamples);
+            std::vector<float> switchedWarmLeft (warmSamples), switchedWarmRight (warmSamples);
+            std::vector<float> tailWarmLeft (warmSamples), tailWarmRight (warmSamples);
+            std::vector<float> earlyWarmLeft (warmSamples), earlyWarmRight (warmSamples);
+            for (int sample = 0; sample < warmSamples; ++sample)
+            {
+                warmLeft[static_cast<std::size_t> (sample)] =
+                    0.021f * std::sin (0.011f * static_cast<float> (sample));
+                warmRight[static_cast<std::size_t> (sample)] =
+                    0.017f * std::cos (0.017f * static_cast<float> (sample));
+            }
+            switched.process (warmLeft.data(), warmRight.data(), switchedWarmLeft.data(),
+                              switchedWarmRight.data(), warmSamples);
+            tailReference.process (warmLeft.data(), warmRight.data(), tailWarmLeft.data(),
+                                   tailWarmRight.data(), warmSamples);
+            earlyReference.process (warmLeft.data(), warmRight.data(), earlyWarmLeft.data(),
+                                    earlyWarmRight.data(), warmSamples);
+
+            std::vector<float> inputLeft (transitionSamples), inputRight (transitionSamples);
+            std::vector<float> switchedLeft (transitionSamples), switchedRight (transitionSamples);
+            std::vector<float> tailLeft (transitionSamples), tailRight (transitionSamples);
+            std::vector<float> earlyLeft (transitionSamples), earlyRight (transitionSamples);
+            for (int sample = 0; sample < transitionSamples; ++sample)
+            {
+                const float position = static_cast<float> (warmSamples + sample);
+                inputLeft[static_cast<std::size_t> (sample)] =
+                    0.021f * std::sin (0.011f * position);
+                inputRight[static_cast<std::size_t> (sample)] =
+                    0.017f * std::cos (0.017f * position);
+            }
+            switched.setAuditionMode (to);
+            switched.process (inputLeft.data(), inputRight.data(), switchedLeft.data(),
+                              switchedRight.data(), transitionSamples);
+            tailReference.process (inputLeft.data(), inputRight.data(), tailLeft.data(),
+                                   tailRight.data(), transitionSamples);
+            earlyReference.process (inputLeft.data(), inputRight.data(), earlyLeft.data(),
+                                    earlyRight.data(), transitionSamples);
+
+            bool finite = true;
+            bool linearRampMatches = true;
+            float previousLeft = switchedWarmLeft.back();
+            float previousRight = switchedWarmRight.back();
+            auto expectedGains = gainsFor (from);
+            const auto targetGains = gainsFor (to);
+            const std::array<float, 2> gainSteps {
+                (targetGains[0] - expectedGains[0]) / static_cast<float> (rampSamples),
+                (targetGains[1] - expectedGains[1]) / static_cast<float> (rampSamples)
+            };
+            for (int sample = 0; sample < transitionSamples; ++sample)
+            {
+                const auto index = static_cast<std::size_t> (sample);
+                if (sample < rampSamples - 1)
+                {
+                    expectedGains[0] += gainSteps[0];
+                    expectedGains[1] += gainSteps[1];
+                }
+                else if (sample == rampSamples - 1)
+                {
+                    expectedGains = targetGains;
+                }
+                const float expectedLeft = earlyLeft[index] * expectedGains[0]
+                                         + tailLeft[index] * expectedGains[1];
+                const float expectedRight = earlyRight[index] * expectedGains[0]
+                                          + tailRight[index] * expectedGains[1];
+                const float rampError = std::max (
+                    std::abs (switchedLeft[index] - expectedLeft),
+                    std::abs (switchedRight[index] - expectedRight));
+                globalMaximumRampError = std::max (globalMaximumRampError, rampError);
+                linearRampMatches = linearRampMatches && rampError < 1.0e-6f;
+                finite = finite && std::isfinite (switchedLeft[index])
+                                && std::isfinite (switchedRight[index]);
+                globalMaximumStep = std::max ({ globalMaximumStep,
+                    std::abs (switchedLeft[index] - previousLeft),
+                    std::abs (switchedRight[index] - previousRight) });
+                previousLeft = switchedLeft[index];
+                previousRight = switchedRight[index];
+            }
+            expect (finite, "every directed Room Body audition transition stays finite");
+            expect (linearRampMatches,
+                    "every mode sample follows the explicit 2400-sample Early/Late gain ramps");
+        }
+
+    expect (globalMaximumStep < 0.06f,
+            "all six directed Room Body audition transitions stay below the click-sized step limit");
+    std::cout << "RoomBody all-mode 50 ms transitions: maximum step="
+              << globalMaximumStep << ", ramp error=" << globalMaximumRampError << '\n';
+}
+
+void testRoomBodyAuditionIdentityAndMatch()
+{
+    constexpr std::size_t samples = 4 * 48000;
+    nsr::RoomBodySettings settings;
+    settings.mix = 1.0f;
+    std::vector<float> inputLeft (samples, 0.0f), inputRight (samples, 0.0f);
+    inputLeft[0] = inputRight[0] = 1.0f;
+
+    const auto tail = renderRoomBody (inputLeft, inputRight, settings, 127,
+                                      nsr::RoomBodyAuditionMode::tailOnly);
+    const auto body = renderRoomBody (inputLeft, inputRight, settings, 127,
+                                      nsr::RoomBodyAuditionMode::roomBody);
+    const auto early = renderRoomBody (inputLeft, inputRight, settings, 127,
+                                       nsr::RoomBodyAuditionMode::earlyOnly);
+
+    float maximumIdentityError = 0.0f;
+    for (std::size_t i = 0; i < samples; ++i)
+    {
+        const float expectedLeft = (tail.left[i] + early.left[i])
+                                 * nsr::RoomBodyCore::roomBodyAuditionTrim;
+        const float expectedRight = (tail.right[i] + early.right[i])
+                                  * nsr::RoomBodyCore::roomBodyAuditionTrim;
+        maximumIdentityError = std::max ({ maximumIdentityError,
+                                           std::abs (body.left[i] - expectedLeft),
+                                           std::abs (body.right[i] - expectedRight) });
+    }
+    expect (maximumIdentityError < 1.0e-6f,
+            "Room Body equals the isolated Early and Late buses with only its fixed trim");
+    expect (energy (early.left) + energy (early.right) > 0.0f,
+            "ER Solo exposes a non-zero isolated early field");
+
+    const double tailEnergy = static_cast<double> (energy (tail.left)) + energy (tail.right);
+    const double bodyEnergy = static_cast<double> (energy (body.left)) + energy (body.right);
+    const double differenceDb = 10.0 * std::log10 (bodyEnergy / tailEnergy);
+    double rawBodyEnergy = 0.0;
+    double earlyFirst50Energy = 0.0;
+    double tailFirst50Energy = 0.0;
+    double rawBodyFirst50Energy = 0.0;
+    constexpr std::size_t first50Samples = 2400;
+    std::size_t firstEarlySample = samples;
+    std::size_t firstLateSample = samples;
+    for (std::size_t i = 0; i < samples; ++i)
+    {
+        const double rawLeft = static_cast<double> (tail.left[i]) + early.left[i];
+        const double rawRight = static_cast<double> (tail.right[i]) + early.right[i];
+        rawBodyEnergy += rawLeft * rawLeft + rawRight * rawRight;
+        if (i < first50Samples)
+        {
+            earlyFirst50Energy += static_cast<double> (early.left[i]) * early.left[i]
+                                + static_cast<double> (early.right[i]) * early.right[i];
+            tailFirst50Energy += static_cast<double> (tail.left[i]) * tail.left[i]
+                               + static_cast<double> (tail.right[i]) * tail.right[i];
+            rawBodyFirst50Energy += rawLeft * rawLeft + rawRight * rawRight;
+        }
+        if (firstEarlySample == samples
+            && (std::abs (early.left[i]) > 1.0e-9f || std::abs (early.right[i]) > 1.0e-9f))
+            firstEarlySample = i;
+        if (firstLateSample == samples
+            && (std::abs (tail.left[i]) > 1.0e-9f || std::abs (tail.right[i]) > 1.0e-9f))
+            firstLateSample = i;
+    }
+    const double rawIntegratedDifferenceDb = 10.0 * std::log10 (rawBodyEnergy / tailEnergy);
+    const double rawFirst50DifferenceDb = 10.0 * std::log10 (
+        rawBodyFirst50Energy / tailFirst50Energy);
+    std::cout << "RoomBody v2 fixed trim=" << nsr::RoomBodyCore::roomBodyAuditionTrim
+              << ", integrated Body-Tail=" << differenceDb << " dB\n"
+              << "RoomBody v2 raw: integrated Body-Tail=" << rawIntegratedDifferenceDb
+              << " dB, first50 Body-Tail=" << rawFirst50DifferenceDb
+              << " dB, ER first50 energy=" << earlyFirst50Energy << '\n'
+              << "RoomBody v2 arrivals: ER=" << firstEarlySample / 48.0
+              << " ms, Late=" << firstLateSample / 48.0 << " ms\n";
+    expect (std::abs (differenceDb) <= 0.1,
+            "fixed Room Body audition trim matches default integrated Tail level within 0.1 dB");
 }
 } // namespace
 
@@ -528,7 +862,9 @@ int main()
     testRoomBodyExtremePeak();
     testRoomBodySignalInvariants();
     testRoomBodyRealtimeSafety();
+    testRoomBodyWetMonoTransition();
     testRoomBodyAuditionTransition();
+    testRoomBodyAuditionIdentityAndMatch();
 
     constexpr std::size_t samples = 48000;
     std::vector<float> monoLeft (samples, 0.0f), monoRight (samples, 0.0f);
