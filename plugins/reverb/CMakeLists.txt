@@ -30,7 +30,7 @@ target_include_directories(nsr_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(nsr_dsp INTERFACE nekospace_dsp)
 target_compile_features(nsr_dsp INTERFACE cxx_std_17)
 
-# Phase 3.5 audition product: one processor/editor builds both VST3 and JUCE Standalone.
+# Room Body audition product: one processor/editor builds both VST3 and JUCE Standalone.
 juce_add_plugin(NekoSpaceReverb
     VERSION ${PROJECT_VERSION}
     COMPANY_NAME "NekoSpace Audio"

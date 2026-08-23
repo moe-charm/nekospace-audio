@@ -119,6 +119,24 @@ Phase 4 begins with the bounded first-order Room Body prototype defined in
 [room-body.md](room-body.md). Order-2/3 generation, pruning and final HRTF output follow
 only after the six-image timing and energy balance survives owner listening.
 
+### Phase 4A — Room Body prototype
+
+The implemented slice wraps the accepted 16-line/4-stage tail in six first-order shoebox
+reflections. Its early field retains Mid fully and Side at 0.5, and all pre-delay and
+geometry-delay automation is limited to 0.5 sample of delay per processed sample.
+`setSettings` is audio-thread-owned and operates only on prepared storage. Bypass fades to
+dry over 50 ms, feeds silence into the room while bypassed so the tail cools down, and is
+exact dry in steady state.
+
+**Current status:** the seven automated engineering gates in
+[room-body.md](room-body.md), the complete seven-test Release CTest set and pluginval 1.0.4
+at strictness 10/repeat 3 pass. Owner listening is the remaining Phase 4A product
+decision; no subjective Room Body result is recorded yet. The provisional bandwise
+ER/late seam analysis is still pre-release work. The old 8/16 switch belongs to completed
+Phase 3.5 history: 16 lines are the sole product tail and 8 lines remain regression
+evidence. pluginval skipped the Steinberg VST3 validator because no path was configured;
+that separate Phase 7 gate remains open.
+
 ## Phase 5 — Late-field envelopment
 
 Implement the measured frequency-dependent coherence stage behind Binaural output mode.

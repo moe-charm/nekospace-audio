@@ -6,17 +6,20 @@ hero mode, while a conventional stereo wet output keeps the plug-in useful on se
 speakers.
 
 The JUCE-free independent DSP core now exists. Its stereo wet excitation preserves Mid
-and Side in separate deterministic 8-line networks. Each feedback line now follows a
+and Side in separate deterministic 16-line networks. Each feedback line now follows a
 smooth three-band decay curve driven by provisional Mid Decay, Bass Tail and Air Tail
 settings. The Phase 0 analyzer continues to render the exact Binaural baseline for
-comparison. A 16-line FWHT network with four input allpasses passed the measured
-comparison and owner listening; the 8-line type remains only for regression evidence.
+comparison. The 16-line FWHT network with four input allpasses passed the measured
+comparison and owner listening; the historical 8-line type remains only for analysis and
+regression evidence.
 
 The explicitly provisional listening surface uses the same Reverb
 processor/editor builds as VST3 and JUCE Standalone, while Reverb Player adds file and
-device transport around those exact objects. Phase 4A adds a bounded six-image Room Body
-in front of the accepted tail. Order-2/3 reflections, final Binaural output and the
-permanent Phase 6 parameter contract do not exist yet.
+device transport around those exact objects. Phase 4A implements a bounded six-image Room
+Body in front of the accepted tail. Its early field retains full Mid and half Side, while
+pre-delay and geometry delay move by at most 0.5 sample per processed sample. Order-2/3
+reflections, final Binaural output and the permanent Phase 6 parameter contract do not
+exist yet.
 
 ## What it is
 
@@ -65,7 +68,7 @@ multi-slope decay and a configurable feedback matrix.
 - [Phase 3 network decision](docs/phase3-network-decision.md) — level-matched 8/16-line
   density, periodicity, decay, CPU and memory evidence.
 - [Audition shell](docs/audition-shell.md) — the shared VST3/Standalone/Player boundary
-  and completed 8/16 listening gate.
+  and current Room Body audition path, with the completed 8/16 gate retained as history.
 - [Room Body prototype](docs/room-body.md) — the first-order reflection, control,
   real-time and listening contract for Phase 4A.
 - [Roadmap](docs/roadmap.md) — vertical implementation slices and the exit condition for
@@ -101,9 +104,10 @@ pure-Side preservation, block-size invariance, allocation-free coefficient updat
 five supported sample rates. Rendered T20 tests cover opposite Bass/Air slopes and prove
 that Space preserves a neutral T60. The selected 16-line/4-stage candidate reaches 45 ms
 NED t90 and 0.140 autocorrelation at matched RMS; its 8-line/4-stage fallback measures
-65 ms and 0.180. Owner listening is the remaining Phase 3 gate.
+65 ms and 0.180. Phase 3 owner listening accepted the 16-line result; 8 lines remain a
+historical regression path rather than a live product choice.
 
-## Phase 3.5 audition applications
+## Room Body audition applications
 
 A Release build produces:
 
@@ -113,8 +117,16 @@ build/plugins/reverb/NekoSpaceReverb_artefacts/Release/Standalone/NekoSpace Reve
 build/plugins/reverb/NekoSpaceReverbPlayer_artefacts/Release/NekoSpace Reverb Player.exe
 ```
 
-Use the Player to open or drop a WAV, AIFF or FLAC take, then compare the 8-line fallback
-and 16-line candidate. That comparison is deliberately not automatable or saved. Audio
-files and rendered demonstrations are globally ignored and must not be committed.
+Use the Player to open or drop a WAV, AIFF or FLAC take, then compare `Tail only` with
+`Room body`. The switch is deliberately not automatable or saved, and both positions use
+the accepted 16-line tail. Bypass crossfades to dry over 50 ms; while bypass is requested,
+the room processes silence so its tail cools down, and steady bypass is exact dry.
+
+The current Phase 4A automated engineering gate is 7/7, the complete Release CTest set is
+7/7, and pluginval 1.0.4 passes strictness 10 for three randomised VST3 repeats. Owner
+listening is the open Phase 4A product decision, so no subjective result is claimed yet.
+The provisional ER/late seam analysis is not automated, and pluginval skipped the
+Steinberg VST3 validator because no validator path was configured. Audio files and
+rendered demonstrations are globally ignored and must not be committed.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

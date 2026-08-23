@@ -1,8 +1,8 @@
 # NekoSpace Reverb — Audition Shell
 
-Status: **Phase 3.5 completed; retained as the audition-host contract**. This document defines the smallest honest way
-to hear the current late-field candidate before early reflections and the permanent
-product surface exist.
+Status: **Phase 3.5 completed; retained as the audition-host contract for Phase 4A**. This
+document defines the smallest honest way to hear the current processor before the
+permanent product surface exists.
 
 The owner selected the 16-line path on 2026-08-23. Phase 4A keeps the same three hosts
 and replaces the temporary network selector with the Room Body comparison defined in
@@ -10,10 +10,14 @@ and replaces the temporary network selector with the Room Body comparison define
 
 ## Purpose
 
-The audition build answers one question: does the measured 16-line late field sound more
-useful on voice than the retained 8-line fallback? It is not presented as the finished
-room model. Directional early reflections, Binaural output, ducking, production presets
-and the complete control set remain later phases.
+The original Phase 3.5 build answered whether the 16-line late field was more useful on
+voice than the retained 8-line fallback. That historical comparison is closed: 16 lines
+are accepted, while 8 lines remain analysis/regression evidence only.
+
+The same shell now auditions whether the implemented six-reflection Room Body adds a
+useful boundary around that accepted tail. It is not presented as the finished room model.
+Order-2/3 reflections, final Binaural output, ducking, production presets and the complete
+control set remain later phases.
 
 ## One processor and one editor
 
@@ -39,10 +43,13 @@ Reverb Player ─────► NekoSpaceReverbProcessor ─► NekoSpaceReverb
 
 ## Provisional listening controls
 
-The first editor exposes only the controls required to judge the existing late tail:
+The current editor exposes only the controls required to judge the Room Body prototype:
 
 - Bypass;
 - Space;
+- Distance;
+- Definition;
+- Pre-delay;
 - Decay;
 - Bass Tail;
 - Air Tail;
@@ -50,23 +57,33 @@ The first editor exposes only the controls required to judge the existing late t
 
 These names follow [control-design.md](control-design.md), but their IDs, ranges and
 defaults remain prototype data until Phase 6. Sessions saved with an audition build are
-not a compatibility promise. The editor must label the build as `LATE TAIL PROTOTYPE` so
-missing early reflections or spatial modes cannot be mistaken for a finished product.
+not a compatibility promise. The editor identifies this as `ROOM BODY PROTOTYPE` so the
+missing later reflection orders and spatial modes cannot be mistaken for a finished
+product.
 
-## 8-line / 16-line comparison
+## Current Tail-only / Room-body comparison
 
-Network selection is a developer audition control, not a product parameter:
+The current developer audition control compares the accepted tail with the same tail plus
+the six first-order reflections:
 
 - it is not exposed to host automation;
 - it is not serialized in plug-in state;
-- both networks are prepared before audio starts;
-- switching uses a bounded crossfade and performs no allocation or rebuild in the audio
-  callback;
-- the 16-line candidate is selected on startup, while 8-line remains the comparison
-  fallback.
+- `Room body` is selected on startup;
+- switching crossfades the early contribution over 50 ms and performs no allocation or
+  rebuild in the audio callback;
+- the 16-line tail is processed once in both positions.
 
-The control disappears when the Phase 3 listening decision closes. Line count never
-becomes a marketing control or a permanent session dependency.
+Bypass is separate from that developer switch. It crossfades to dry over 50 ms, feeds
+silence to the prepared room while bypassed so the tail cools down, and reaches exact dry
+in steady state.
+
+## Historical 8-line / 16-line comparison
+
+The Phase 3.5 network selector was an unsaved developer control. Both networks were
+prepared before audio start, and switching used a bounded crossfade without allocation or
+rebuild in the audio callback. The accepted 16-line candidate started selected and the
+8-line network was its comparison fallback. That control disappeared when Phase 3 closed.
+Line count is not a marketing control or a permanent session dependency.
 
 ## Exit checks
 
@@ -79,3 +96,9 @@ This checkpoint is complete only when:
 5. state round-trip restores provisional user controls but not the audition network;
 6. Reverb and existing Binaural/CleanVoice tests still pass;
 7. no private audio or rendered demonstration is tracked.
+
+Those checks record the completed Phase 3.5 history. For Phase 4A, the current automated
+engineering gate and complete Release CTest set are both 7/7; pluginval 1.0.4 passes
+strictness 10 for three randomised VST3 repeats. Owner listening is pending; see
+[room-body.md](room-body.md). pluginval skipped the Steinberg VST3 validator because no
+validator path was configured.

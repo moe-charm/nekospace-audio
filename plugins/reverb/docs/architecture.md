@@ -1,6 +1,7 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; 16-line late field selected, Phase 4A Room Body in progress**.
+Status: **design contract; 16-line late field selected, Phase 4A engineering complete and
+owner listening pending**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -73,8 +74,8 @@ Stereo input
    └─► input conditioning / common wet pre-delay
           │
           ├─► Image-source early field
-          │      candidate order <= 3, maximum 62 images
-          │      arrival-time / level / energy pruning
+          │      Phase 4A: six first-order images
+          │      future: order <= 3, maximum 62 candidates + pruning
           │      distance loss + per-surface filtering
           │      │
           │      ├─ Stereo projection ───────────────┐
@@ -84,8 +85,8 @@ Stereo input
                  2–4 short allpass stages            │
                  │                                   │
                  ▼                                   │
-              FDN baseline/candidate                 │
-                 8 lines first; 16 only by evidence  │
+              accepted 16-line FDN                  │
+                 four late-input allpass stages      │
                  FWHT/Hadamard feedback mixing       │
                  smooth T60(f) attenuation per line  │
                  deterministic slow modulation      │
@@ -108,10 +109,11 @@ The shipping bus is stereo-to-stereo so FL Studio and ordinary send workflows re
 predictable. Mono material may arrive duplicated by the host. The dry path is not summed,
 HRTF-filtered or widened.
 
-Phase 1 uses an energy-bounded Mid/Side transform. Mid and Side excite two independent,
-identically configured 8-line late networks; their wet outputs are reconstructed as
-`L = Mid + Side`, `R = Mid - Side`. This deliberately spends more state than a mono feed
-to make these invariants exact:
+Phase 1 established an energy-bounded Mid/Side transform with two independent 8-line
+networks. Phase 3 retained that channel architecture and replaced each historical 8-line
+network with the accepted 16-line/4-stage path. Mid and Side wet outputs are reconstructed
+as `L = Mid + Side`, `R = Mid - Side`. This deliberately spends more state than a mono
+feed to make these invariants exact:
 
 - mono input produces a centred, symmetric field;
 - stereo input does not collapse or reverse the existing image;
@@ -119,16 +121,24 @@ to make these invariants exact:
 - input and output energy stay bounded and comparable across mono and stereo material;
 - `Mix = 0` and room bypass reduce to the aligned dry signal exactly.
 
-A simple `(L + R) / 2` downmix is therefore not used. The dual-network cost and sound are
-provisional: Phase 3 compares it with symmetry-preserving single-network or 16-line
-candidates, but no candidate may regress the Phase 1 channel tests.
+A simple `(L + R) / 2` downmix is therefore not used. The 8-line implementation remains
+available only as analysis and regression evidence; it is not a second shipping path or
+a current owner control.
 
 ### Early field
 
-The existing Binaural room uses six first-order shoebox images. That remains appropriate
-for a light externalisation aid, but it is only the baseline for a dedicated reverb.
+Phase 4A implements six first-order shoebox images around the accepted 16-line tail. The
+early renderer converts the stereo input to Mid/Side, retains Mid at unity and retains
+Side at `earlySideRetention = 0.5`, then reconstructs L/R per reflection. This preserves
+mono symmetry and existing stereo difference information without turning the first-order
+room into two disconnected hard-panned reverbs.
 
-Reverb may generate image candidates through reflection order 3:
+Pre-delay, per-ear reflection delays and the late-excitation geometry delay change through
+a delay smoother capped at **0.5 sample of delay per processed sample**. This bound applies
+even when the requested geometry move is larger than the ordinary smoothing interval.
+
+The six-image renderer is the accepted Phase 4A implementation, not the final Phase 4
+ceiling. Later work may generate image candidates through reflection order 3:
 
 | Maximum order | New images | Cumulative candidates |
 | ---: | ---: | ---: |
@@ -282,13 +292,21 @@ the bypass/dry path must remain aligned.
 
 Tail length is reported from the common wet pre-delay, the longest retained reflection and
 the **maximum active-band T60**, plus a documented safety margin. It is not derived from
-mid-band Decay alone. Bypass/off handling must drain or cool down internal state without
-clearing large buffers in the audio callback or releasing stale energy when re-enabled.
+mid-band Decay alone.
+
+The Phase 4A Bypass transition crossfades to dry over 50 ms. While bypass is requested,
+the preallocated Room Body receives silence instead of new programme material, so its
+existing tail cools down naturally without a callback reset. After the fade the output is
+exact dry; re-enabling does not release material that arrived during steady bypass.
 
 ## Real-time state publication
 
 All maximum buffers and candidate reflection slots are allocated during `prepare`.
 Ordinary parameter automation updates preallocated coefficients through bounded smoothers.
+For the fixed Phase 4A graph, `RoomBodyCore::setSettings` is owned and called only by the
+audio thread. It updates preallocated state and fixed-cost targets; no UI or worker thread
+may call it concurrently. Pre-delay and geometry-delay targets obey the 0.5
+sample-per-sample slew cap.
 
 Any change that requires rebuilding a filter bank, reflection topology or network state
 is constructed away from the audio thread, published as an immutable object and swapped
@@ -298,6 +316,14 @@ the audio thread.
 The audio callback performs no allocation, deallocation, locking, file access, network
 access, string work, logging or UI access. Hosts may provide odd and changing block sizes;
 processing therefore uses prepared chunks and is block-size invariant at static settings.
+
+Phase 4A's seven automated engineering gates and the complete seven-test Release CTest set
+pass. pluginval 1.0.4 also passes strictness 10 for three randomised VST3 repeats. Owner
+listening remains the open Phase 4A product decision, while the provisional bandwise
+ER/late seam analysis remains pre-release acoustic work. The Steinberg VST3 validator
+subtest was skipped because no validator path was configured; it remains Phase 7 work and
+must not be inferred from the current unit/integration result. See
+[room-body.md](room-body.md) for exact measurements and caveats.
 
 ## Reuse from Binaural
 
