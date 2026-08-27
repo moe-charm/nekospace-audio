@@ -2,107 +2,93 @@
 
 English: [README.md](README.md)
 
-音声作品・ボイス制作向けのオーディオプラグインにゃ。C++17 / JUCE / CMake、AGPLv3にゃ。
+音声作品・ASMR・ボイス制作向けのオープンソース音声ツールにゃ。
+C++17 / JUCE / CMake、AGPLv3-or-laterにゃ。
 
-| 製品 | 状態 | |
+| 製品 | 用途 | 状態 |
 | --- | --- | --- |
-| **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
-| **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、アプリ + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | オーナー試聴版 | 自然な16-line Room Body＋6つの初期プリセット、VST3＋Player — [readme](plugins/reverb/README.md) |
-| NekoSpace Room | 予定 | |
-| NekoSpace Delay | 予定 | |
+| [**NekoSpace Binaural**](plugins/binaural/README.md) | 声や効果音を聴き手の周囲へ配置 | `v0.2.0-alpha` |
+| [**NekoSpace Reverb**](plugins/reverb/README.md) | 元のステレオ像を保ちながら自然な部屋を作る | オーナー試聴版 |
+| [**NekoSpace CleanVoice**](plugins/cleanvoice/README.md) | 囁きの定常ノイズを学習して除去 | オフライン試作版 |
 
-![NekoSpace Binaural](docs/images/gui-main.png)
+<table>
+  <tr>
+    <th width="33%">NekoSpace Binaural</th>
+    <th width="33%">NekoSpace Reverb</th>
+    <th width="33%">NekoSpace CleanVoice</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/gui-main.png" alt="NekoSpace Binauralの画面"></td>
+    <td><img src="docs/images/reverb-main.png" alt="NekoSpace Reverbの画面"></td>
+    <td><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoiceの画面"></td>
+  </tr>
+  <tr>
+    <td>声向けの3D配置と、耳元まで近づける距離表現。</td>
+    <td>6つの初期反射、決定論的16-lineテール、6つの初期プリセット。</td>
+    <td>ノイズ区間を学習し、Original / Clean / Removedを比較。</td>
+  </tr>
+</table>
 
-▶ **[74秒のNekoSpace BinauralデモをYouTubeで見る](https://youtu.be/nk54N0w6FOE)**
-— ヘッドフォン／イヤホン推奨にゃ。
+## デモ
+
+- ▶ [NekoSpace Binaural — 74秒の操作デモ](https://youtu.be/nk54N0w6FOE)
+  — ヘッドフォン／イヤホン推奨にゃ。
+- **NekoSpace Reverb** — ナレーション付き機能紹介はローカルで完成済みにゃ。
+  再現用のRemotion／VOICEVOXコードは [`video/`](video/README.md) にあり、公開後に
+  YouTubeリンクへ差し替えるにゃ。
+- **NekoSpace CleanVoice** — 公開可能なノイズ入り声素材が決まってから制作するにゃ。
+
+録画、生成ナレーション、完成動画はGitから全体除外し、再現用コード・台本・タイミングだけを
+追跡するにゃ。
 
 ## 現状 — 正直版
 
-alphaにゃ。パラメーターID・プラグインコード・選択肢リストは `v0.1.0-alpha` で凍結して、
-それ以降変えていないにゃ（[CHANGELOG.md](CHANGELOG.md) 参照）。音のほうはまだ固まってないにゃ。
+### NekoSpace Binaural
 
-**NekoSpace Binaural は動くにゃ。** 左右・前後・距離、そして耳元の「耳のすぐそば」表現は
-どれも宣伝どおりに機能するにゃ。JUCE非依存の受け入れテスト33本と
-`pluginval --strictness-level 10` で検証済みにゃ。
+Windows VST3とStandaloneで、左右・前後・距離、強い耳元表現が動くにゃ。
+上下は音色と軽い移動感を作れるけど、確実な上下判定にはならないにゃ。静的で非個人化された
+HRTFは聴き手自身の耳の形を知らず、ヘッドフォンも同じ5〜12 kHzを色づけするためにゃ。
+高さは演出を補助する色として使い、物語の必須手がかりにはしないにゃ。測定値と詳しい経緯は
+[Binaural README](plugins/binaural/README.md) に分離しているにゃ。
 
-**弱いのは上下にゃ。** 音は確かに変わるし、多少の上下動は感じられるけど、
-「上にいる」と確信できる手がかりにはなってないにゃ。これは見つけられてないバグではなく、
-**静的・非個人化バイノーラルの原理的な限界**にゃ。高さを運ぶスペクトル手がかりは
-**聴く人自身の耳たぶの形**に依存するし、ヘッドフォンはまさにその 5〜12 kHz を色づけするにゃ。
+### NekoSpace Reverb
 
-4つの手を試して計測したにゃ — 数式モデルの再設計、KU100の実測データ、
-胴体反射＋初期反射のHRTFレンダリング、そして聴く人ごとの手動調整にゃ。
-**どれも数値は改善したけど、どれも決定的な知覚は生まなかった**にゃ。
-上下は「演出の色付け」として使い、物語の要には据えないのが正解にゃ。
-
-## CleanVoice 試作版
-
-**NekoSpace CleanVoice** は、囁きや息の多い声向けのオフライン編集アプリ＋CLIにゃ。
-リアルタイムプラグインではまだないにゃ。声のないノイズ区間を選んで固定プロファイルを学習し、
-同じプレビュー範囲を **Original / Clean / Removed Noise** で聴き比べてから全体を処理するにゃ。
-全チャンネルへ同じスペクトルゲインを掛けるので、ノイズ除去でバイノーラル定位を溶かさない設計にゃ。
-使い方と現時点の制限は [CleanVoice readme](plugins/cleanvoice/README.md) にまとまってるにゃ。
-
-## Reverb オーナー試聴版
-
-**NekoSpace Reverb** は、Binauralの追加ページではなく、声を中心に考えた独立アルゴリズム
-リバーブにゃ。6つの一次反射と、採用済みの決定論的16-lineテールを組み合わせているにゃ。
-Space、Distance、Definition、Pre-delay、3帯域の減衰、Mixを操作でき、Mono Inputは
-**ウェット入力だけ**をモノラル化するので、ドライのステレオ像は壊さないにゃ。
-
+VST3、JUCE Standalone、ファイルPlayerは、本物のProcessorとEditorを共有しているにゃ。
+現在のRoom Bodyは6つの一次反射と、採用済みの低着色16-lineテールを組み合わせるにゃ。
 初期プリセットは **Default / Voice Booth / Small Wood Room / Dialogue Stage /
-Soft Chamber / Open Hall** の6つにゃ。選択すると音を決める値を全部設定し、どれかを動かすと
-`Custom`、`Reset`でDefaultへ戻るにゃ。保存するのは名前ではなく実際の値なので、将来
-プリセット名や調整値が変わっても古いセッションの音は勝手に変わらないにゃ。
+Soft Chamber / Open Hall**。値を動かすと`Custom`、ResetでDefaultへ戻るにゃ。
 
-2026-08-28に現在のVST3をFL Studioで読み込み・音声処理確認し、オーナーの目視試聴では
-現在の響きを自然な方向として採用したにゃ。ただし、これは公開alpha完成という意味ではないにゃ。
-CPU／メモリ計測、最終パラメーター凍結、配布パッケージ、残りのvalidator確認は別のゲートにゃ。
-Remotion＋VOICEVOXの解説動画は再現できるコードだけを公開し、録画・生成音声・完成動画は
-Gitから除外しているにゃ。
+2026-08-28に現在の音を自然な方向としてオーナー試聴で採用し、FL StudioでもVST3の
+読み込みと音声処理を確認したにゃ。ただし公開alphaではまだないにゃ。CPU／メモリ証拠、
+最終パラメーター凍結、配布パッケージ、残りのvalidatorは明示的な未完ゲートにゃ。
 
-## もう少し詳しく
+### NekoSpace CleanVoice
 
-| | |
-| --- | --- |
-| **プリセットは「場面」まるごと**にゃ。音を決めるパラメーターを全部設定するので、同じ名前なら必ず同じ音になるにゃ。メイン画面の JUMP TO ボタンは逆の仕事で、**位置だけ動かして作り込んだ部屋には触らない**にゃ。 | ![プリセットメニュー](docs/images/presets.png) |
-
-**Elevation Lab** — 高さモデルを4つのマクロで操作して、自分のヘッドフォンで耳で合わせて
-固めるためのものにゃ。`Advanced…` で背後の24個の生の値が出て、`Copy as C++` で
-そのカーブを恒久化するコードブロックが取れるにゃ。
-
-![Elevation Lab](docs/images/elevation-lab.png)
-
-**マニュアルはプラグインの中**にゃ。英語と日本語があって、ウィンドウの中で切り替えるにゃ。
-初回はOSの言語に従い、選択は**プロジェクトではなくユーザーごとに**保存されるので、
-昔のセッションを開いても言語が戻ることはないにゃ。
-
-![ヘルプ 英語](docs/images/help-en.png)
-
-![ヘルプ 日本語](docs/images/help-ja.png)
+オフライン編集アプリとCLIは、声のない区間から固定ノイズプロファイルを学習するにゃ。
+同じ範囲を **Original / Clean / Removed Noise** で比較してから全体を処理できるにゃ。
+全チャンネルへ同じスペクトルゲインを掛けるので、バイノーラル定位を溶かさない設計にゃ。
+リアルタイムプラグインではまだないにゃ。詳しい操作は
+[CleanVoice README](plugins/cleanvoice/README.md) にゃ。
 
 ## インストール
 
-[Releases](https://github.com/moe-charm/nekospace-audio/releases) からWindows用zipを
-落として展開するにゃ。`.vst3` フォルダ、スタンドアロンの `.exe`、ライセンスと表示物が
-入ってるにゃ。
+現在公開しているWindows版はNekoSpace Binauralにゃ。
+[Releases](https://github.com/moe-charm/nekospace-audio/releases)からzipを展開し、
+`NekoSpace Binaural.vst3`をフォルダーごと次へコピーするにゃ。
 
-1. **`NekoSpace Binaural.vst3` フォルダごと**（1個のファイルじゃなくてバンドルにゃ）
-   `C:\Program Files\Common Files\VST3\` にコピーするにゃ。
-2. DAWでプラグインを再スキャンするにゃ。FL Studioなら
-   *Options → Manage plugins → Find more plugins* にゃ。
-3. DAWなしで音を聴くだけなら `NekoSpace Binaural.exe` がそのまま動くにゃ。
+```text
+C:\Program Files\Common Files\VST3\
+```
 
-**ヘッドフォン必須**にゃ。バイノーラルなので、スピーカーだと効果は成立しないにゃ。
+DAWで再スキャンするにゃ。FL Studioなら *Options → Manage plugins → Find more plugins*。
+`NekoSpace Binaural.exe`はDAWなしで動くにゃ。バイノーラル再生にはヘッドフォンが必要にゃ。
 
-昔の名前で入れたことがあってDAWがロードを拒む場合は、DAWが古いプラグインIDを
-キャッシュしてるにゃ。プラグインデータベースを消して再スキャンするにゃ。
+ReverbとCleanVoiceは、それぞれの配布ゲートとパッケージが完成するまでソースからの開発版にゃ。
 
 ## ビルド
 
 CMake 3.22以上、C++17コンパイラ（WindowsならVisual Studio 2022）、gitが必要にゃ。
-JUCEは初回configure時に自動取得されるにゃ。
+JUCEはトップレベルconfigureで一度だけ取得し、全製品で共有するにゃ。
 
 ```bash
 cmake -B build -G "Visual Studio 17 2022" -A x64
@@ -110,41 +96,45 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-全製品がトップレベルのconfigure 1回でビルドされて、JUCEは1度だけ取得して共有されるにゃ。
+## リポジトリ構成
 
-## 構成
-
-```
+```text
 nekospace-audio/
-├─ plugins/          製品ごとに1ディレクトリ、自己完結
-│  ├─ binaural/      src, tests, docs, tools, resources
-│  ├─ cleanvoice/    JUCE非依存DSP/CLI＋JUCEスタンドアロンGUI
-│  └─ reverb/        独立DSP＋VST3／Standalone＋ファイルPlayer＋解析基盤
-├─ shared/           複数プラグインが実際に必要としたコードだけ
-├─ docs/             製品横断の契約
-├─ video/            Remotionソース、非公開素材と完成動画は除外
+├─ plugins/
+│  ├─ binaural/      DSP、VST3／Standalone、ファイルPlayer、テスト、製品ドキュメント
+│  ├─ reverb/        独立DSP、VST3／Standalone、ファイルPlayer、解析基盤
+│  └─ cleanvoice/    JUCE非依存DSP／CLI＋JUCEオフライン編集アプリ
+├─ shared/           複数製品で実証された製品中立DSP
+├─ docs/             スイート共通契約と公開安全な画像
+├─ video/            Remotionソース。非公開素材と完成動画は除外
 └─ cmake/            ビルド補助
 ```
 
-何をどこに置くか、特に **なぜ `shared/` を空で始めるのか** は
-[docs/repo-layout.md](docs/repo-layout.md) にゃ。
+配置ルールは[repository layout](docs/repo-layout.md)、トップページの構成契約は
+[README structure](docs/readme-structure.md)にゃ。
 
-## 全製品に共通のドキュメント
+## 全製品共通の契約
 
-- [identity.md](docs/identity.md) — 著作権者とブランドの区別、リリース後は変更不可のVST3/AUコード
-- [state-format.md](docs/state-format.md) — ホストのプロジェクトに何を保存するか、古いプロジェクトを読み続けるためのルール
-- [realtime-contract.md](docs/realtime-contract.md) — スレッド規約
-- [third-party-licenses.md](docs/third-party-licenses.md) — 依存ライセンスのSSOT
-- [reference-iem.md](docs/reference-iem.md) — IEM Plug-in Suite から何を学び、何を採らないか、GPLとの線引き
-- [reference-denoise.md](docs/reference-denoise.md) — 囁き・息のノイズ除去。調波前提の手法が使えない理由と、バイノーラル素材に左右共通ゲインが要る理由
+- [Identity](docs/identity.md) — 著作権者、ブランド、変更不可のプラグインコード
+- [State format](docs/state-format.md) — 古いDAWプロジェクトを壊さない保存形式
+- [Realtime contract](docs/realtime-contract.md) — オーディオスレッド規約
+- [Third-party licences](docs/third-party-licenses.md) — 依存ライセンスの正本
+- [IEM reference boundary](docs/reference-iem.md) — 何を学び、GPLとどう線引きしたか
+- [Denoise research](docs/reference-denoise.md) — 囁き保護と左右共通ゲイン
+- [Video production](docs/video-production.md) — 非公開素材境界と再現可能な動画制作
+
+## リリース
+
+`v*`タグをpushすると、リリースworkflowが宣言済みの対象をビルド・テストし、
+ライセンス／noticesと一緒に梱包してdraft GitHub Releaseを作るにゃ。
+凍結済みIDと履歴は[CHANGELOG.md](CHANGELOG.md)にゃ。
 
 ## ライセンス
 
-**GNU Affero General Public License v3.0 or later** のフリーソフトウェアにゃ
-（[LICENSE](LICENSE) 参照）。
+**GNU Affero General Public License v3.0 or later** のフリーソフトウェアにゃ。
+[LICENSE](LICENSE)参照にゃ。
 
     Copyright (C) 2026 charmpic
 
-**このプラグインで作った音声は君のものにゃ。** AGPLが対象にするのはプラグイン自身の
-ソースとバイナリにゃ。レンダリングされた音声はソフトウェアの派生物ではないにゃ
-（LICENSE 第2条参照）。NekoSpaceで制作した録音や音声作品にAGPLの義務は一切かからないにゃ。
+**このツールで作った音声は君のものにゃ。** AGPLの対象はソフトウェア自身のソースと
+バイナリで、制作した録音やレンダリング音声ではないにゃ（LICENSE第2条）。

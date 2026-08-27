@@ -24,6 +24,8 @@ owner audition are complete. The 2026-08-28 owner session accepted the current r
 natural, and the same VST3 loaded and processed audio in FL Studio. This does not freeze the
 permanent Phase 6 parameter contract or make the prototype a public alpha.
 
+![NekoSpace Reverb](../../docs/images/reverb-main.png)
+
 ## What it is
 
 NekoSpace Reverb builds the space around an already positioned sound:

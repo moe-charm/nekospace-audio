@@ -4,6 +4,8 @@ Part of **NekoSpace Audio** — https://github.com/moe-charm/nekospace-audio
 
 Noise removal for whispered and breathy voice. **v1 prototype: a small desktop app, plus a command-line tool.**
 
+![NekoSpace CleanVoice](../../docs/images/cleanvoice-main.png)
+
 The design and its sources are in [reference-denoise.md](../../docs/reference-denoise.md);
 this file is how to run it.
 

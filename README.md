@@ -2,118 +2,98 @@
 
 日本語版は [README.ja.md](README.ja.md) にゃ。
 
-Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
+Open-source audio tools for voice, ASMR and audio drama. C++17 / JUCE / CMake,
+licensed under AGPLv3-or-later.
 
-| Product | Status | |
+| Product | Purpose | Status |
 | --- | --- | --- |
-| **NekoSpace Binaural** | v0.2.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
-| **NekoSpace CleanVoice** | prototype | noise removal for whispered voice, app + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | owner-audition prototype | natural-sounding 16-line Room Body, six factory starting points, VST3 + Player — [readme](plugins/reverb/README.md) |
-| NekoSpace Room | planned | |
-| NekoSpace Delay | planned | |
+| [**NekoSpace Binaural**](plugins/binaural/README.md) | place voice and effects around the listener | `v0.2.0-alpha` |
+| [**NekoSpace Reverb**](plugins/reverb/README.md) | build a natural room around an existing stereo image | owner-audition prototype |
+| [**NekoSpace CleanVoice**](plugins/cleanvoice/README.md) | learn and remove steady noise from whispered voice | offline prototype |
 
-![NekoSpace Binaural](docs/images/gui-main.png)
+<table>
+  <tr>
+    <th width="33%">NekoSpace Binaural</th>
+    <th width="33%">NekoSpace Reverb</th>
+    <th width="33%">NekoSpace CleanVoice</th>
+  </tr>
+  <tr>
+    <td><img src="docs/images/gui-main.png" alt="NekoSpace Binaural interface"></td>
+    <td><img src="docs/images/reverb-main.png" alt="NekoSpace Reverb interface"></td>
+    <td><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoice interface"></td>
+  </tr>
+  <tr>
+    <td>Voice-focused 3D placement with near-ear distance control.</td>
+    <td>Six early reflections, a deterministic 16-line tail and six starting presets.</td>
+    <td>Noise-region learning with Original / Clean / Removed monitoring.</td>
+  </tr>
+</table>
 
-▶ **[Watch the 74-second NekoSpace Binaural demo on YouTube](https://youtu.be/nk54N0w6FOE)**
-— headphones or earphones recommended.
+## Demos
 
-## Status — honest version
+- ▶ [NekoSpace Binaural — 74-second operation demo](https://youtu.be/nk54N0w6FOE)
+  — headphones or earphones recommended.
+- **NekoSpace Reverb** — narrated feature-tour render is ready locally; the reproducible
+  Remotion/VOICEVOX composition is in [`video/`](video/README.md). A published link will
+  replace this note after upload.
+- **NekoSpace CleanVoice** — demonstration planned after representative noisy voice material
+  is cleared for publication.
 
-Alpha. Parameter IDs, plugin codes and the choice lists were frozen at `v0.1.0-alpha`
-and have not changed since — see [CHANGELOG.md](CHANGELOG.md). The sound is not frozen.
+Recordings, generated narration and rendered videos are ignored globally. Only reproducible
+code, narration text and timing are versioned.
 
-**NekoSpace Binaural** works: left/right, front/back, distance and near-field "at the ear"
-placement all do what they claim, validated by 33 JUCE-free acceptance tests and
-`pluginval --strictness-level 10`.
+## Honest status
 
-**Elevation is the weak axis.** It produces a real, audible change and a mild sense of
-vertical movement, but it is not a dependable "that is above me" cue. This is the known
-ceiling of static, non-individualised binaural rather than a bug we have not found yet:
-the spectral cues that carry height depend on the shape of *your* pinnae, and headphones
-colour exactly the 5–12 kHz band those cues live in. Four approaches were tried and
-measured — an analytic redesign, a measured KU100 dataset, torso reflections plus early
-reflections rendered through the HRTF, and per-listener tuning. Each improved the numbers;
-none produced a decisive percept. Treat elevation as a colour, not as a load-bearing
-narrative cue.
+### NekoSpace Binaural
 
-## CleanVoice prototype
+The Windows VST3 and Standalone provide left/right, front/back, distance and strong near-ear
+placement. Elevation creates an audible colour and mild vertical movement, but it is not a
+dependable above/below cue: static non-individualised HRTFs cannot know the listener's pinnae,
+and headphones colour the same 5–12 kHz band. Treat height as supporting production colour,
+not a load-bearing narrative cue. The measurements and full explanation live in the
+[Binaural README](plugins/binaural/README.md).
 
-**NekoSpace CleanVoice** is an offline desktop editor and CLI for whispered and breathy
-voice — not a realtime plugin yet. Select a noise-only region, learn its fixed profile,
-then audition the same preview range as **Original / Clean / Removed Noise** before
-processing the full take. One shared spectral gain is applied to every channel so noise
-removal does not dissolve the binaural image. See the
-[CleanVoice readme](plugins/cleanvoice/README.md) for the workflow and current limits.
+### NekoSpace Reverb
 
-## Reverb owner-audition prototype
+The real VST3, JUCE Standalone and file Player share one processor and editor. The current
+Room Body combines bounded first-order reflections with the accepted low-colour 16-line tail.
+Factory starting points are **Default, Voice Booth, Small Wood Room, Dialogue Stage, Soft
+Chamber and Open Hall**; editing a value changes the selector to `Custom`, and Reset restores
+Default.
 
-**NekoSpace Reverb** is a separate voice-focused algorithmic reverb, not another control
-page for Binaural. It combines six bounded first-order reflections with the accepted
-deterministic 16-line tail. The current surface provides Space, Distance, Definition,
-Pre-delay, three-band decay shaping, Mix and a wet-only Mono Input that never collapses
-the dry stereo path.
+On 2026-08-28 the owner accepted the current direction as natural in sighted audition and the
+VST3 loaded and processed audio in FL Studio. This is not a public alpha yet: CPU/memory
+evidence, final parameter freeze, release packaging and the remaining validator gate are
+still explicit work.
 
-Six complete factory starting points are included: **Default, Voice Booth, Small Wood
-Room, Dialogue Stage, Soft Chamber and Open Hall**. Selecting one sets the complete sound
-tuple; editing any value changes the selector to `Custom`, and `Reset` restores Default.
-Only values are saved, so a future preset rename cannot silently change an old session.
+### NekoSpace CleanVoice
 
-On 2026-08-28 the current VST3 loaded and processed audio in FL Studio, and the owner
-accepted the present sound as natural in sighted audition. This proves the current audition
-direction, not public-alpha readiness: CPU/memory evidence, final parameter freeze, release
-packaging and the remaining validator gate still come later. The repository contains a
-reproducible Remotion/VOICEVOX demo composition, while recordings, narration WAVs and
-rendered videos stay private and ignored.
-
-## A closer look
-
-| | |
-| --- | --- |
-| **Presets are complete scenes.** Each one sets every sound-shaping parameter, so a name always means the same sound. The JUMP TO buttons in the main window do the opposite job — they move the source and leave the room you built alone. | ![Preset menu](docs/images/presets.png) |
-
-**Elevation Lab** — four macros over the height model, tuned by ear on your own headphones
-and then frozen. `Advanced…` opens the 24 raw anchor values behind them, and `Copy as C++`
-emits the block that makes a curve permanent.
-
-![Elevation Lab](docs/images/elevation-lab.png)
-
-**The manual is in the plugin**, in English and Japanese, switched from inside the window.
-The choice follows the OS on first run and is stored per user, so an old session never
-opens in the wrong language.
-
-![Help, English](docs/images/help-en.png)
-
-![Help, Japanese](docs/images/help-ja.png)
+The offline desktop app and CLI learn a fixed profile from a selected noise-only region. The
+app previews the exact same range as **Original / Clean / Removed Noise** before whole-file
+processing. One shared spectral gain is applied to every channel, so noise removal does not
+dissolve a binaural image. It is not a realtime plug-in yet; see the
+[CleanVoice workflow](plugins/cleanvoice/README.md).
 
 ## Install
 
-Download the Windows zip from [Releases](https://github.com/moe-charm/nekospace-audio/releases)
-and unpack it. It contains a `.vst3` folder, a standalone `.exe`, and the licence and
-notices.
+The current public Windows release is NekoSpace Binaural. Download its zip from
+[Releases](https://github.com/moe-charm/nekospace-audio/releases), unpack it, and copy the
+whole `NekoSpace Binaural.vst3` bundle to:
 
-1. Copy the whole **`NekoSpace Binaural.vst3` folder** — it is a bundle, not a single file —
-   into `C:\Program Files\Common Files\VST3\`.
-2. Rescan plugins in your DAW. In FL Studio: *Options → Manage plugins → Find more plugins*.
-3. `NekoSpace Binaural.exe` runs without a DAW if you just want to hear it.
+```text
+C:\Program Files\Common Files\VST3\
+```
 
-Needs headphones. This is a binaural renderer; over speakers the effect does not survive.
+Then rescan plug-ins. In FL Studio: *Options → Manage plugins → Find more plugins*.
+`NekoSpace Binaural.exe` runs without a DAW. Headphones are required for binaural rendering.
 
-If the plugin was installed under an earlier name and your DAW still refuses to load it,
-the DAW is caching the old plugin ID — clear its plugin database and rescan.
-
-## Releases
-
-Builds are published from a tag: pushing `v*` runs the release workflow, which configures,
-builds, **runs the acceptance tests**, packages the VST3 and Standalone with the licence
-and notices, and opens a draft GitHub Release. A build that has not passed its own tests
-is not released.
-
-See [CHANGELOG.md](CHANGELOG.md) for what each release contains and what it freezes.
+Reverb and CleanVoice are development builds from source until their own release gates and
+packages are complete.
 
 ## Build
 
-Requires CMake ≥ 3.22, a C++17 compiler (Visual Studio 2022 on Windows), and git — JUCE
-is fetched automatically on first configure.
+Requires CMake 3.22 or newer, a C++17 compiler (Visual Studio 2022 on Windows), and git.
+JUCE is fetched once by the top-level configure and shared by all products.
 
 ```bash
 cmake -B build -G "Visual Studio 17 2022" -A x64
@@ -121,41 +101,45 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
-Every plugin builds from the one top-level configure; JUCE is fetched once and shared.
+## Repository layout
 
-## Layout
-
-```
+```text
 nekospace-audio/
-├─ plugins/          one directory per product, self-contained
-│  ├─ binaural/      src, tests, docs, tools, resources
-│  ├─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE standalone GUI
-│  └─ reverb/        independent core, VST3/Standalone, file Player and analysis harness
+├─ plugins/
+│  ├─ binaural/      DSP, VST3/Standalone, file Player, tests and product docs
+│  ├─ reverb/        independent DSP, VST3/Standalone, file Player and analyzer
+│  └─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE offline editor
 ├─ shared/           product-neutral DSP proven by multiple consumers
-├─ docs/             contracts that apply across products
-├─ video/            Remotion source; private media and renders stay ignored
+├─ docs/             suite contracts and publication-safe images
+├─ video/            Remotion source; private media and renders remain ignored
 └─ cmake/            build helpers
 ```
 
-See [docs/repo-layout.md](docs/repo-layout.md) for what belongs where, and in particular
-how code earns promotion into `shared/`.
+See [repository layout](docs/repo-layout.md) for ownership rules and
+[README structure](docs/readme-structure.md) for the landing-page contract.
 
-## Docs that apply to every product
+## Shared contracts
 
-- [identity.md](docs/identity.md) — copyright holder vs brand; VST3/AU codes, permanent after release
-- [state-format.md](docs/state-format.md) — what gets written into a host project and the rules that keep old projects loading
-- [realtime-contract.md](docs/realtime-contract.md) — thread rules
-- [third-party-licenses.md](docs/third-party-licenses.md) — dependency licensing SSOT
-- [reference-iem.md](docs/reference-iem.md) — what we read the IEM Plug-in Suite for, what we deliberately do not take, and where the GPL line sits
-- [reference-denoise.md](docs/reference-denoise.md) — noise reduction for whispered and breathy voice: why harmonic-based methods do not apply, and why binaural material needs one gain for both ears
+- [Identity](docs/identity.md) — copyright holder, brand and permanent plug-in codes
+- [State format](docs/state-format.md) — backwards-compatible host project state
+- [Realtime contract](docs/realtime-contract.md) — audio-thread rules
+- [Third-party licences](docs/third-party-licenses.md) — dependency licensing SSOT
+- [IEM reference boundary](docs/reference-iem.md) — what was studied and the GPL line
+- [Denoise research](docs/reference-denoise.md) — whispered-voice protection and shared gain
+- [Video production](docs/video-production.md) — private-media boundary and reproducible demos
+
+## Releases
+
+Pushing a `v*` tag runs the release workflow, builds and tests the declared release product,
+packages licences/notices and opens a draft GitHub Release. See
+[CHANGELOG.md](CHANGELOG.md) for frozen IDs and release history.
 
 ## License
 
-Free software under the **GNU Affero General Public License v3.0 or later**
-(see [LICENSE](LICENSE)).
+Free software under the **GNU Affero General Public License v3.0 or later** — see
+[LICENSE](LICENSE).
 
     Copyright (C) 2026 charmpic
 
-**Audio you produce with these plugins is yours.** The AGPL covers the plugins' own source
-and binaries. Rendered audio is not a derivative work of the software — see LICENSE
-section 2. Recordings and audio dramas made with NekoSpace carry no AGPL obligation.
+**Audio produced with these tools belongs to you.** The AGPL covers the software source and
+binaries, not recordings or rendered audio created with it; see LICENSE section 2.
