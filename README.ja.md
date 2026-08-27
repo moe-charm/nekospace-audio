@@ -1,74 +1,74 @@
+![NekoSpace Audioカラーで描いた猫耳と立体音響の抽象波形](docs/images/banner.jpg)
+
 # NekoSpace Audio
+
+[![Build](https://github.com/moe-charm/nekospace-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/moe-charm/nekospace-audio/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/moe-charm/nekospace-audio?include_prereleases&label=release)](https://github.com/moe-charm/nekospace-audio/releases/tag/v0.2.0-alpha)
+![Windows x64](https://img.shields.io/badge/platform-Windows%20x64-00a8d6)
+![VST3 and Standalone](https://img.shields.io/badge/format-VST3%20%7C%20Standalone-f28c28)
+[![AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-8a8f98)](LICENSE)
+
+音声作品・ASMR・ボイス制作のための、オープンソース空間音響・音声修復ツールにゃ。
 
 English: [README.md](README.md)
 
-音声作品・ASMR・ボイス制作向けのオープンソース音声ツールにゃ。
-C++17 / JUCE / CMake、AGPLv3-or-laterにゃ。
+### [⬇ NekoSpace Binaural v0.2.0-alpha — Windows x64版をダウンロード](https://github.com/moe-charm/nekospace-audio/releases/download/v0.2.0-alpha/NekoSpaceBinaural-v0.2.0-alpha-Windows-x64.zip)
 
-| 製品 | 用途 | 状態 |
+VST3エフェクトとDAW不要のStandalone入り。ヘッドフォン／イヤホン推奨にゃ。
+[74秒の操作デモを見る](https://youtu.be/nk54N0w6FOE) ·
+[製品ガイドを読む](plugins/binaural/README.md)
+
+## 音声制作の流れ
+
+| 1 — 整える | 2 — 配置する | 3 — 部屋を与える |
 | --- | --- | --- |
-| [**NekoSpace Binaural**](plugins/binaural/README.md) | 声や効果音を聴き手の周囲へ配置 | `v0.2.0-alpha` |
-| [**NekoSpace Reverb**](plugins/reverb/README.md) | 元のステレオ像を保ちながら自然な部屋を作る | オーナー試聴版 |
-| [**NekoSpace CleanVoice**](plugins/cleanvoice/README.md) | 囁きの定常ノイズを学習して除去 | オフライン試作版 |
+| **CleanVoice**が声のない区間からノイズを学び、ステレオ像を崩さず整えるにゃ。 | **Binaural**が声や効果音を聴き手の周囲や耳元へ配置するにゃ。 | **Reverb**が元の定位を尊重しながら、初期反射と自然な残響を加えるにゃ。 |
+
+現在、パッケージ公開済みなのはBinauralにゃ。CleanVoiceとReverbはソースからビルドする
+開発中製品にゃ。
+
+## 主力製品 — NekoSpace Binaural
+
+[![NekoSpace Binauralの空間音響インターフェース](docs/images/gui-main.png)](plugins/binaural/README.md)
+
+- 声向けの左右・前後・距離と、強い耳元配置にゃ。
+- Natural／Enhanced HRTF、方向付きRoom Assist、ファクトリーシーンプリセットにゃ。
+- 現行ソースではVST3、Standalone、ファイルPlayerが同じProcessorとEditorを共有するにゃ。
+
+**[Windows版をダウンロード](https://github.com/moe-charm/nekospace-audio/releases/download/v0.2.0-alpha/NekoSpaceBinaural-v0.2.0-alpha-Windows-x64.zip)** ·
+[デモ](https://youtu.be/nk54N0w6FOE) · [詳細と限界](plugins/binaural/README.md)
+
+## 開発中
 
 <table>
   <tr>
-    <th width="33%">NekoSpace Binaural</th>
-    <th width="33%">NekoSpace Reverb</th>
-    <th width="33%">NekoSpace CleanVoice</th>
+    <th width="50%"><a href="plugins/reverb/README.md">NekoSpace Reverb</a></th>
+    <th width="50%"><a href="plugins/cleanvoice/README.md">NekoSpace CleanVoice</a></th>
   </tr>
   <tr>
-    <td><img src="docs/images/gui-main.png" alt="NekoSpace Binauralの画面"></td>
-    <td><img src="docs/images/reverb-main.png" alt="NekoSpace Reverbの画面"></td>
-    <td><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoiceの画面"></td>
+    <td><a href="plugins/reverb/README.md"><img src="docs/images/reverb-main.png" alt="NekoSpace Reverbの画面"></a></td>
+    <td><a href="plugins/cleanvoice/README.md"><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoiceの画面"></a></td>
   </tr>
   <tr>
-    <td>声向けの3D配置と、耳元まで近づける距離表現。</td>
-    <td>6つの初期反射、決定論的16-lineテール、6つの初期プリセット。</td>
-    <td>ノイズ区間を学習し、Original / Clean / Removedを比較。</td>
+    <td><strong>開発中 — DSPとUIは動作中。</strong><br>6つの初期反射、決定論的16-lineテール、6つの初期プリセット。VST3、Standalone、ファイルPlayerが本物のProcessorを共有するにゃ。</td>
+    <td><strong>プロトタイプ — オフラインアプリとCLI。</strong><br>声のない区間を学習し、Original／Clean／Removedを比較してからファイル全体を処理するにゃ。</td>
   </tr>
 </table>
 
-## デモ
+Reverbの機能紹介は[`video/`](video/README.md)から再現できるにゃ。CleanVoiceのデモは、
+公開可能なノイズ入り声素材が決まってから制作するにゃ。仕事用録音、生成ナレーション、完成動画は
+Gitへ入れないにゃ。
 
-- ▶ [NekoSpace Binaural — 74秒の操作デモ](https://youtu.be/nk54N0w6FOE)
-  — ヘッドフォン／イヤホン推奨にゃ。
-- **NekoSpace Reverb** — ナレーション付き機能紹介はローカルで完成済みにゃ。
-  再現用のRemotion／VOICEVOXコードは [`video/`](video/README.md) にあり、公開後に
-  YouTubeリンクへ差し替えるにゃ。
-- **NekoSpace CleanVoice** — 公開可能なノイズ入り声素材が決まってから制作するにゃ。
+## 正直な開発状況
 
-録画、生成ナレーション、完成動画はGitから全体除外し、再現用コード・台本・タイミングだけを
-追跡するにゃ。
+- **Binaural:** 水平方向と耳元表現が強みにゃ。上下は演出上の色として使えるけど、
+  非個人化された静的HRTFで確実な上下判定を保証はしないにゃ。
+- **Reverb:** オーナー試聴で自然な方向として採用し、FL StudioでVST3の音声処理も確認済みにゃ。
+  CPU／メモリ証拠、配布パッケージ、残りのリリースゲートは未完にゃ。
+- **CleanVoice:** 固定プロファイルと左右共通ゲインによるオフライン処理は動作中。
+  リアルタイムプラグインではまだないにゃ。
 
-## 現状 — 正直版
-
-### NekoSpace Binaural
-
-Windows VST3とStandaloneで、左右・前後・距離、強い耳元表現が動くにゃ。
-上下は音色と軽い移動感を作れるけど、確実な上下判定にはならないにゃ。静的で非個人化された
-HRTFは聴き手自身の耳の形を知らず、ヘッドフォンも同じ5〜12 kHzを色づけするためにゃ。
-高さは演出を補助する色として使い、物語の必須手がかりにはしないにゃ。測定値と詳しい経緯は
-[Binaural README](plugins/binaural/README.md) に分離しているにゃ。
-
-### NekoSpace Reverb
-
-VST3、JUCE Standalone、ファイルPlayerは、本物のProcessorとEditorを共有しているにゃ。
-現在のRoom Bodyは6つの一次反射と、採用済みの低着色16-lineテールを組み合わせるにゃ。
-初期プリセットは **Default / Voice Booth / Small Wood Room / Dialogue Stage /
-Soft Chamber / Open Hall**。値を動かすと`Custom`、ResetでDefaultへ戻るにゃ。
-
-2026-08-28に現在の音を自然な方向としてオーナー試聴で採用し、FL StudioでもVST3の
-読み込みと音声処理を確認したにゃ。ただし公開alphaではまだないにゃ。CPU／メモリ証拠、
-最終パラメーター凍結、配布パッケージ、残りのvalidatorは明示的な未完ゲートにゃ。
-
-### NekoSpace CleanVoice
-
-オフライン編集アプリとCLIは、声のない区間から固定ノイズプロファイルを学習するにゃ。
-同じ範囲を **Original / Clean / Removed Noise** で比較してから全体を処理できるにゃ。
-全チャンネルへ同じスペクトルゲインを掛けるので、バイノーラル定位を溶かさない設計にゃ。
-リアルタイムプラグインではまだないにゃ。詳しい操作は
-[CleanVoice README](plugins/cleanvoice/README.md) にゃ。
+測定値、限界、検証境界は美化せず、各製品READMEへ残しているにゃ。
 
 ## インストール
 

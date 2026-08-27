@@ -1,78 +1,76 @@
+![Abstract cat-ear spatial-audio waves in the NekoSpace Audio colours](docs/images/banner.jpg)
+
 # NekoSpace Audio
+
+[![Build](https://github.com/moe-charm/nekospace-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/moe-charm/nekospace-audio/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/moe-charm/nekospace-audio?include_prereleases&label=release)](https://github.com/moe-charm/nekospace-audio/releases/tag/v0.2.0-alpha)
+![Windows x64](https://img.shields.io/badge/platform-Windows%20x64-00a8d6)
+![VST3 and Standalone](https://img.shields.io/badge/format-VST3%20%7C%20Standalone-f28c28)
+[![AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-8a8f98)](LICENSE)
+
+Open-source spatial and restoration tools built for voice, ASMR and audio drama.
 
 日本語版は [README.ja.md](README.ja.md) にゃ。
 
-Open-source audio tools for voice, ASMR and audio drama. C++17 / JUCE / CMake,
-licensed under AGPLv3-or-later.
+### [⬇ Download NekoSpace Binaural v0.2.0-alpha for Windows x64](https://github.com/moe-charm/nekospace-audio/releases/download/v0.2.0-alpha/NekoSpaceBinaural-v0.2.0-alpha-Windows-x64.zip)
 
-| Product | Purpose | Status |
+VST3 effect and DAW-free Standalone included. Headphones or earphones recommended.
+[Watch the 74-second demo](https://youtu.be/nk54N0w6FOE) ·
+[Read the product guide](plugins/binaural/README.md)
+
+## A voice-production path
+
+| 1 — Clean | 2 — Place | 3 — Give it a room |
 | --- | --- | --- |
-| [**NekoSpace Binaural**](plugins/binaural/README.md) | place voice and effects around the listener | `v0.2.0-alpha` |
-| [**NekoSpace Reverb**](plugins/reverb/README.md) | build a natural room around an existing stereo image | owner-audition prototype |
-| [**NekoSpace CleanVoice**](plugins/cleanvoice/README.md) | learn and remove steady noise from whispered voice | offline prototype |
+| **CleanVoice** learns a noise-only region without collapsing the stereo image. | **Binaural** moves voice and effects around the listener, including strong near-ear placement. | **Reverb** adds early reflections and a natural tail while respecting the existing image. |
+
+CleanVoice and Reverb are currently source-built development products. Binaural is the
+packaged public alpha.
+
+## Featured — NekoSpace Binaural
+
+[![NekoSpace Binaural spatial audio interface](docs/images/gui-main.png)](plugins/binaural/README.md)
+
+- Voice-focused left/right, front/back, distance and near-ear placement.
+- Natural and Enhanced HRTF profiles, directional room assistance and factory scene presets.
+- Current source builds VST3, Standalone and a file Player around the same processor and editor.
+
+**[Download for Windows](https://github.com/moe-charm/nekospace-audio/releases/download/v0.2.0-alpha/NekoSpaceBinaural-v0.2.0-alpha-Windows-x64.zip)** ·
+[Demo](https://youtu.be/nk54N0w6FOE) · [Details and limitations](plugins/binaural/README.md)
+
+## In development
 
 <table>
   <tr>
-    <th width="33%">NekoSpace Binaural</th>
-    <th width="33%">NekoSpace Reverb</th>
-    <th width="33%">NekoSpace CleanVoice</th>
+    <th width="50%"><a href="plugins/reverb/README.md">NekoSpace Reverb</a></th>
+    <th width="50%"><a href="plugins/cleanvoice/README.md">NekoSpace CleanVoice</a></th>
   </tr>
   <tr>
-    <td><img src="docs/images/gui-main.png" alt="NekoSpace Binaural interface"></td>
-    <td><img src="docs/images/reverb-main.png" alt="NekoSpace Reverb interface"></td>
-    <td><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoice interface"></td>
+    <td><a href="plugins/reverb/README.md"><img src="docs/images/reverb-main.png" alt="NekoSpace Reverb interface"></a></td>
+    <td><a href="plugins/cleanvoice/README.md"><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoice interface"></a></td>
   </tr>
   <tr>
-    <td>Voice-focused 3D placement with near-ear distance control.</td>
-    <td>Six early reflections, a deterministic 16-line tail and six starting presets.</td>
-    <td>Noise-region learning with Original / Clean / Removed monitoring.</td>
+    <td><strong>In development — DSP and UI working.</strong><br>Six early reflections, a deterministic 16-line tail and six factory starting points. VST3, Standalone and file Player share the real processor.</td>
+    <td><strong>Prototype — offline app and CLI.</strong><br>Learn a noise-only region, then compare Original, Clean and Removed before processing the whole file.</td>
   </tr>
 </table>
 
-## Demos
+The Reverb feature-tour source is reproducible under [`video/`](video/README.md). A CleanVoice
+demo waits for representative noisy voice material cleared for publication. Private
+recordings, generated narration and rendered media stay outside Git.
 
-- ▶ [NekoSpace Binaural — 74-second operation demo](https://youtu.be/nk54N0w6FOE)
-  — headphones or earphones recommended.
-- **NekoSpace Reverb** — narrated feature-tour render is ready locally; the reproducible
-  Remotion/VOICEVOX composition is in [`video/`](video/README.md). A published link will
-  replace this note after upload.
-- **NekoSpace CleanVoice** — demonstration planned after representative noisy voice material
-  is cleared for publication.
+## Honest engineering
 
-Recordings, generated narration and rendered videos are ignored globally. Only reproducible
-code, narration text and timing are versioned.
+- **Binaural:** horizontal and near-ear placement are the strengths. Elevation is useful
+  production colour, not a guaranteed above/below cue with non-individualised static HRTFs.
+- **Reverb:** its direction was accepted as natural in owner audition and its VST3 processed
+  audio in FL Studio; CPU/memory evidence, packaging and the remaining release gates are not
+  complete.
+- **CleanVoice:** the fixed-profile workflow and shared channel gain work offline; it is not a
+  realtime plug-in.
 
-## Honest status
-
-### NekoSpace Binaural
-
-The Windows VST3 and Standalone provide left/right, front/back, distance and strong near-ear
-placement. Elevation creates an audible colour and mild vertical movement, but it is not a
-dependable above/below cue: static non-individualised HRTFs cannot know the listener's pinnae,
-and headphones colour the same 5–12 kHz band. Treat height as supporting production colour,
-not a load-bearing narrative cue. The measurements and full explanation live in the
-[Binaural README](plugins/binaural/README.md).
-
-### NekoSpace Reverb
-
-The real VST3, JUCE Standalone and file Player share one processor and editor. The current
-Room Body combines bounded first-order reflections with the accepted low-colour 16-line tail.
-Factory starting points are **Default, Voice Booth, Small Wood Room, Dialogue Stage, Soft
-Chamber and Open Hall**; editing a value changes the selector to `Custom`, and Reset restores
-Default.
-
-On 2026-08-28 the owner accepted the current direction as natural in sighted audition and the
-VST3 loaded and processed audio in FL Studio. This is not a public alpha yet: CPU/memory
-evidence, final parameter freeze, release packaging and the remaining validator gate are
-still explicit work.
-
-### NekoSpace CleanVoice
-
-The offline desktop app and CLI learn a fixed profile from a selected noise-only region. The
-app previews the exact same range as **Original / Clean / Removed Noise** before whole-file
-processing. One shared spectral gain is applied to every channel, so noise removal does not
-dissolve a binaural image. It is not a realtime plug-in yet; see the
-[CleanVoice workflow](plugins/cleanvoice/README.md).
+Measurements, limitations and validation boundaries remain in each product README instead
+of being hidden or turned into marketing claims.
 
 ## Install
 
