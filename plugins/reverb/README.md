@@ -19,9 +19,10 @@ device transport around those exact objects. Room Body v1 implements a bounded s
 early field in front of the accepted tail. Owner listening found its first comparison
 mainly slightly louder. Room Body v2 is now implemented at `84a4df4`: matched
 Tail/Body/ER isolation, a wet-only Mono Input, one bounded surface/onset retune and a
-general mono-compatible ER spread stage. Engineering validation is complete; the matched
-owner audition remains before any order-2/3 or HRTF expansion. The permanent Phase 6
-parameter contract does not exist yet.
+general mono-compatible ER spread stage. Engineering validation and the sighted matched
+owner audition are complete. The 2026-08-28 owner session accepted the current result as
+natural, and the same VST3 loaded and processed audio in FL Studio. This does not freeze the
+permanent Phase 6 parameter contract or make the prototype a public alpha.
 
 ## What it is
 
@@ -125,12 +126,19 @@ is a saved, automatable Bool that feeds `0.5 * (L + R)` to the wet room only, le
 stereo and the output bus unchanged. All mode and input transitions are specified at
 50 ms. Bypass still feeds silence to the room and becomes exact dry in steady state.
 
+The owner-audition UI also provides six complete factory starting points: `Default`,
+`Voice Booth`, `Small Wood Room`, `Dialogue Stage`, `Soft Chamber` and `Open Hall`.
+`Reset` applies Default. Preset names are not serialized; the authoritative APVTS values
+are saved, and editing any member of a known tuple displays `Custom`.
+
 At `84a4df4`, Room Body v2 passed the complete Release CTest set 7/7 and pluginval 1.0.4
 at strictness 10 for three randomised VST3 repeats. The matched default Body/Tail
 difference is `-0.000064 dB`; every 50 ms mode/Mono transition remained far below the
 `0.06` click-sized step guard. GUI layout and all four controls were also checked in the
-real Player. Only the sighted owner listening result remains; exact conditions and the v1
-comparison history are in [room-body.md](docs/room-body.md). Audio and rendered
-demonstrations remain globally ignored. The Steinberg validator is still unconfigured.
+real Player. On 2026-08-28 the owner accepted the current direction as natural in sighted
+audition, and FL Studio loaded and processed the VST3 successfully. Exact conditions and
+the v1 comparison history are in [room-body.md](docs/room-body.md). Audio and rendered
+demonstrations remain globally ignored. CPU/memory evidence, release packaging and the
+Steinberg validator remain public-alpha gates.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

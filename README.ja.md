@@ -8,7 +8,7 @@ English: [README.md](README.md)
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | 声に特化した3Dバイノーラル空間化 — [readme](plugins/binaural/README.md) |
 | **NekoSpace CleanVoice** | 試作 | 囁き向けノイズ除去、アプリ + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | Room Body v2 試聴可能 | 採用済み16-lineテール＋音量整合した一次反射試聴＋Wet専用Mono Input、オーナー試聴待ち — [設計](plugins/reverb/README.md) |
+| **NekoSpace Reverb** | オーナー試聴版 | 自然な16-line Room Body＋6つの初期プリセット、VST3＋Player — [readme](plugins/reverb/README.md) |
 | NekoSpace Room | 予定 | |
 | NekoSpace Delay | 予定 | |
 
@@ -43,6 +43,24 @@ alphaにゃ。パラメーターID・プラグインコード・選択肢リス�
 同じプレビュー範囲を **Original / Clean / Removed Noise** で聴き比べてから全体を処理するにゃ。
 全チャンネルへ同じスペクトルゲインを掛けるので、ノイズ除去でバイノーラル定位を溶かさない設計にゃ。
 使い方と現時点の制限は [CleanVoice readme](plugins/cleanvoice/README.md) にまとまってるにゃ。
+
+## Reverb オーナー試聴版
+
+**NekoSpace Reverb** は、Binauralの追加ページではなく、声を中心に考えた独立アルゴリズム
+リバーブにゃ。6つの一次反射と、採用済みの決定論的16-lineテールを組み合わせているにゃ。
+Space、Distance、Definition、Pre-delay、3帯域の減衰、Mixを操作でき、Mono Inputは
+**ウェット入力だけ**をモノラル化するので、ドライのステレオ像は壊さないにゃ。
+
+初期プリセットは **Default / Voice Booth / Small Wood Room / Dialogue Stage /
+Soft Chamber / Open Hall** の6つにゃ。選択すると音を決める値を全部設定し、どれかを動かすと
+`Custom`、`Reset`でDefaultへ戻るにゃ。保存するのは名前ではなく実際の値なので、将来
+プリセット名や調整値が変わっても古いセッションの音は勝手に変わらないにゃ。
+
+2026-08-28に現在のVST3をFL Studioで読み込み・音声処理確認し、オーナーの目視試聴では
+現在の響きを自然な方向として採用したにゃ。ただし、これは公開alpha完成という意味ではないにゃ。
+CPU／メモリ計測、最終パラメーター凍結、配布パッケージ、残りのvalidator確認は別のゲートにゃ。
+Remotion＋VOICEVOXの解説動画は再現できるコードだけを公開し、録画・生成音声・完成動画は
+Gitから除外しているにゃ。
 
 ## もう少し詳しく
 
@@ -101,7 +119,7 @@ nekospace-audio/
 ├─ plugins/          製品ごとに1ディレクトリ、自己完結
 │  ├─ binaural/      src, tests, docs, tools, resources
 │  ├─ cleanvoice/    JUCE非依存DSP/CLI＋JUCEスタンドアロンGUI
-│  └─ reverb/        設計契約＋JUCE非依存のPhase 0解析基盤
+│  └─ reverb/        独立DSP＋VST3／Standalone＋ファイルPlayer＋解析基盤
 ├─ shared/           複数プラグインが実際に必要としたコードだけ
 ├─ docs/             製品横断の契約
 ├─ video/            Remotionソース、非公開素材と完成動画は除外

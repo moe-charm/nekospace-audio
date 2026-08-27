@@ -28,6 +28,18 @@ npx remotion render NekoSpaceBinauralDemo out/NekoSpace_Binaural_demo_final.mp4
 
 Adjust the event ranges in `src/Composition.tsx` when a new recording is made.
 
+The Reverb preset demonstration uses composition `NekoSpaceReverbDemo`, source timing in
+`src/ReverbComposition.tsx`, and the ignored local asset
+`public/NekoSpace_Reverb_demo_cut.mp4`.
+
+Generate and render it with:
+
+```console
+npm run narration:reverb
+npm run lint
+npx remotion render NekoSpaceReverbDemo out/NekoSpace_Reverb_demo_final.mp4
+```
+
 Generate the seven narration clips while the local VOICEVOX engine is running:
 
 ```console

@@ -70,20 +70,26 @@ Definition, Envelopment, Motion, Pre-delay, Mono Input, Ducking, Mix
 Like Binaural, a factory preset must set every sound-shaping control it owns. Loading the
 same preset from two different starting states must produce the same room.
 
-## Candidate factory scenes
+## Initial factory presets
 
-These names are design probes, not a frozen shipping list:
+The owner-audition build ships a deliberately small set. These are useful starting points,
+not claims that the room models have completed final voicing:
 
-- **Voice Booth** — very short, defined, minimal late field;
-- **Small Wood Room** — compact geometry, warm early field, controlled tail;
-- **Tiled Bathroom** — small Space with longer bright Decay, proving those controls are
-  independent;
-- **Stairwell** — long, narrow, reflection-led onset;
-- **Dialogue Stage** — clear late-only ducking and restrained envelopment;
-- **Soft Chamber** — diffuse, dark, intimate;
-- **Open Hall** — slower density buildup and broad late field;
-- **Headphone Embrace** — binaural envelopment demonstration, never the default speaker
-  preset.
+| Preset | Space | Distance | Definition | Pre-delay | Decay | Bass Tail | Air Tail | Mix |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Default | 35% | 25% | 65% | 12 ms | 1.40 s | 100% | 70% | 35% |
+| Voice Booth | 18% | 18% | 88% | 4 ms | 0.38 s | 85% | 58% | 18% |
+| Small Wood Room | 32% | 30% | 70% | 8 ms | 0.85 s | 125% | 62% | 28% |
+| Dialogue Stage | 45% | 38% | 82% | 18 ms | 1.15 s | 95% | 55% | 24% |
+| Soft Chamber | 52% | 22% | 48% | 10 ms | 1.85 s | 135% | 42% | 34% |
+| Open Hall | 78% | 58% | 42% | 32 ms | 3.20 s | 120% | 78% | 38% |
+
+Every factory preset sets every sound-shaping parameter, turns Bypass off, turns Wet Mono
+Input off, and returns the unsaved audition bus to Room Body. `RESET` applies `Default`.
+
+The saved state remains parameter-authoritative: no preset name is serialized. Therefore a
+session recalls its exact values even if a factory preset is renamed or retuned later. Moving
+any control away from a factory tuple makes the selector display `Custom`.
 
 ## Automation rules
 

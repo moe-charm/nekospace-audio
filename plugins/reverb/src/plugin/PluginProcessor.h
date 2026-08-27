@@ -6,6 +6,7 @@
 #include <atomic>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "../dsp/RoomBodyCore.h"
+#include "FactoryPresets.h"
 
 namespace nsr::pid
 {
@@ -52,6 +53,8 @@ public:
     void setAuditionMode (nsr::RoomBodyAuditionMode mode) noexcept
     { auditionMode.store (static_cast<int> (mode), std::memory_order_relaxed); }
     nsr::RoomBodyAuditionMode getAuditionMode() const noexcept;
+    void applyFactoryPreset (int presetIndex);
+    int getMatchingFactoryPreset() const noexcept;
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -67,6 +70,7 @@ private:
     std::atomic<int> auditionMode {
         static_cast<int> (nsr::RoomBodyAuditionMode::roomBody)
     };
+    std::atomic<unsigned int> presetWriteSequence { 0 };
 
     std::atomic<float>* pBypass = nullptr;
     std::atomic<float>* pSpace = nullptr;

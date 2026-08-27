@@ -18,6 +18,26 @@ NekoSpaceReverbEditor::NekoSpaceReverbEditor (NekoSpaceReverbProcessor& p)
     notice.setColour (Label::textColourId, Colour (0xff9f9992));
     for (auto* label : { &title, &subtitle, &notice }) addAndMakeVisible (*label);
 
+    preset.setTextWhenNothingSelected ("Custom");
+    for (std::size_t i = 0; i < nsr::factoryPresets.size(); ++i)
+        preset.addItem (nsr::factoryPresets[i].name, static_cast<int> (i) + 1);
+    preset.onChange = [this]
+    {
+        const int index = preset.getSelectedId() - 1;
+        if (index >= 0)
+            processor.applyFactoryPreset (index);
+        updateAuditionButtons();
+        updatePresetDisplay();
+    };
+    addAndMakeVisible (preset);
+    reset.onClick = [this]
+    {
+        processor.applyFactoryPreset (0);
+        updateAuditionButtons();
+        updatePresetDisplay();
+    };
+    addAndMakeVisible (reset);
+
     addKnob (space, spaceLabel, "SPACE", nsr::pid::space, spaceAttachment);
     addKnob (distance, distanceLabel, "DISTANCE", nsr::pid::distance, distanceAttachment);
     addKnob (definition, definitionLabel, "DEFINITION", nsr::pid::definition,
@@ -60,7 +80,26 @@ NekoSpaceReverbEditor::NekoSpaceReverbEditor (NekoSpaceReverbProcessor& p)
         updateAuditionButtons();
     };
     updateAuditionButtons();
+    updatePresetDisplay();
+    startTimerHz (10);
     setSize (900, 520);
+}
+
+void NekoSpaceReverbEditor::timerCallback()
+{
+    updatePresetDisplay();
+}
+
+void NekoSpaceReverbEditor::updatePresetDisplay()
+{
+    const int matching = processor.getMatchingFactoryPreset();
+    if (matching >= 0)
+        preset.setSelectedId (matching + 1, juce::dontSendNotification);
+    else
+    {
+        preset.setSelectedId (0, juce::dontSendNotification);
+        preset.setText ("Custom", juce::dontSendNotification);
+    }
 }
 
 void NekoSpaceReverbEditor::addKnob (Slider& slider, Label& label, const String& text,
@@ -123,6 +162,8 @@ void NekoSpaceReverbEditor::resized()
 {
     title.setBounds (24, 15, 430, 36);
     subtitle.setBounds (26, 49, 500, 22);
+    preset.setBounds (500, 25, 165, 30);
+    reset.setBounds (673, 25, 82, 30);
     bypass.setBounds (770, 25, 100, 30);
     notice.setBounds (31, 79, 835, 25);
     constexpr int startX = 35, width = 175, gap = 35;

@@ -315,8 +315,9 @@ gain reference with maximum error 0, and each path converges after exactly 2400 
 The complete Release CTest set passed 7/7. pluginval 1.0.4 passed strictness 10,
 `--repeat 3` and `--randomise`; its VST3-validator subtest remained skipped because no
 Steinberg validator path is configured. VST3, Standalone and Player built, and the Player
-GUI was manually checked for layout, selection and notice updates. Only the sighted owner
-listening gate remains pending.
+GUI was manually checked for layout, selection and notice updates. The sighted owner
+listening gate was accepted on 2026-08-28. The VST3 also loaded and processed audio in
+FL Studio; this was a focused host smoke test, not the complete Phase 7 host matrix.
 
 ## Calibrating the provisional gates
 

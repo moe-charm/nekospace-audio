@@ -8,7 +8,7 @@ Audio plugins for voice work and audio drama. C++17 / JUCE / CMake, AGPLv3.
 | --- | --- | --- |
 | **NekoSpace Binaural** | v0.2.0-alpha | voice-focused 3D binaural spatializer — [readme](plugins/binaural/README.md) |
 | **NekoSpace CleanVoice** | prototype | noise removal for whispered voice, app + CLI — [readme](plugins/cleanvoice/README.md) |
-| **NekoSpace Reverb** | Room Body v2 audition ready | accepted 16-line tail, matched first-order room audition and wet-only Mono Input; owner listening pending — [design](plugins/reverb/README.md) |
+| **NekoSpace Reverb** | owner-audition prototype | natural-sounding 16-line Room Body, six factory starting points, VST3 + Player — [readme](plugins/reverb/README.md) |
 | NekoSpace Room | planned | |
 | NekoSpace Delay | planned | |
 
@@ -44,6 +44,26 @@ then audition the same preview range as **Original / Clean / Removed Noise** bef
 processing the full take. One shared spectral gain is applied to every channel so noise
 removal does not dissolve the binaural image. See the
 [CleanVoice readme](plugins/cleanvoice/README.md) for the workflow and current limits.
+
+## Reverb owner-audition prototype
+
+**NekoSpace Reverb** is a separate voice-focused algorithmic reverb, not another control
+page for Binaural. It combines six bounded first-order reflections with the accepted
+deterministic 16-line tail. The current surface provides Space, Distance, Definition,
+Pre-delay, three-band decay shaping, Mix and a wet-only Mono Input that never collapses
+the dry stereo path.
+
+Six complete factory starting points are included: **Default, Voice Booth, Small Wood
+Room, Dialogue Stage, Soft Chamber and Open Hall**. Selecting one sets the complete sound
+tuple; editing any value changes the selector to `Custom`, and `Reset` restores Default.
+Only values are saved, so a future preset rename cannot silently change an old session.
+
+On 2026-08-28 the current VST3 loaded and processed audio in FL Studio, and the owner
+accepted the present sound as natural in sighted audition. This proves the current audition
+direction, not public-alpha readiness: CPU/memory evidence, final parameter freeze, release
+packaging and the remaining validator gate still come later. The repository contains a
+reproducible Remotion/VOICEVOX demo composition, while recordings, narration WAVs and
+rendered videos stay private and ignored.
 
 ## A closer look
 
@@ -110,7 +130,7 @@ nekospace-audio/
 ├─ plugins/          one directory per product, self-contained
 │  ├─ binaural/      src, tests, docs, tools, resources
 │  ├─ cleanvoice/    JUCE-free DSP/CLI plus a JUCE standalone GUI
-│  └─ reverb/        independent JUCE-free core + analysis harness
+│  └─ reverb/        independent core, VST3/Standalone, file Player and analysis harness
 ├─ shared/           product-neutral DSP proven by multiple consumers
 ├─ docs/             contracts that apply across products
 ├─ video/            Remotion source; private media and renders stay ignored

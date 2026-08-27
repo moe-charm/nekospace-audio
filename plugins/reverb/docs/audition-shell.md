@@ -116,5 +116,6 @@ Those checks record the completed Phase 3.5 history. At `84a4df4`, Room Body v2'
 Input, three continuously running modes, fixed matching and bounded retune passed their
 DSP/state tests; the complete Release CTest set passed 7/7 and pluginval 1.0.4 passed
 strictness 10 for three randomised VST3 repeats. The real Player layout and each new
-control were checked manually. Matched owner listening is still pending; see
-[room-body.md](room-body.md). The Steinberg validator remains unconfigured.
+control were checked manually. Matched sighted owner listening was accepted on 2026-08-28,
+and FL Studio loaded and processed the VST3; see [room-body.md](room-body.md). The full
+Phase 7 host matrix and Steinberg validator remain incomplete.

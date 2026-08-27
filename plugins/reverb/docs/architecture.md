@@ -1,7 +1,7 @@
 # NekoSpace Reverb — Architecture
 
-Status: **design contract; 16-line late field selected, Room Body v2 implemented and
-engineering-validated, matched owner audition pending**.
+Status: **design contract; 16-line late field selected, Room Body v2 implemented,
+engineering-validated and accepted in sighted matched owner audition**.
 
 This document defines the product boundary and the signal-processing architecture. It is
 binding unless a later measured result is recorded here with the reason for the change.
@@ -329,9 +329,9 @@ At `84a4df4`, Room Body v2's state, bus identity, all directed mode transitions,
 Input, mono compatibility and fixed matching checks passed. The complete Release CTest
 set passed 7/7 and pluginval 1.0.4 passed strictness 10 for three randomised VST3 repeats.
 The actual Player layout and button/checkbox interaction were checked manually. The
-matched owner audition remains the only Phase 4A.1 gate not complete; see
-[room-body.md](room-body.md). The Steinberg VST3 validator remains unconfigured Phase 7
-work.
+matched owner audition was accepted on 2026-08-28; see [room-body.md](room-body.md).
+The CPU/memory record, packaging work and Steinberg VST3 validator remain later release
+gates.
 
 ## Reuse from Binaural
 

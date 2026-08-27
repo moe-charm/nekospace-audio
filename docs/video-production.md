@@ -102,3 +102,35 @@ npx remotion render NekoSpaceBinauralDemo out/NekoSpace_Binaural_demo_final.mp4
 Review the rendered MP4 with headphones. Confirm that it contains a stereo AAC
 track, captions match the visible controls, narration does not mask the movement,
 and the VOICEVOX credit is legible before publishing.
+
+## Reverb preset demonstration
+
+The Reverb demonstration is a separate composition so the published Binaural video remains
+reproducible and unchanged.
+
+- Composition ID: `NekoSpaceReverbDemo`
+- Private source recording: user-local capture, deliberately not named or tracked here
+- Local cut: `video/public/NekoSpace_Reverb_demo_cut.mp4`
+- Output: `video/out/NekoSpace_Reverb_demo_final.mp4`
+- Size: 1360 x 884, 30 fps
+- Structure: 10-second introduction, 86-second operation montage, 5-second credit card
+
+The montage keeps Default and each factory preset for six to seven seconds, then demonstrates
+Tail Only, Room Body, Mix 100%, ER Solo, Wet Mono Input and Reset. Long tool-operation waits
+from the 473-second source recording are intentionally removed. The source and cut remain
+ignored private media; only narration text, captions, timing and composition code are tracked.
+
+The current loop recording is the short **feature tour**: its regular rhythm makes fast
+preset comparisons easy. A later **sound-quality demo** should use two separately cleared
+sources: an owned, CC0 or otherwise licensed classical-style piano/strings passage for Hall,
+Decay and Tail, plus owned voice material for the product's main use case. An old composition
+is not enough by itself; the particular performance and recording must also be cleared.
+
+With VOICEVOX running locally:
+
+```console
+cd video
+npm run narration:reverb
+npm run lint
+npx remotion render NekoSpaceReverbDemo out/NekoSpace_Reverb_demo_final.mp4
+```

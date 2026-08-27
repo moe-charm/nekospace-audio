@@ -54,6 +54,33 @@ int main()
            < 0.001f, "Wet Mono Input defaults Off");
     check (processor.getAuditionMode() == nsr::RoomBodyAuditionMode::roomBody,
            "Room Body is the fresh-instance audition default");
+    check (processor.getMatchingFactoryPreset() == 0,
+           "fresh parameter tuple matches the Default factory preset");
+
+    {
+        setPlain (processor, nsr::pid::space, 99.0f);
+        setPlain (processor, nsr::pid::mix, 1.0f);
+        setPlain (processor, nsr::pid::wetMonoInput, 1.0f);
+        setPlain (processor, nsr::pid::bypass, 1.0f);
+        processor.setAuditionMode (nsr::RoomBodyAuditionMode::earlyOnly);
+        processor.applyFactoryPreset (2);
+        const auto& expected = nsr::factoryPresets[2];
+        check (processor.getMatchingFactoryPreset() == 2,
+               "factory preset applies a complete deterministic tuple");
+        check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::decay)->load()
+                        - expected.decaySeconds) < 0.001f,
+               "factory preset applies its Decay value");
+        check (processor.apvts.getRawParameterValue (nsr::pid::bypass)->load() < 0.5f,
+               "factory preset clears Bypass");
+        check (processor.apvts.getRawParameterValue (nsr::pid::wetMonoInput)->load() < 0.5f,
+               "factory preset clears Wet Mono Input");
+        check (processor.getAuditionMode() == nsr::RoomBodyAuditionMode::roomBody,
+               "factory preset returns the diagnostic bus to Room Body");
+        setPlain (processor, nsr::pid::space, expected.space + 1.0f);
+        check (processor.getMatchingFactoryPreset() == -1,
+               "editing a factory tuple is reported as Custom");
+        processor.applyFactoryPreset (0);
+    }
 
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());

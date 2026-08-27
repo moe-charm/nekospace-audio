@@ -5,7 +5,8 @@
 #include "PluginProcessor.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
-class NekoSpaceReverbEditor final : public juce::AudioProcessorEditor
+class NekoSpaceReverbEditor final : public juce::AudioProcessorEditor,
+                                    private juce::Timer
 {
 public:
     explicit NekoSpaceReverbEditor (NekoSpaceReverbProcessor&);
@@ -18,6 +19,8 @@ private:
     void addKnob (juce::Slider&, juce::Label&, const juce::String&, const char*,
                   std::unique_ptr<SliderAttachment>&);
     void updateAuditionButtons();
+    void timerCallback() override;
+    void updatePresetDisplay();
 
     NekoSpaceReverbProcessor& processor;
     juce::Label title, subtitle, notice;
@@ -25,6 +28,8 @@ private:
     juce::Label spaceLabel, distanceLabel, definitionLabel, preDelayLabel,
                 decayLabel, bassLabel, airLabel, mixLabel;
     juce::ToggleButton bypass, monoInput;
+    juce::ComboBox preset;
+    juce::TextButton reset { "RESET" };
     juce::TextButton tailOnly { "TAIL ONLY" }, roomBody { "ROOM BODY" }, erSolo { "ER SOLO" };
     std::unique_ptr<SliderAttachment> spaceAttachment, distanceAttachment,
                                       definitionAttachment, preDelayAttachment,

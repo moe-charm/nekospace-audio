@@ -1,7 +1,7 @@
 # NekoSpace Reverb — Room Body Prototype
 
 Status: **Room Body v1 baseline recorded; Room Body v2 implemented and
-engineering-validated at `84a4df4`; matched owner audition pending**.
+engineering-validated at `84a4df4`; sighted matched owner audition accepted 2026-08-28**.
 
 The accepted 16-line late field remains unchanged. Room Body v1 placed six first-order
 shoebox reflections in front of it. On 2026-08-24 the owner heard the difference, but
@@ -216,7 +216,17 @@ validator was not configured and its pluginval subtest was skipped.
 | Matching | default Tail/Body integrated wet levels differ by no more than `0.1 dB`; fixed gain and render conditions are recorded | PASS |
 | Regression | prior Room Body gates, complete Release CTest and pluginval are rerun | PASS |
 | GUI | real Player layout, selected states and mode notices respond correctly | PASS (manual) |
-| Listening | sighted, matched owner audition records accept/defer/remove; no blind test is required | PENDING |
+| Listening | sighted, matched owner audition records accept/defer/remove; no blind test is required | PASS — accepted as natural on 2026-08-28 |
+
+### Owner and host result — 2026-08-28
+
+The owner auditioned the current Room Body path and factory starting points through the
+real Player, described the result as natural, and accepted the present direction. Tail Only,
+Room Body, ER Solo at Mix 100%, and Wet Mono Input On/Off were demonstrated sighted; a blind
+test was neither requested nor required by this contract. The VST3 also loaded and processed
+audio successfully in FL Studio. This completes the Phase 4A.1 listening gate, but it is not
+evidence for the still-unmeasured public-alpha CPU/memory gate or the unconfigured Steinberg
+validator.
 
 The listening question is deliberately perceptual: does the matched Body sound more like
 a believable room boundary than Tail Only, not merely different or louder? If one bounded

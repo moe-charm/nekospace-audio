@@ -147,9 +147,10 @@ adding:
 **Current status:** implemented at `84a4df4`. State, transition, continuous hidden-bus,
 realtime, mono safety and fixed matching tests pass. The complete Release CTest set is
 7/7 and pluginval 1.0.4 passes strictness 10/repeat 3. Default matched Body/Tail differs by
-`-0.000064 dB`. One sighted matched owner audition remains. If it still sounds only like
-level/tone change, Phase 4A pauses for redesign. Order-2/3 and HRTF do not begin before
-this decision. The Steinberg validator remains an unconfigured Phase 7 gate.
+`-0.000064 dB`. The sighted matched owner audition was accepted as natural on 2026-08-28,
+and the VST3 loaded and processed audio in FL Studio. Phase 4A.1 is therefore complete.
+Order-2/3 and HRTF remain separate design decisions rather than automatic next steps. The
+CPU/memory record, release packaging and Steinberg validator remain later gates.
 
 ## Phase 5 — Late-field envelopment
 

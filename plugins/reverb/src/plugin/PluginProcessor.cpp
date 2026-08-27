@@ -145,6 +145,51 @@ nsr::RoomBodyAuditionMode NekoSpaceReverbProcessor::getAuditionMode() const noex
     return nsr::RoomBodyAuditionMode::roomBody;
 }
 
+void NekoSpaceReverbProcessor::applyFactoryPreset (int presetIndex)
+{
+    if (! juce::isPositiveAndBelow (presetIndex,
+                                    static_cast<int> (nsr::factoryPresets.size())))
+        return;
+
+    const auto& preset = nsr::factoryPresets[static_cast<std::size_t> (presetIndex)];
+    presetWriteSequence.fetch_add (1, std::memory_order_acq_rel); // odd: transaction open
+    auto setPlain = [this] (const char* id, float value)
+    {
+        if (auto* parameter = apvts.getParameter (id))
+            parameter->setValueNotifyingHost (parameter->convertTo0to1 (value));
+    };
+    setPlain (nsr::pid::bypass, 0.0f);
+    setPlain (nsr::pid::space, preset.space);
+    setPlain (nsr::pid::distance, preset.distance);
+    setPlain (nsr::pid::definition, preset.definition);
+    setPlain (nsr::pid::preDelay, preset.preDelayMs);
+    setPlain (nsr::pid::decay, preset.decaySeconds);
+    setPlain (nsr::pid::bassTail, preset.bassTailPercent);
+    setPlain (nsr::pid::airTail, preset.airTailPercent);
+    setPlain (nsr::pid::mix, preset.mixPercent);
+    setPlain (nsr::pid::wetMonoInput, preset.wetMonoInput ? 1.0f : 0.0f);
+    setAuditionMode (nsr::RoomBodyAuditionMode::roomBody);
+    presetWriteSequence.fetch_add (1, std::memory_order_release); // even: complete tuple visible
+}
+
+int NekoSpaceReverbProcessor::getMatchingFactoryPreset() const noexcept
+{
+    const auto near = [] (float a, float b) { return std::abs (a - b) < 0.0005f; };
+    for (std::size_t i = 0; i < nsr::factoryPresets.size(); ++i)
+    {
+        const auto& p = nsr::factoryPresets[i];
+        if (near (pSpace->load(), p.space) && near (pDistance->load(), p.distance)
+            && near (pDefinition->load(), p.definition)
+            && near (pPreDelay->load(), p.preDelayMs) && near (pDecay->load(), p.decaySeconds)
+            && near (pBassTail->load(), p.bassTailPercent)
+            && near (pAirTail->load(), p.airTailPercent) && near (pMix->load(), p.mixPercent)
+            && (pWetMonoInput->load() > 0.5f) == p.wetMonoInput
+            && pBypass->load() < 0.5f)
+            return static_cast<int> (i);
+    }
+    return -1;
+}
+
 void NekoSpaceReverbProcessor::prepareToPlay (double sampleRate, int maximumBlockSize)
 {
     preparedBlockSize = jmax (1, maximumBlockSize);
@@ -169,7 +214,15 @@ void NekoSpaceReverbProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
     if (inputChannels == 1 && buffer.getNumChannels() > 1)
         buffer.copyFrom (1, 0, buffer, 0, 0, sampleCount);
 
-    const auto settings = readSettings();
+    auto settings = lastSettings;
+    const auto sequenceBefore = presetWriteSequence.load (std::memory_order_acquire);
+    if ((sequenceBefore & 1u) == 0u)
+    {
+        const auto candidate = readSettings();
+        const auto sequenceAfter = presetWriteSequence.load (std::memory_order_acquire);
+        if (sequenceBefore == sequenceAfter)
+            settings = candidate;
+    }
     if (settings.space != lastSettings.space || settings.decaySeconds != lastSettings.decaySeconds
         || settings.bassTailRatio != lastSettings.bassTailRatio
         || settings.airTailRatio != lastSettings.airTailRatio
