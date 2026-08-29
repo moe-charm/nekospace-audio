@@ -41,6 +41,16 @@ int main()
 {
     juce::ScopedJuceInitialiser_GUI juce;
     NekoSpaceReverbProcessor processor;
+
+    check (processor.getNumPrograms() == static_cast<int> (nsr::factoryPresets.size()),
+           "host program list exposes every factory preset");
+    for (int i = 0; i < processor.getNumPrograms(); ++i)
+        check (processor.getProgramName (i).isNotEmpty(),
+               "every host-visible factory program has a name");
+    processor.setCurrentProgram (1);
+    check (processor.getCurrentProgram() == 1,
+           "host program selection applies and reports the selected preset");
+    processor.setCurrentProgram (0);
     processor.setPlayConfigDetails (2, 2, 48000.0, 127);
     processor.prepareToPlay (48000.0, 127);
 

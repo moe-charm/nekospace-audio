@@ -120,6 +120,28 @@ double NekoSpaceReverbProcessor::getTailLengthSeconds() const
                                 + pPreDelay->load() * 0.001f + 0.5f);
 }
 
+int NekoSpaceReverbProcessor::getNumPrograms()
+{
+    return static_cast<int> (nsr::factoryPresets.size());
+}
+
+int NekoSpaceReverbProcessor::getCurrentProgram()
+{
+    const auto matchingPreset = getMatchingFactoryPreset();
+    return matchingPreset >= 0 ? matchingPreset : 0;
+}
+
+void NekoSpaceReverbProcessor::setCurrentProgram (int index)
+{
+    applyFactoryPreset (index);
+}
+
+const String NekoSpaceReverbProcessor::getProgramName (int index)
+{
+    if (! isPositiveAndBelow (index, getNumPrograms())) return {};
+    return nsr::factoryPresets[static_cast<std::size_t> (index)].name;
+}
+
 nsr::RoomBodySettings NekoSpaceReverbProcessor::readSettings() const noexcept
 {
     nsr::RoomBodySettings settings;
