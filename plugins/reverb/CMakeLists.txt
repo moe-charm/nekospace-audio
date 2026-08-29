@@ -30,9 +30,13 @@ target_include_directories(nsr_dsp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(nsr_dsp INTERFACE nekospace_dsp)
 target_compile_features(nsr_dsp INTERFACE cxx_std_17)
 
+# Reverb has its own release cadence inside the suite monorepo. The prerelease suffix is
+# carried by its reverb-v* Git tag; JUCE platform versions use this numeric core.
+set(NEKOSPACE_REVERB_VERSION 0.1.0)
+
 # Room Body audition product: one processor/editor builds both VST3 and JUCE Standalone.
 juce_add_plugin(NekoSpaceReverb
-    VERSION ${PROJECT_VERSION}
+    VERSION ${NEKOSPACE_REVERB_VERSION}
     COMPANY_NAME "NekoSpace Audio"
     BUNDLE_ID "audio.nekospace.reverb"
     PLUGIN_MANUFACTURER_CODE NkSp
@@ -61,7 +65,7 @@ juce_add_gui_app(NekoSpaceReverbPlayer
     PRODUCT_NAME "NekoSpace Reverb Player"
     COMPANY_NAME "NekoSpace Audio"
     BUNDLE_ID "audio.nekospace.reverb-player"
-    VERSION ${PROJECT_VERSION})
+    VERSION ${NEKOSPACE_REVERB_VERSION})
 target_sources(NekoSpaceReverbPlayer PRIVATE player/Main.cpp)
 target_compile_definitions(NekoSpaceReverbPlayer PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0)

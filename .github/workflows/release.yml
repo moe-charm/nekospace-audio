@@ -1,66 +1,89 @@
 name: release
 
-# Cutting a release is deliberately a manual act: push a tag such as v0.1.0-alpha.
-# Nothing here runs on an ordinary commit.
+# Releases are deliberate tag actions. Legacy v* tags belong to Binaural; product-prefixed
+# tags let later suite members keep independent version numbers.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "reverb-v*"]
 
 permissions:
   contents: write
 
 jobs:
   windows:
-    # Pinned for reproducibility — see the note in ci.yml. A release must be built with
-    # a known toolchain, not with whatever the latest runner image happens to carry.
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
+      - name: Identify product
+        id: product
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -match '^reverb-v(.+)$') {
+            "name=reverb" >> $env:GITHUB_OUTPUT
+            "version=$($Matches[1])" >> $env:GITHUB_OUTPUT
+            "changelog=plugins/reverb/CHANGELOG.md" >> $env:GITHUB_OUTPUT
+          } elseif ($tag -match '^v(.+)$') {
+            "name=binaural" >> $env:GITHUB_OUTPUT
+            "version=$($Matches[1])" >> $env:GITHUB_OUTPUT
+            "changelog=CHANGELOG.md" >> $env:GITHUB_OUTPUT
+          } else {
+            throw "Unsupported release tag: $tag"
+          }
+
       - name: Configure
         run: cmake -B build -G "Visual Studio 17 2022" -A x64
 
-      - name: Build
-        run: cmake --build build --config Release
+      - name: Build Binaural
+        if: steps.product.outputs.name == 'binaural'
+        run: >-
+          cmake --build build --config Release --parallel 4 --target
+          NekoSpaceBinaural_VST3 NekoSpaceBinaural_Standalone nsb_tests
 
-      # A release that has not passed its own acceptance tests is not a release.
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Build Reverb
+        if: steps.product.outputs.name == 'reverb'
+        run: >-
+          cmake --build build --config Release --parallel 4 --target
+          NekoSpaceReverb_VST3 NekoSpaceReverb_Standalone NekoSpaceReverbPlayer
+          nsr_analysis_tests nekospace_reverb_analyze nsr_dsp_tests nsr_plugin_tests
+
+      - name: Test Binaural
+        if: steps.product.outputs.name == 'binaural'
+        run: ctest --test-dir build -C Release --output-on-failure -R '^binaural_dsp$'
+
+      - name: Test Reverb
+        if: steps.product.outputs.name == 'reverb'
+        run: ctest --test-dir build -C Release --output-on-failure -R '^reverb_'
 
       - name: Package
         shell: pwsh
-        run: |
-          $out = "dist/NekoSpaceBinaural-${{ github.ref_name }}-Windows-x64"
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          $art = "build/plugins/binaural/NekoSpaceBinaural_artefacts/Release"
-          Copy-Item -Recurse "$art/VST3/NekoSpace Binaural.vst3" $out
-          Copy-Item "$art/Standalone/NekoSpace Binaural.exe" $out
-          # AGPL section 4: a binary distribution carries its licence and its notices
-          Copy-Item LICENSE $out
-          Copy-Item CHANGELOG.md $out
-          Copy-Item README.md $out
-          Copy-Item docs/third-party-licenses.md $out
-          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip"
+        run: >-
+          ./cmake/package-release.ps1
+          -Product "${{ steps.product.outputs.name }}"
+          -Tag "${{ github.ref_name }}"
 
-      # The release notes are this version's section of the changelog, not the whole file.
-      # Pasting the whole file works exactly once — on the second release it buries the
-      # new entry under the old ones.
       - name: Release notes
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
-          $lines = Get-Content CHANGELOG.md
-          $start = ($lines | Select-String -SimpleMatch "## [$version]").LineNumber
-          if (-not $start) { throw "CHANGELOG.md has no section for $version" }
-          $rest = $lines[$start..($lines.Count - 1)]
-          $next = ($rest | Select-String -Pattern '^## \[').LineNumber | Select-Object -First 1
-          $body = if ($next) { $rest[0..($next - 2)] } else { $rest }
-          $body | Set-Content release-notes.md -Encoding utf8
+          $version = "${{ steps.product.outputs.version }}"
+          $lines = Get-Content -LiteralPath "${{ steps.product.outputs.changelog }}"
+          $heading = $lines | Select-String -Pattern "^## \[$([regex]::Escape($version))\]" | Select-Object -First 1
+          if (-not $heading) { throw "Changelog has no section for $version" }
+          $start = $heading.LineNumber - 1
+          $next = $null
+          for ($i = $start + 1; $i -lt $lines.Count; ++$i) {
+            if ($lines[$i] -match '^## \[') { $next = $i; break }
+          }
+          $end = if ($null -eq $next) { $lines.Count - 1 } else { $next - 1 }
+          $lines[$start..$end] | Set-Content release-notes.md -Encoding utf8
 
-      - name: Publish
+      - name: Publish draft
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/*.sha256.txt
           body_path: release-notes.md
-          draft: true          # review before it goes live
+          draft: true
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}

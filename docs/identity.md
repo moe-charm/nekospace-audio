@@ -49,11 +49,13 @@ shipped.
 
 ## The freeze point
 
-These codes become permanent at the **first tagged release, v0.1.0-alpha**. Up to that
-tag they are free to change; after it, changing either code gives the plugin a new
-identity and every project that used the old one stops finding it.
+These codes become permanent for each product at **that product's first tagged release**.
+Binaural froze at `v0.1.0-alpha`; Reverb will freeze at its intended first tag,
+`reverb-v0.1.0-alpha`. Up to a product's first tag its reserved code can still change;
+after it, changing the code gives the plug-in a new identity and every project that used
+the old one stops finding it.
 
-The same tag freezes the parameter IDs and the released choice option lists — see
+The same product tag freezes its parameter IDs and released choice option lists — see
 [parameter-contract.md](../plugins/binaural/docs/parameter-contract.md) and
 [state-format.md](state-format.md). Anything that needs changing should be changed
 before the tag, not after.

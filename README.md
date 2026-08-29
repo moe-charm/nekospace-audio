@@ -129,9 +129,11 @@ See [repository layout](docs/repo-layout.md) for ownership rules and
 
 ## Releases
 
-Pushing a `v*` tag runs the release workflow, builds and tests the declared release product,
-packages licences/notices and opens a draft GitHub Release. See
-[CHANGELOG.md](CHANGELOG.md) for frozen IDs and release history.
+Products have independent versions: legacy `v*` tags belong to Binaural and
+`reverb-v*` tags belong to Reverb. A matching tag builds and tests only that product,
+packages licences/notices and opens a draft GitHub Release. See the
+[release process](docs/release-process.md), [Binaural changelog](CHANGELOG.md) and
+[Reverb changelog](plugins/reverb/CHANGELOG.md).
 
 ## License
 
