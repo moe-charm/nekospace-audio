@@ -50,13 +50,14 @@ packaged public alpha.
     <td><a href="plugins/cleanvoice/README.md"><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoice interface"></a></td>
   </tr>
   <tr>
-    <td><strong>In development — DSP and UI working.</strong><br>Six early reflections, a deterministic 16-line tail and six factory starting points. VST3, Standalone and file Player share the real processor.</td>
+    <td><strong>In development — DSP and UI working.</strong><br>Six early reflections, a deterministic 16-line tail and six factory starting points. VST3, Standalone and file Player share the real processor.<br><a href="https://youtu.be/lT10UuXTyAE">Watch the 101-second feature tour</a>.</td>
     <td><strong>Prototype — offline app and CLI.</strong><br>Learn a noise-only region, then compare Original, Clean and Removed before processing the whole file.</td>
   </tr>
 </table>
 
-The Reverb feature-tour source is reproducible under [`video/`](video/README.md). A CleanVoice
-demo waits for representative noisy voice material cleared for publication. Private
+The published [Reverb feature tour](https://youtu.be/lT10UuXTyAE) is reproducible from the
+source under [`video/`](video/README.md). A CleanVoice demo waits for representative noisy
+voice material cleared for publication. Private
 recordings, generated narration and rendered media stay outside Git.
 
 ## Honest engineering

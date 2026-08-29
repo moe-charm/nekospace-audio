@@ -50,12 +50,13 @@ VST3エフェクトとDAW不要のStandalone入り。ヘッドフォン／イヤ
     <td><a href="plugins/cleanvoice/README.md"><img src="docs/images/cleanvoice-main.png" alt="NekoSpace CleanVoiceの画面"></a></td>
   </tr>
   <tr>
-    <td><strong>開発中 — DSPとUIは動作中。</strong><br>6つの初期反射、決定論的16-lineテール、6つの初期プリセット。VST3、Standalone、ファイルPlayerが本物のProcessorを共有するにゃ。</td>
+    <td><strong>開発中 — DSPとUIは動作中。</strong><br>6つの初期反射、決定論的16-lineテール、6つの初期プリセット。VST3、Standalone、ファイルPlayerが本物のProcessorを共有するにゃ。<br><a href="https://youtu.be/lT10UuXTyAE">101秒の機能紹介を見る</a>にゃ。</td>
     <td><strong>プロトタイプ — オフラインアプリとCLI。</strong><br>声のない区間を学習し、Original／Clean／Removedを比較してからファイル全体を処理するにゃ。</td>
   </tr>
 </table>
 
-Reverbの機能紹介は[`video/`](video/README.md)から再現できるにゃ。CleanVoiceのデモは、
+公開済みの[Reverb機能紹介](https://youtu.be/lT10UuXTyAE)は
+[`video/`](video/README.md)から再現できるにゃ。CleanVoiceのデモは、
 公開可能なノイズ入り声素材が決まってから制作するにゃ。仕事用録音、生成ナレーション、完成動画は
 Gitへ入れないにゃ。
 

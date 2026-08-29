@@ -26,6 +26,10 @@ permanent Phase 6 parameter contract or make the prototype a public alpha.
 
 ![NekoSpace Reverb](../../docs/images/reverb-main.png)
 
+▶ [Watch the 101-second feature tour on YouTube](https://youtu.be/lT10UuXTyAE)
+— headphones or earphones recommended. This is an operation and feature tour, not the final
+sound-quality comparison.
+
 ## What it is
 
 NekoSpace Reverb builds the space around an already positioned sound:

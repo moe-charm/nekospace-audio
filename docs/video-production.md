@@ -109,6 +109,7 @@ The Reverb demonstration is a separate composition so the published Binaural vid
 reproducible and unchanged.
 
 - Composition ID: `NekoSpaceReverbDemo`
+- Published demo: <https://youtu.be/lT10UuXTyAE>
 - Private source recording: user-local capture, deliberately not named or tracked here
 - Local cut: `video/public/NekoSpace_Reverb_demo_cut.mp4`
 - Output: `video/out/NekoSpace_Reverb_demo_final.mp4`
