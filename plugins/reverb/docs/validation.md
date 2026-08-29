@@ -66,6 +66,13 @@ mainly as slightly louder than Tail. The default static render measured approxim
 not acceptance targets. Room Body v2 must rerun the engineering gates after adding wet
 Mono Input, three-bus isolation, fixed matching and one bounded six-image retune.
 
+The first full 30-minute Release callback benchmark is recorded in
+[realtime-benchmark-2026-08-29.md](realtime-benchmark-2026-08-29.md). At clean commit
+`99cf6f7`, the actual processor at 48 kHz/64 samples recorded p99 at 2.7975% of the block
+budget, zero callback allocation/free, finite output and no private-memory growth. One of
+1,350,000 callbacks reached 28.815%, so the binding 25% worst-time gate remains **failed**.
+This is not rounded down or waived as an OS outlier without stronger evidence.
+
 ## Reproducible test render
 
 The JUCE-free test tool must render at least:
@@ -110,6 +117,10 @@ versioned.
 | CPU evidence | Release build records machine/CPU/compiler; at 48 kHz/64 samples callback p99 is at most 10% of buffer time and worst case at most 25% on the declared reference machine |
 
 The CPU percentages are a project budget, not a cross-machine performance promise.
+
+Run the manual Release benchmark with `nsr_realtime_bench`. It is intentionally not a
+CTest: shared CI hardware cannot provide a stable real-time scheduling gate. A versioned
+reference-machine report is required for each release candidate.
 
 ## Frequency-dependent T60
 

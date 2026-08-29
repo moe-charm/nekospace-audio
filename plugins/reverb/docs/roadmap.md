@@ -152,6 +152,11 @@ and the VST3 loaded and processed audio in FL Studio. Phase 4A.1 is therefore co
 Order-2/3 and HRTF remain separate design decisions rather than automatic next steps. The
 CPU/memory record, release packaging and Steinberg validator remain later gates.
 
+The CPU/memory record is now available in
+[realtime-benchmark-2026-08-29.md](realtime-benchmark-2026-08-29.md). Allocation, memory,
+finite output and p99 pass, but one callback reached 28.815% against the binding 25%
+worst-time limit. Phase 7 therefore remains open; the result is evidence, not a waiver.
+
 ## Phase 5 — Late-field envelopment
 
 Implement the measured frequency-dependent coherence stage behind Binaural output mode.
@@ -182,6 +187,11 @@ Steinberg validator when available.
 **Exit:** every binding gate in [validation.md](validation.md) passes, provisional acoustic
 targets are either calibrated and frozen or explicitly waived with evidence, release
 artifacts contain licences/notices, and no private media is tracked.
+
+**Current status:** FL Studio and pluginval smoke checks pass. The first versioned
+30-minute benchmark passes allocation, memory, finite-output and p99 checks but fails the
+worst-time gate by one callback. Steinberg validation and release packaging have not yet
+been completed.
 
 ## Post-v1 research queue
 

@@ -72,6 +72,8 @@ multi-slope decay and a configurable feedback matrix.
   invariants; parameter IDs are deliberately not frozen yet.
 - [Validation](docs/validation.md) — measurement harness, hard safety gates and provisional
   acoustic targets.
+- [30-minute realtime benchmark](docs/realtime-benchmark-2026-08-29.md) — actual processor
+  CPU distribution, callback allocation, process memory and the still-open worst-time gate.
 - [8-line baseline findings](docs/baseline-8line.md) — the first reproducible 48 kHz
   measurement and what it says about the current tail.
 - [Phase 3 network decision](docs/phase3-network-decision.md) — level-matched 8/16-line
@@ -145,6 +147,8 @@ real Player. On 2026-08-28 the owner accepted the current direction as natural i
 audition, and FL Studio loaded and processed the VST3 successfully. Exact conditions and
 the v1 comparison history are in [room-body.md](docs/room-body.md). Audio and rendered
 demonstrations remain globally ignored. CPU/memory evidence, release packaging and the
-Steinberg validator remain public-alpha gates.
+Steinberg validator remain public-alpha gates. The first 30-minute Release run records
+p99 at 2.7975%, zero callback allocation/free and no memory growth, but formally fails the
+25% worst-time gate because one of 1,350,000 callbacks reached 28.815%.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.
