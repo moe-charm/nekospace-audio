@@ -78,6 +78,8 @@ multi-slope decay and a configurable feedback matrix.
   acoustic targets.
 - [30-minute realtime benchmark](docs/realtime-benchmark-2026-08-29.md) — actual processor
   CPU distribution, callback allocation, process memory and the still-open worst-time gate.
+- [0.1.0-alpha readiness](docs/release-readiness-0.1.0-alpha.md) — explicit PASS/OPEN/FAIL
+  table and the current no-tag decision.
 - [8-line baseline findings](docs/baseline-8line.md) — the first reproducible 48 kHz
   measurement and what it says about the current tail.
 - [Phase 3 network decision](docs/phase3-network-decision.md) — level-matched 8/16-line
