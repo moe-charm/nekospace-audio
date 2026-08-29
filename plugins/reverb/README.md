@@ -69,7 +69,11 @@ multi-slope decay and a configurable feedback matrix.
 - [Architecture](docs/architecture.md) — product boundary, signal path and binding DSP
   decisions.
 - [Control design](docs/control-design.md) — provisional user controls and their DSP
-  invariants; parameter IDs are deliberately not frozen yet.
+  invariants, including longer-term controls outside the first alpha.
+- [Parameter contract](docs/parameter-contract.md) — the ten host-facing alpha controls,
+  permanent IDs, ranges, defaults and order.
+- [State format](docs/state-format.md) — formal schema 1 plus the schema-0 development-state
+  bridge.
 - [Validation](docs/validation.md) — measurement harness, hard safety gates and provisional
   acoustic targets.
 - [30-minute realtime benchmark](docs/realtime-benchmark-2026-08-29.md) — actual processor

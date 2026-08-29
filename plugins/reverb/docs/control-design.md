@@ -1,11 +1,12 @@
 # NekoSpace Reverb — Control Design
 
-Status: **provisional names and semantics; not a parameter contract**.
+Status: **long-term control research plus a frozen-alpha subset**.
 
-No parameter ID, range, default, choice order or preset format is frozen by this document.
-Those are created only after the DSP baseline and listening prototypes exist. Once the
-first release freezes them, the repository-wide [state rules](../../../docs/state-format.md)
-apply permanently.
+This document still describes controls that may be researched after the first alpha. The
+ten controls implemented for that alpha are defined normatively in
+[parameter-contract.md](parameter-contract.md); this broader design must not silently
+change those IDs, ranges or meanings. Once the first release freezes them, the
+repository-wide [state rules](../../../docs/state-format.md) apply permanently.
 
 ## Main controls
 
@@ -104,9 +105,9 @@ any control away from a factory tuple makes the selector display `Custom`.
 - No control may allocate, lock or rebuild a variable-size container from the host's
   parameter callback or audio callback.
 
-## Before IDs are frozen
+## Questions for later appended controls
 
-The Phase 6 parameter contract must answer and test these open questions:
+These questions remain relevant to controls that are not in the alpha contract:
 
 1. Does `Distance` remain distinct enough from `Definition` in real voice material?
 2. Does `Envelopment` need one shared range for Stereo and Binaural, or separate IDs so

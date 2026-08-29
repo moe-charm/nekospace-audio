@@ -68,6 +68,55 @@ int main()
            "fresh parameter tuple matches the Default factory preset");
 
     {
+        juce::MemoryBlock freshState;
+        processor.getStateInformation (freshState);
+        auto freshXml = juce::AudioProcessor::getXmlFromBinary (
+            freshState.getData(), static_cast<int> (freshState.getSize()));
+        check (freshXml != nullptr && freshXml->hasTagName ("NekoSpaceReverbState"),
+               "fresh state uses the formal Reverb root");
+        check (freshXml != nullptr && freshXml->getIntAttribute ("schemaVersion") == 1,
+               "fresh state declares schema 1");
+    }
+
+    {
+        juce::MemoryBlock currentState;
+        processor.getStateInformation (currentState);
+        auto currentXml = juce::AudioProcessor::getXmlFromBinary (
+            currentState.getData(), static_cast<int> (currentState.getSize()));
+        auto currentTree = currentXml != nullptr ? juce::ValueTree::fromXml (*currentXml)
+                                                 : juce::ValueTree();
+        juce::ValueTree legacyTree { "NekoSpaceReverbPrototypeState" };
+        legacyTree.copyPropertiesAndChildrenFrom (currentTree, nullptr);
+        legacyTree.setProperty ("schemaVersion", 0, nullptr);
+        for (int child = 0; child < legacyTree.getNumChildren(); ++child)
+            if (legacyTree.getChild (child).getProperty ("id").toString() == nsr::pid::space)
+                legacyTree.getChild (child).setProperty ("value", 61.0f, nullptr);
+        juce::MemoryBlock legacyState;
+        if (auto legacyXml = legacyTree.createXml())
+            juce::AudioProcessor::copyXmlToBinary (*legacyXml, legacyState);
+        processor.setStateInformation (legacyState.getData(), static_cast<int> (legacyState.getSize()));
+        check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::space)->load() - 61.0f)
+               < 0.001f, "schema-0 prototype state remains readable");
+        juce::MemoryBlock migratedState;
+        processor.getStateInformation (migratedState);
+        auto migratedXml = juce::AudioProcessor::getXmlFromBinary (
+            migratedState.getData(), static_cast<int> (migratedState.getSize()));
+        check (migratedXml != nullptr && migratedXml->hasTagName ("NekoSpaceReverbState"),
+               "prototype state is emitted under the formal root after loading");
+        check (migratedXml != nullptr && migratedXml->getIntAttribute ("schemaVersion") == 1,
+               "prototype state migrates to schema 1");
+
+        juce::XmlElement unrelated { "AnotherPluginState" };
+        juce::MemoryBlock unrelatedState;
+        juce::AudioProcessor::copyXmlToBinary (unrelated, unrelatedState);
+        processor.setStateInformation (unrelatedState.getData(),
+                                       static_cast<int> (unrelatedState.getSize()));
+        check (std::abs (processor.apvts.getRawParameterValue (nsr::pid::space)->load() - 61.0f)
+               < 0.001f, "an unrelated state root is rejected without changing parameters");
+        processor.applyFactoryPreset (0);
+    }
+
+    {
         setPlain (processor, nsr::pid::space, 99.0f);
         setPlain (processor, nsr::pid::mix, 1.0f);
         setPlain (processor, nsr::pid::wetMonoInput, 1.0f);

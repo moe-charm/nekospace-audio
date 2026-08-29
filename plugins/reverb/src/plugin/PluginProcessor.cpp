@@ -8,6 +8,10 @@ using namespace juce;
 
 namespace
 {
+const Identifier formalStateType { "NekoSpaceReverbState" };
+const Identifier legacyPrototypeStateType { "NekoSpaceReverbPrototypeState" };
+constexpr int currentStateSchema = 1;
+
 // JUCE's AudioParameterBool intentionally retains arbitrary host-normalised values even
 // though its semantic value is boolean. Its NormalisableRange snaps the APVTS state to
 // 0/1, so an editor-open save/restore can leave the raw host value unrestored. Keeping the
@@ -93,9 +97,9 @@ AudioProcessorValueTreeState::ParameterLayout NekoSpaceReverbProcessor::createLa
 NekoSpaceReverbProcessor::NekoSpaceReverbProcessor()
     : AudioProcessor (BusesProperties().withInput ("Input", AudioChannelSet::stereo(), true)
                                        .withOutput ("Output", AudioChannelSet::stereo(), true)),
-      apvts (*this, nullptr, "NekoSpaceReverbPrototypeState", createLayout())
+      apvts (*this, nullptr, formalStateType, createLayout())
 {
-    apvts.state.setProperty ("schemaVersion", 0, nullptr);
+    apvts.state.setProperty ("schemaVersion", currentStateSchema, nullptr);
     auto raw = [this] (const char* id) { return apvts.getRawParameterValue (id); };
     pBypass = raw (nsr::pid::bypass); pSpace = raw (nsr::pid::space);
     pDecay = raw (nsr::pid::decay); pBassTail = raw (nsr::pid::bassTail);
@@ -307,7 +311,20 @@ void NekoSpaceReverbProcessor::getStateInformation (MemoryBlock& destination)
 void NekoSpaceReverbProcessor::setStateInformation (const void* data, int size)
 {
     if (auto xml = getXmlFromBinary (data, size))
-        if (xml->hasTagName (apvts.state.getType())) apvts.replaceState (ValueTree::fromXml (*xml));
+    {
+        auto restored = ValueTree::fromXml (*xml);
+        if (! restored.isValid()
+            || (restored.getType() != formalStateType
+                && restored.getType() != legacyPrototypeStateType))
+            return;
+
+        ValueTree migrated { formalStateType };
+        migrated.copyPropertiesAndChildrenFrom (restored, nullptr);
+        const int sourceSchema = static_cast<int> (migrated.getProperty ("schemaVersion", 0));
+        if (sourceSchema <= currentStateSchema)
+            migrated.setProperty ("schemaVersion", currentStateSchema, nullptr);
+        apvts.replaceState (migrated);
+    }
 }
 
 AudioProcessorEditor* NekoSpaceReverbProcessor::createEditor()
