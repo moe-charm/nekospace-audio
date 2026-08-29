@@ -137,7 +137,8 @@ stereo and the output bus unchanged. All mode and input transitions are specifie
 The owner-audition UI also provides six complete factory starting points: `Default`,
 `Voice Booth`, `Small Wood Room`, `Dialogue Stage`, `Soft Chamber` and `Open Hall`.
 `Reset` applies Default. Preset names are not serialized; the authoritative APVTS values
-are saved, and editing any member of a known tuple displays `Custom`.
+are saved, and editing any member of a known tuple displays `Custom`. The same six names
+are exposed to VST3 hosts as factory programs.
 
 At `84a4df4`, Room Body v2 passed the complete Release CTest set 7/7 and pluginval 1.0.4
 at strictness 10 for three randomised VST3 repeats. The matched default Body/Tail
@@ -149,6 +150,8 @@ the v1 comparison history are in [room-body.md](docs/room-body.md). Audio and re
 demonstrations remain globally ignored. CPU/memory evidence, release packaging and the
 Steinberg validator remain public-alpha gates. The first 30-minute Release run records
 p99 at 2.7975%, zero callback allocation/free and no memory growth, but formally fails the
-25% worst-time gate because one of 1,350,000 callbacks reached 28.815%.
+25% worst-time gate because one of 1,350,000 callbacks reached 28.815%. Steinberg
+Validator 3.8.1 extensive mode passes 537/537 after its first run exposed and prompted a
+fix for an unnamed factory-program entry.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

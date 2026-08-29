@@ -188,10 +188,11 @@ Steinberg validator when available.
 targets are either calibrated and frozen or explicitly waived with evidence, release
 artifacts contain licences/notices, and no private media is tracked.
 
-**Current status:** FL Studio and pluginval smoke checks pass. The first versioned
-30-minute benchmark passes allocation, memory, finite-output and p99 checks but fails the
-worst-time gate by one callback. Steinberg validation and release packaging have not yet
-been completed.
+**Current status:** FL Studio and pluginval smoke checks pass. Steinberg Validator 3.8.1
+first exposed an unnamed host-program bug; after `c8e14da`, the extensive/local-instance
+run passes 537/537. The first versioned 30-minute benchmark passes allocation, memory,
+finite-output and p99 checks but fails the worst-time gate by one callback. Release
+packaging has not yet been completed.
 
 ## Post-v1 research queue
 

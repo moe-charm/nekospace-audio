@@ -330,6 +330,13 @@ GUI was manually checked for layout, selection and notice updates. The sighted o
 listening gate was accepted on 2026-08-28. The VST3 also loaded and processed audio in
 FL Studio; this was a focused host smoke test, not the complete Phase 7 host matrix.
 
+The missing validator gate was run separately on 2026-08-29 with Steinberg VST3 SDK
+`v3.8.1_build_84`, built from Steinberg's official repository. Its first extensive run
+found one real metadata failure: JUCE exposed one unnamed host program even though the UI
+owned six named factory presets. Commit `c8e14da` makes those same six presets the
+host-visible program list and adds a regression test. A clean Release VST3 then passed
+the validator's `-e -l` run: **537 tests passed, 0 failed**, exit code 0.
+
 ## Calibrating the provisional gates
 
 Before acoustic thresholds are frozen for v1:
