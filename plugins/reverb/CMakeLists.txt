@@ -106,6 +106,16 @@ add_test(NAME reverb_plugin COMMAND nsr_plugin_tests)
 add_executable(nsr_phase3_compare tools/phase3_compare.cpp)
 target_link_libraries(nsr_phase3_compare PRIVATE nsr_analysis)
 
+# Manual Release benchmark: the real processor callback, 30 minutes of simulated 48 kHz / 64
+# sample automation, allocation/free instrumentation, latency percentiles and process memory.
+# It is deliberately not a CTest because shared CI hardware cannot be a stable realtime gate.
+add_executable(nsr_realtime_bench tools/realtime_bench.cpp)
+target_link_libraries(nsr_realtime_bench PRIVATE
+    NekoSpaceReverb nsr_analysis juce::juce_audio_utils)
+if(WIN32)
+    target_link_libraries(nsr_realtime_bench PRIVATE Psapi Avrt)
+endif()
+
 if(MSVC)
     target_compile_options(NekoSpaceReverb PRIVATE /utf-8)
     target_compile_options(nekospace_reverb_analyze PRIVATE /W4 /utf-8)
@@ -113,4 +123,5 @@ if(MSVC)
     target_compile_options(nsr_dsp_tests PRIVATE /W4 /utf-8)
     target_compile_options(nsr_plugin_tests PRIVATE /W4 /utf-8)
     target_compile_options(nsr_phase3_compare PRIVATE /W4 /utf-8)
+    target_compile_options(nsr_realtime_bench PRIVATE /W4 /utf-8)
 endif()
