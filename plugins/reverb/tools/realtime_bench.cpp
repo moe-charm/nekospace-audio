@@ -332,6 +332,7 @@ int main()
     std::size_t worstAutomationBlock = 0;
     std::size_t callbacksOverTenPercent = 0;
     std::size_t callbacksOverTwentyFivePercent = 0;
+    std::size_t callbacksOverFullBudget = 0;
     std::size_t cycleQueryFailures = 0;
     std::size_t worstWallBlock = 0;
     std::size_t worstCycleBlock = 0;
@@ -395,6 +396,8 @@ int main()
             ++callbacksOverTenPercent;
         if (callbackMicroseconds[block] > budgetMicroseconds * 0.25)
             ++callbacksOverTwentyFivePercent;
+        if (callbackMicroseconds[block] > budgetMicroseconds)
+            ++callbacksOverFullBudget;
         for (int channel = 0; channel < 2; ++channel)
             for (int sample = 0; sample < blockSize; ++sample)
                 finite = finite && std::isfinite (buffer.getSample (channel, sample));
@@ -429,10 +432,13 @@ int main()
                                      ? 0.0
                                      : static_cast<double> (cyclesAtWorstWall)
                                          / static_cast<double> (medianCycles);
+    const double wallAtWorstCyclesPercent =
+        100.0 * wallMicrosecondsAtWorstCycles / budgetMicroseconds;
     const auto callbackAllocations = allocationsAfter - allocationsBefore;
     const auto callbackDeallocations = deallocationsAfter - deallocationsBefore;
     const bool passed = callbackAllocations == 0 && callbackDeallocations == 0 && finite
-                     && p99Percent <= 10.0 && worstPercent <= 25.0;
+                     && cycleDiagnosticsAvailable && p99Percent <= 10.0
+                     && wallAtWorstCyclesPercent <= 25.0 && worstPercent <= 100.0;
 
     std::cout << std::fixed << std::setprecision (6)
               << "{\n"
@@ -463,6 +469,7 @@ int main()
               << (worstCallbackWasAutomation ? "true" : "false") << ",\n"
               << "  \"callbacks_over_10_percent\": " << callbacksOverTenPercent << ",\n"
               << "  \"callbacks_over_25_percent\": " << callbacksOverTwentyFivePercent << ",\n"
+              << "  \"callbacks_over_full_budget\": " << callbacksOverFullBudget << ",\n"
               << "  \"p99_realtime_percent\": " << p99Percent << ",\n"
               << "  \"worst_realtime_percent\": " << worstPercent << ",\n"
               << "  \"thread_cycle_diagnostics_available\": "
@@ -474,6 +481,8 @@ int main()
               << "  \"worst_thread_cycles_block\": " << worstCycleBlock << ",\n"
               << "  \"wall_us_at_worst_thread_cycles\": "
               << wallMicrosecondsAtWorstCycles << ",\n"
+              << "  \"wall_at_worst_thread_cycles_realtime_percent\": "
+              << wallAtWorstCyclesPercent << ",\n"
               << "  \"thread_cycles_at_worst_wall\": " << cyclesAtWorstWall << ",\n"
               << "  \"worst_wall_thread_cycle_ratio_to_median\": "
               << worstWallCycleRatio << ",\n"

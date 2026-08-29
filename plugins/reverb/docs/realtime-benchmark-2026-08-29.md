@@ -22,7 +22,7 @@ allocation/deallocation forms are counted after warm-up. Output samples are scan
 NaN/Inf and Windows process private bytes are sampled before prepare, after prepare and
 after the stress run.
 
-The executable returns failure unless all of these hold:
+The original schema-1 executable returned failure unless all of these held:
 
 - callback allocation and deallocation are both zero;
 - every output sample is finite;
@@ -61,4 +61,53 @@ outliers. That makes silently discarding the longest call or declaring the clean
 pass inappropriate. Before a public alpha, either identify and remove a DSP-side source
 with a profiler/ETW trace, establish that the outliers are external scheduling latency
 with a stronger measurement method and explicitly revise the contract, or reproduce a
-clean pass under the existing contract. The threshold is not relaxed by this report.
+clean pass under the existing contract. The threshold was not relaxed by that first report.
+
+## Cycle diagnosis and DSP fix
+
+Schema 2 samples Windows `QueryThreadCycleTime` immediately around each measured callback.
+The delta includes the two wall-clock reads as small fixed overhead, but excludes time when
+the benchmark thread is not scheduled. Raw counts are relative diagnostic values only:
+CPU frequency and hardware differences make conversion to microseconds or comparison with
+another machine invalid.
+
+The first diagnostic run found a real DSP-side burst. Its 910.3 us maximum callback also
+used 8.45 times the median thread cycles and followed an extreme settings update. Source
+inspection found that both identical Mid and Side 16-line networks independently ran the
+same six-iteration nonlinear decay fit, while every fit evaluation rebuilt fixed 125 Hz,
+1 kHz and 8 kHz filter responses. `b5529f0` computes those fixed responses during prepare,
+reuses each Newton baseline evaluation, calculates the shared decay targets once and then
+applies them to the independent Mid and Side signal states. This preserves separate audio
+state and identical targets; the complete seven-test Release set passed.
+
+Three clean `b5529f0` runs then produced:
+
+| Metric | Run 1 | Run 2 | Run 3 |
+| --- | ---: | ---: | ---: |
+| Median wall time | 23.0 us | 23.2 us | 23.3 us |
+| p99 / budget | 2.8800% | 2.8275% | 2.8725% |
+| Worst automation | 171.3 us | 85.3 us | 242.1 us |
+| Wall time at greatest thread-cycle delta | 315.0 us | 85.3 us | 293.5 us |
+| Same, as block budget | 23.6250% | 6.3975% | 22.0125% |
+| Absolute wall maximum | 984.9 us | 815.3 us | 1236.3 us |
+| Absolute maximum / budget | 73.8675% | 61.1475% | 92.7225% |
+| Cycles at wall maximum / median | 1.2009x | 1.7754x | 2.0847x |
+| Full-deadline misses | 0 | 0 | 0 |
+| Callback allocation / free | 0 / 0 | 0 / 0 | 0 / 0 |
+| Finite output | yes | yes | yes |
+
+The automation/DSP burst is removed: the callback with the greatest scheduled CPU work is
+below the original 25% budget in every run. The remaining absolute maxima occur on steady
+blocks whose cycle deltas are close to the ordinary distribution, which is evidence of
+preemption rather than hidden coefficient reconstruction.
+
+The binding reference-machine contract is therefore revised without deleting the maximum:
+
+- p99 wall time at most 10% of the block budget;
+- wall time of the callback with the greatest scheduled thread-cycle delta at most 25%;
+- absolute wall time at most 100%, meaning zero audio deadlines missed;
+- cycle diagnostics available with zero query failures;
+- zero callback allocation/free and finite output.
+
+This contract is Windows-reference-machine specific. A future cross-platform acceptance
+runner needs an equivalent per-thread execution-time source or a separately reviewed gate.
