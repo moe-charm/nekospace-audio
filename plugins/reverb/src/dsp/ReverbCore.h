@@ -175,6 +175,7 @@ public:
     void prepare (float sampleRate, const ReverbSettings& initialSettings)
     {
         sr = sampleRate;
+        prepareShelfBasis();
         for (int i = 0; i < lines; ++i)
         {
             maxLength[i] = static_cast<int> (NetworkTraits<lines>::baseLength[i]
@@ -239,6 +240,23 @@ public:
         }
     }
 
+    // Mid and Side use the same network geometry and decay targets. Calculate the
+    // nonlinear fit once, then apply the identical targets to the independent state.
+    void setSettingsFrom (const LateNetwork& source) noexcept
+    {
+        for (int i = 0; i < lines; ++i)
+        {
+            targetLength[i] = source.targetLength[i];
+            targetMidGain[i] = source.targetMidGain[i];
+            targetLowRatio[i] = source.targetLowRatio[i];
+            targetHighRatio[i] = source.targetHighRatio[i];
+            length[i].setTarget (targetLength[i]);
+            midGain[i].setTarget (targetMidGain[i]);
+            lowRatio[i].setTarget (targetLowRatio[i]);
+            highRatio[i].setTarget (targetHighRatio[i]);
+        }
+    }
+
     float processSample (float input) noexcept
     {
         float d[lines];
@@ -273,30 +291,43 @@ public:
 
 private:
     struct FittedGains { float mid, lowRatio, highRatio; };
+    using Complex = std::complex<float>;
+
+    struct ShelfBasis
+    {
+        Complex lowBand;
+        Complex highLowpass;
+    };
 
     float loopGain (float delaySamples, float t60Seconds) const noexcept
     {
         return std::pow (10.0f, -3.0f * delaySamples / (t60Seconds * sr));
     }
 
-    float shelfMagnitude (float hz, float low, float high) const noexcept
+    void prepareShelfBasis() noexcept
     {
-        using Complex = std::complex<float>;
-        const float omega = 6.28318530717958647692f * hz / sr;
-        const Complex zInverse = std::polar (1.0f, -omega);
-        const auto lowpass = [zInverse] (float coefficient)
-        {
-            return Complex (coefficient, 0.0f)
-                   / (Complex (1.0f, 0.0f) - (1.0f - coefficient) * zInverse);
-        };
+        constexpr float hz[3] = { 125.0f, 1000.0f, 8000.0f };
         const float lowCoefficient = 1.0f - std::exp (-6.28318530717958647692f * 500.0f / sr);
         const float highCoefficient = 1.0f - std::exp (-6.28318530717958647692f * 4000.0f / sr);
-        const Complex lowResponse = lowpass (lowCoefficient);
-        const Complex highResponse = lowpass (highCoefficient);
-        const Complex lowBand = lowResponse;
-        const Complex highLowpass = highResponse;
-        const Complex response = low * lowBand + (highLowpass - lowBand)
-                                 + high * (1.0f - highLowpass);
+        for (int band = 0; band < 3; ++band)
+        {
+            const float omega = 6.28318530717958647692f * hz[band] / sr;
+            const Complex zInverse = std::polar (1.0f, -omega);
+            const auto lowpass = [zInverse] (float coefficient)
+            {
+                return Complex (coefficient, 0.0f)
+                       / (Complex (1.0f, 0.0f) - (1.0f - coefficient) * zInverse);
+            };
+            shelfBasis[band] = { lowpass (lowCoefficient), lowpass (highCoefficient) };
+        }
+    }
+
+    float shelfMagnitude (int band, float low, float high) const noexcept
+    {
+        const auto& basis = shelfBasis[band];
+        const Complex response = low * basis.lowBand
+                               + (basis.highLowpass - basis.lowBand)
+                               + high * (1.0f - basis.highLowpass);
         return std::max (std::abs (response), 1.0e-6f);
     }
 
@@ -305,7 +336,6 @@ private:
     {
         float x[3] = { std::log (midTarget), std::log (lowTarget / midTarget),
                        std::log (highTarget / midTarget) };
-        const float hz[3] = { 125.0f, 1000.0f, 8000.0f };
         const float target[3] = { std::log (lowTarget), std::log (midTarget),
                                   std::log (highTarget) };
         constexpr float epsilon = 1.0e-3f;
@@ -317,17 +347,18 @@ private:
             const auto evaluate = [&] (int band, const float* values)
             {
                 return values[0] + std::log (shelfMagnitude (
-                    hz[band], std::exp (values[1]), std::exp (values[2])));
+                    band, std::exp (values[1]), std::exp (values[2])));
             };
             for (int band = 0; band < 3; ++band)
             {
-                residual[band] = evaluate (band, x) - target[band];
+                const float current = evaluate (band, x);
+                residual[band] = current - target[band];
                 for (int variable = 0; variable < 3; ++variable)
                 {
                     float perturbed[3] = { x[0], x[1], x[2] };
                     perturbed[variable] += epsilon;
                     jacobian[band][variable] = (evaluate (band, perturbed)
-                                                 - evaluate (band, x)) / epsilon;
+                                                 - current) / epsilon;
                 }
             }
 
@@ -370,6 +401,7 @@ private:
     int maxLength[lines] = {};
     float targetLength[lines] = {}, targetMidGain[lines] = {};
     float targetLowRatio[lines] = {}, targetHighRatio[lines] = {};
+    ShelfBasis shelfBasis[3] {};
     float sr = 48000.0f;
 };
 } // namespace detail
@@ -406,7 +438,7 @@ public:
         settings = next;
         settings.mix = detail::clamp (settings.mix, 0.0f, 1.0f);
         mid.setSettings (settings);
-        side.setSettings (settings);
+        side.setSettingsFrom (mid);
     }
 
     void process (const float* inputLeft, const float* inputRight,
