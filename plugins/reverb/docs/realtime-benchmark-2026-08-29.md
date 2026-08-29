@@ -111,3 +111,8 @@ The binding reference-machine contract is therefore revised without deleting the
 
 This contract is Windows-reference-machine specific. A future cross-platform acceptance
 runner needs an equivalent per-thread execution-time source or a separately reviewed gate.
+
+A final clean schema-2 run at `bc0aaa0b84c6` exercised the executable's revised binding
+result: p99 28.7 us / 2.1525%, greatest-cycle callback 59.8 us / 4.485%, absolute maximum
+990.7 us / 74.3025%, zero full-budget misses, zero cycle-query failures, zero callback
+allocation/free and finite output. The executable returned 0 with `"passed": true`.
