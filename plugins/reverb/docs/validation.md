@@ -337,6 +337,12 @@ owned six named factory presets. Commit `c8e14da` makes those same six presets t
 host-visible program list and adds a regression test. A clean Release VST3 then passed
 the validator's `-e -l` run: **537 tests passed, 0 failed**, exit code 0.
 
+After the formal schema-1 state migration at `b41e00f`, the complete Release CTest set
+again passed 7/7 and Steinberg Validator again passed 537/537. pluginval 1.0.4 then passed
+strictness 10, three randomised repeats with fixed seed `0x7eef060`; its configured
+Steinberg-validator subprocess exited 0 in all three repeats. The log contains no failed
+markers and ends in `SUCCESS`.
+
 ## Calibrating the provisional gates
 
 Before acoustic thresholds are frozen for v1:

@@ -188,11 +188,13 @@ Steinberg validator when available.
 targets are either calibrated and frozen or explicitly waived with evidence, release
 artifacts contain licences/notices, and no private media is tracked.
 
-**Current status:** FL Studio and pluginval smoke checks pass. Steinberg Validator 3.8.1
-first exposed an unnamed host-program bug; after `c8e14da`, the extensive/local-instance
-run passes 537/537. The first versioned 30-minute benchmark passes allocation, memory,
-finite-output and p99 checks but fails the worst-time gate by one callback. Release
-packaging has not yet been completed.
+**Current status:** the schema-1 alpha parameter/state contract is implemented at
+`b41e00f`. Its clean Release build passes CTest 7/7, Steinberg Validator 537/537 and
+pluginval 1.0.4 strictness 10 with three randomised repeats; the configured validator
+exits 0 in every repeat. Product-specific `reverb-v*` draft-release packaging produces
+VST3, Standalone, Player, notices, build identity and SHA-256 without private media. The
+first versioned 30-minute benchmark passes allocation, memory, finite-output and p99
+checks but still fails the binding worst-time gate by one callback. No release tag exists.
 
 ## Post-v1 research queue
 

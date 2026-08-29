@@ -151,11 +151,13 @@ difference is `-0.000064 dB`; every 50 ms mode/Mono transition remained far belo
 real Player. On 2026-08-28 the owner accepted the current direction as natural in sighted
 audition, and FL Studio loaded and processed the VST3 successfully. Exact conditions and
 the v1 comparison history are in [room-body.md](docs/room-body.md). Audio and rendered
-demonstrations remain globally ignored. CPU/memory evidence, release packaging and the
-Steinberg validator remain public-alpha gates. The first 30-minute Release run records
-p99 at 2.7975%, zero callback allocation/free and no memory growth, but formally fails the
-25% worst-time gate because one of 1,350,000 callbacks reached 28.815%. Steinberg
-Validator 3.8.1 extensive mode passes 537/537 after its first run exposed and prompted a
-fix for an unnamed factory-program entry.
+demonstrations remain globally ignored. The product-specific local release package now
+contains only VST3, Standalone, Player, build identity, licences/notices and product docs,
+with a matching SHA-256. At schema-1 commit `b41e00f`, CTest passes 7/7, Steinberg
+Validator 3.8.1 passes 537/537, and pluginval 1.0.4 passes strictness 10 for three
+randomised repeats including the configured validator. The first 30-minute Release run
+records p99 at 2.7975%, zero callback allocation/free and no memory growth, but formally
+fails the 25% worst-time gate because one of 1,350,000 callbacks reached 28.815%. No
+public Reverb tag has been created.
 
 License: **AGPLv3-or-later**, like the rest of NekoSpace Audio.

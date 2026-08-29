@@ -26,6 +26,9 @@ tag is not created until every binding release gate is resolved.
 - FL Studio load and audio-processing smoke test.
 - Steinberg Validator 3.8.1 extensive/local-instance run: 537/537 after fixing an unnamed
   host-program entry.
+- pluginval 1.0.4 strictness 10: three randomised repeats pass with the official
+  Steinberg Validator returning 0 in every repeat.
+- Formal schema-1 state plus a tested reader for pre-release schema-0 prototype states.
 - Thirty-minute 48 kHz/64 callback run: zero allocation/free, finite output, no private
   memory growth and p99 at 2.7975% of the block budget.
 
@@ -34,4 +37,3 @@ tag is not created until every binding release gate is resolved.
 - The same callback run had one 28.815% worst-time sample against the binding 25% budget.
   The candidate is not tagged until that gate passes or its contract is explicitly revised
   with stronger scheduling/profiling evidence.
-
